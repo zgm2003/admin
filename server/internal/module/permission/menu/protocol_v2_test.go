@@ -40,7 +40,7 @@ func TestMenuProtocolV2AcceptsCustomI18nKeyAndIconName(t *testing.T) {
 	icon := "lucide:shield-check"
 	input := CreateInput{
 		PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("reports.orders.list"),
-		Icon: &icon, SortOrder: 10, IsEnabled: yesno.Yes,
+		Icon: &icon, SortOrder: 10, Status: yesno.Yes,
 	}
 	if _, err := normalizeCreateInput(input); err != nil {
 		t.Fatalf("custom i18n key and icon were rejected: %v", err)
@@ -51,7 +51,7 @@ func TestMenuProtocolV2AcceptsPersistedOperationalIcons(t *testing.T) {
 	for _, icon := range []string{"lucide:list-checks", "lucide:database-zap"} {
 		input := CreateInput{
 			PlatformID: 1, MenuType: TypeDirectory, Name: "系统工具", Code: "tools",
-			I18nKey: stringPointer("navigation.system"), Icon: &icon, SortOrder: 10, IsEnabled: yesno.Yes,
+			I18nKey: stringPointer("navigation.system"), Icon: &icon, SortOrder: 10, Status: yesno.Yes,
 		}
 		if _, err := normalizeCreateInput(input); err != nil {
 			t.Errorf("persisted icon %q was rejected: %v", icon, err)
@@ -90,7 +90,7 @@ func TestMenuProtocolV2RequiresActionsToBeHidden(t *testing.T) {
 	action := Menu{
 		ID: 7, PlatformID: 1, ParentID: int64Pointer(3), MenuType: TypeAction,
 		Name: "修改角色", Code: "permission:role:update", I18nKey: nil,
-		IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
+		Status: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := validateStoredMenu(action); err == nil {
 		t.Fatal("visible action was accepted")

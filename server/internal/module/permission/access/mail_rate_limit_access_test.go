@@ -35,7 +35,7 @@ func TestMailRateLimitActionRequiresExplicitGrantAndRespectsPlatformScope(t *tes
 		PlatformID: fixture.adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage,
 		Name: "邮件服务", Code: "message:mail:view", I18nKey: &mailI18nKey,
 		Path: &mailPath, ComponentPath: &mailComponentPath, SortOrder: 20,
-		IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
+		Status: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := fixture.db.WithContext(fixture.ctx).Create(&mailPage).Error; err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestMailRateLimitActionRequiresExplicitGrantAndRespectsPlatformScope(t *tes
 	mailAction := menu.Menu{
 		PlatformID: fixture.adminPlatformID, ParentID: &mailPage.ID, MenuType: menu.TypeAction,
 		Name: "修改邮件限流策略", Code: "message:mail:rate-limit:update", SortOrder: 10,
-		IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now,
+		Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := fixture.db.WithContext(fixture.ctx).Create(&mailAction).Error; err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestMailRateLimitActionRequiresExplicitGrantAndRespectsPlatformScope(t *tes
 	canvasAction := menu.Menu{
 		PlatformID: fixture.canvasPlatformID, ParentID: &fixture.canvasPage.ID, MenuType: menu.TypeAction,
 		Name: "Canvas action", Code: "canvas:mail:rate-limit:update", SortOrder: 20,
-		IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now,
+		Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := fixture.db.WithContext(fixture.ctx).Create(&canvasAction).Error; err != nil {
 		t.Fatal(err)

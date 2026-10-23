@@ -135,7 +135,7 @@ async function toggle(row: smsApi.SmsTemplate, value: YesNoValue): Promise<void>
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsTemplate }">
         <el-switch
-          :model-value="row.isEnabled"
+          :model-value="row.status"
           inline-prompt
           :active-text="t('common.enable')"
           :inactive-text="t('common.disable')"

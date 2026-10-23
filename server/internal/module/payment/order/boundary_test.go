@@ -224,7 +224,7 @@ func TestCreateSelectsFirstChannelSupportingRequestedMethod(t *testing.T) {
 	second.Version.ConfigID = 5
 	second.Version.PayMethods = paymentconfig.PayMethods{payment.PayMethodH5}
 	second.Version.NotifyURL = "https://pay.example.test/5/4"
-	service.runtime = multiChannelRuntime{rows: []paymentconfig.CatalogItem{{ID: 3, Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, CurrentVersion: 4, IsEnabled: yesno.Yes}, {ID: 5, Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, CurrentVersion: 4, IsEnabled: yesno.Yes}}, versions: map[int64]paymentconfig.BoundCredential{3: first, 5: second}}
+	service.runtime = multiChannelRuntime{rows: []paymentconfig.CatalogItem{{ID: 3, Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, CurrentVersion: 4, Status: yesno.Yes}, {ID: 5, Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, CurrentVersion: 4, Status: yesno.Yes}}, versions: map[int64]paymentconfig.BoundCredential{3: first, 5: second}}
 	_, err := service.Create(context.Background(), auth.Identity{UserID: 7, PlatformID: 1}, CreateInput{RequestID: "00000000-0000-4000-8000-000000000001", PackageID: 8, PayMethod: payment.PayMethodH5, ReturnURL: "https://app.example.test/paid"})
 	if err != nil || repo.created == nil || repo.created.ConfigID != 5 {
 		t.Fatalf("advertised H5 method unavailable: created=%+v err=%v", repo.created, err)

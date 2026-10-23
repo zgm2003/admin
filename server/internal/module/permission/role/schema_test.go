@@ -42,7 +42,7 @@ func TestRoleSchema(t *testing.T) {
 		"fk_permission_user_role_user":  {"FOREIGN KEY (user_id)", "user_account(id)", "ON DELETE RESTRICT"},
 		"fk_permission_user_role_role":  {"FOREIGN KEY (role_id)", "permission_role(id)", "ON DELETE RESTRICT"},
 		"ck_permission_role_is_default": {"CHECK", "is_default", "0", "1"},
-		"ck_permission_role_is_enabled": {"CHECK", "is_enabled", "0", "1"},
+		"ck_permission_role_status": {"CHECK", "status", "0", "1"},
 	} {
 		definition := roleConstraintDefinition(t, db, ctx, name)
 		for _, fragment := range fragments {

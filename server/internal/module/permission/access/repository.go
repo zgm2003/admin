@@ -28,7 +28,7 @@ type SourceMenu struct {
 	ComponentPath *string
 	Icon          *string
 	SortOrder     int
-	IsEnabled     yesno.Value
+	Status     yesno.Value
 	IsHidden      yesno.Value
 }
 
@@ -71,7 +71,7 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID, platform
 		FROM user_account AS app_user
 		JOIN permission_access_version AS access_version ON access_version.user_id = app_user.id
 		WHERE app_user.id = ?
-		  AND app_user.is_enabled = ?
+		  AND app_user.status = ?
 		  AND app_user.deleted_at IS NULL`, userID, yesno.Yes).Scan(&version)
 	if result.Error != nil {
 		return Source{}, fmt.Errorf("find access source version: %w", result.Error)
@@ -90,7 +90,7 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID, platform
 		FROM permission_user_role AS user_role
 		JOIN permission_role AS app_role
 		  ON app_role.id = user_role.role_id
-		 AND app_role.is_enabled = ?
+		 AND app_role.status = ?
 		 AND app_role.deleted_at IS NULL
 		WHERE user_role.user_id = ?
 		  AND user_role.deleted_at IS NULL
@@ -112,9 +112,9 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID, platform
 	menus := make([]SourceMenu, 0)
 	if err := db.Raw(`
 		SELECT id, parent_id, menu_type, code, i18n_key, path,
-		       component_path, icon, sort_order, is_enabled, is_hidden
+		       component_path, icon, sort_order, status, is_hidden
 		FROM permission_menu
-		WHERE platform_id = ? AND is_enabled = ? AND deleted_at IS NULL
+		WHERE platform_id = ? AND status = ? AND deleted_at IS NULL
 		ORDER BY sort_order, code, id`, platformID, yesno.Yes).Scan(&menus).Error; err != nil {
 		return Source{}, fmt.Errorf("find access source menus: %w", err)
 	}
@@ -127,7 +127,7 @@ func (r *Repository) FindSourceWithVersion(ctx context.Context, userID, platform
 			JOIN permission_menu AS app_menu
 			  ON app_menu.id = role_menu.menu_id
 			 AND app_menu.platform_id = ?
-			 AND app_menu.is_enabled = ?
+			 AND app_menu.status = ?
 			 AND app_menu.deleted_at IS NULL
 			WHERE role_menu.role_id IN ?
 			  AND role_menu.deleted_at IS NULL

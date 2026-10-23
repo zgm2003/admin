@@ -12,11 +12,11 @@ func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 	pagePath := "/system/roles"
 	componentPath := "system/roles"
 	menus := []Menu{
-		{ID: 4, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "修改角色", Code: "permission:role:update", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "删除角色", Code: "permission:role:delete", SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.permissionRole"), Path: &pagePath, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 5, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), SortOrder: 200, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "系统管理", Code: "system", I18nKey: stringPointer("navigation.system"), SortOrder: 100, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 4, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "修改角色", Code: "permission:role:update", SortOrder: 10, Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "删除角色", Code: "permission:role:delete", SortOrder: 20, Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.permissionRole"), Path: &pagePath, ComponentPath: &componentPath, SortOrder: 10, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 5, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), SortOrder: 200, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "系统管理", Code: "system", I18nKey: stringPointer("navigation.system"), SortOrder: 100, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}
 
 	index, err := buildMenuIndex(menus)
@@ -59,11 +59,11 @@ func TestBuildMenuIndexBuildsStableTreeWithNonNilLeafChildren(t *testing.T) {
 func TestNormalizeMenuInputEnforcesPageAndActionPermissionSuffixes(t *testing.T) {
 	pagePath := "/reports"
 	componentPath := "reports"
-	page := CreateInput{PlatformID: 1, MenuType: TypePage, Name: "报表", Code: "reports:list", I18nKey: stringPointer("navigation.system"), Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := CreateInput{PlatformID: 1, MenuType: TypePage, Name: "报表", Code: "reports:list", I18nKey: stringPointer("navigation.system"), Path: &pagePath, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if _, err := normalizeCreateInput(page); err == nil {
 		t.Fatal("page permission without :view suffix was accepted")
 	}
-	action := CreateInput{PlatformID: 1, MenuType: TypeAction, Name: "查看", Code: "reports:view", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	action := CreateInput{PlatformID: 1, MenuType: TypeAction, Name: "查看", Code: "reports:view", Status: yesno.Yes, IsHidden: yesno.Yes}
 	if _, err := normalizeCreateInput(action); err == nil {
 		t.Fatal("action permission with :view suffix was accepted")
 	}
@@ -82,7 +82,7 @@ func TestNormalizeMenuInputEnforcesPageAndActionPermissionSuffixes(t *testing.T)
 func TestNormalizeMenuInputRejectsMismatchedPagePathAndComponentPath(t *testing.T) {
 	path := "/permission/role"
 	componentPath := "access/roles"
-	input := CreateInput{PlatformID: 1, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	input := CreateInput{PlatformID: 1, MenuType: TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: stringPointer("navigation.roles"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if _, err := normalizeCreateInput(input); err == nil {
 		t.Fatal("mismatched page path/componentPath was accepted")
 	}
@@ -96,10 +96,10 @@ func TestNormalizeMenuInputRejectsMismatchedPagePathAndComponentPath(t *testing.
 
 func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 	now := time.Now().UTC()
-	validRoot := Menu{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	validRoot := Menu{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	pagePath := "/reports"
 	componentPath := "reports"
-	validPage := Menu{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "报表列表", Code: "reports:view", I18nKey: stringPointer("reports.list"), Path: &pagePath, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	validPage := Menu{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypePage, Name: "报表列表", Code: "reports:view", I18nKey: stringPointer("reports.list"), Path: &pagePath, ComponentPath: &componentPath, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	invalidPageCode := validPage
 	invalidPageCode.Code = "reports:list"
 	invalidPagePath := validPage
@@ -110,14 +110,14 @@ func TestBuildMenuIndexRejectsInvalidStoredTrees(t *testing.T) {
 		menus []Menu
 	}{
 		{name: "duplicate id", menus: []Menu{validRoot, validRoot}},
-		{name: "missing platform", menus: []Menu{{ID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "orphan", menus: []Menu{{ID: 2, PlatformID: 1, ParentID: int64Pointer(99), MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "root action", menus: []Menu{{ID: 1, PlatformID: 1, MenuType: TypeAction, Name: "新增报表", Code: "reports:create", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "action under directory", menus: []Menu{validRoot, {ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "action has child", menus: []Menu{validRoot, validPage, {ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 4, PlatformID: 1, ParentID: int64Pointer(3), MenuType: TypeAction, Name: "修改报表", Code: "reports:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "cycle", menus: []Menu{{ID: 1, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypeDirectory, Name: "设置", Code: "settings", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "malformed title", menus: []Menu{{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation_unknown"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Icon: stringPointer("lucide:key-round"), IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "missing platform", menus: []Menu{{ID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "orphan", menus: []Menu{{ID: 2, PlatformID: 1, ParentID: int64Pointer(99), MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "root action", menus: []Menu{{ID: 1, PlatformID: 1, MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "action under directory", menus: []Menu{validRoot, {ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "action has child", menus: []Menu{validRoot, validPage, {ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 4, PlatformID: 1, ParentID: int64Pointer(3), MenuType: TypeAction, Name: "修改报表", Code: "reports:update", Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "cycle", menus: []Menu{{ID: 1, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}, {ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypeDirectory, Name: "设置", Code: "settings", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "malformed title", menus: []Menu{{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation_unknown"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "invalid action icon", menus: []Menu{validRoot, validPage, {ID: 3, PlatformID: 1, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "新增报表", Code: "reports:create", Icon: stringPointer("lucide:key-round"), Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 		{name: "page permission suffix", menus: []Menu{validRoot, invalidPageCode}},
 		{name: "page path component mismatch", menus: []Menu{validRoot, invalidPagePath}},
 	}
@@ -136,9 +136,9 @@ func TestBuildMenuIndexSupportsRootPagesAndPlatformScopedUniqueness(t *testing.T
 	path := "/test"
 	componentPath := "test"
 	menus := []Menu{
-		{ID: 1, PlatformID: 1, MenuType: TypePage, Name: "Admin test", Code: "test:view", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 2, PlatformID: 2, MenuType: TypePage, Name: "Canvas test", Code: "test:view", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{ID: 3, PlatformID: 2, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "Canvas button", Code: "test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 1, PlatformID: 1, MenuType: TypePage, Name: "Admin test", Code: "test:view", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 2, PlatformID: 2, MenuType: TypePage, Name: "Canvas test", Code: "test:view", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 3, PlatformID: 2, ParentID: int64Pointer(2), MenuType: TypeAction, Name: "Canvas button", Code: "test:button", Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}
 
 	index, err := buildMenuIndex(menus)
@@ -161,14 +161,14 @@ func TestBuildMenuIndexRejectsPlatformConflicts(t *testing.T) {
 	now := time.Now().UTC()
 	path := "/test"
 	componentPath := "test"
-	root := Menu{ID: 1, PlatformID: 1, MenuType: TypePage, Name: "Admin test", Code: "test", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	root := Menu{ID: 1, PlatformID: 1, MenuType: TypePage, Name: "Admin test", Code: "test", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	tests := []struct {
 		name  string
 		menus []Menu
 	}{
-		{name: "cross-platform parent", menus: []Menu{root, {ID: 2, PlatformID: 2, ParentID: int64Pointer(1), MenuType: TypeAction, Name: "Canvas button", Code: "test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "duplicate code in platform", menus: []Menu{root, {ID: 2, PlatformID: 1, MenuType: TypeDirectory, Name: "Duplicate", Code: "test", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
-		{name: "duplicate page path in platform", menus: []Menu{root, {ID: 2, PlatformID: 1, MenuType: TypePage, Name: "Duplicate", Code: "other", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "cross-platform parent", menus: []Menu{root, {ID: 2, PlatformID: 2, ParentID: int64Pointer(1), MenuType: TypeAction, Name: "Canvas button", Code: "test:button", Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "duplicate code in platform", menus: []Menu{root, {ID: 2, PlatformID: 1, MenuType: TypeDirectory, Name: "Duplicate", Code: "test", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
+		{name: "duplicate page path in platform", menus: []Menu{root, {ID: 2, PlatformID: 1, MenuType: TypePage, Name: "Duplicate", Code: "other", I18nKey: stringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -182,8 +182,8 @@ func TestBuildMenuIndexRejectsPlatformConflicts(t *testing.T) {
 func TestMenuIndexRejectsEnabledNodeBelowDisabledAncestor(t *testing.T) {
 	now := time.Now().UTC()
 	menus := []Menu{
-		{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.No, CreatedAt: now, UpdatedAt: now},
-		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypeDirectory, Name: "报表分组", Code: "reports:section", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "报表", Code: "reports", I18nKey: stringPointer("navigation.system"), Status: yesno.No, CreatedAt: now, UpdatedAt: now},
+		{ID: 2, PlatformID: 1, ParentID: int64Pointer(1), MenuType: TypeDirectory, Name: "报表分组", Code: "reports:section", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}
 	index, err := buildMenuIndex(menus)
 	if err != nil {
@@ -199,7 +199,7 @@ func TestBuildMenuIndexAcceptsProfileMenuIcon(t *testing.T) {
 	icon := "lucide:user-circle"
 	menu := Menu{
 		ID: 1, PlatformID: 1, MenuType: TypeDirectory, Name: "个人中心", Code: "account:profile",
-		I18nKey: stringPointer("navigation.user"), Icon: &icon, IsEnabled: yesno.Yes,
+		I18nKey: stringPointer("navigation.user"), Icon: &icon, Status: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if _, err := buildMenuIndex([]Menu{menu}); err != nil {
@@ -213,7 +213,7 @@ func TestBuildMenuIndexAcceptsSystemSettingMenuIcon(t *testing.T) {
 	menu := Menu{
 		ID: 1, PlatformID: 1, MenuType: TypePage, Name: "系统设置", Code: "system:setting:view",
 		I18nKey: stringPointer("navigation.systemSetting"), Path: stringPointer("/system/setting"),
-		ComponentPath: stringPointer("system/setting"), Icon: &icon, IsEnabled: yesno.Yes,
+		ComponentPath: stringPointer("system/setting"), Icon: &icon, Status: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if _, err := buildMenuIndex([]Menu{menu}); err != nil {

@@ -34,7 +34,7 @@ CREATE TABLE permission_auth_platform(
  id BIGINT PRIMARY KEY, code VARCHAR(49) NOT NULL, name VARCHAR(64) NOT NULL, deleted_at TIMESTAMPTZ);
 CREATE TABLE user_account(
  id BIGINT PRIMARY KEY, username VARCHAR(64) NOT NULL, email VARCHAR(254) NOT NULL,
- phone VARCHAR(32), password_hash VARCHAR(255) NOT NULL, is_enabled SMALLINT NOT NULL,
+ phone VARCHAR(32), password_hash VARCHAR(255) NOT NULL, status SMALLINT NOT NULL,
  created_at TIMESTAMPTZ NOT NULL, updated_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ);
 CREATE TABLE message_sms_log(
  id BIGSERIAL PRIMARY KEY, platform_id BIGINT NOT NULL, challenge_id VARCHAR(128), user_id BIGINT,
@@ -62,7 +62,7 @@ func TestRepositoryListsAcrossPlatformsWithExactPhoneAndStablePagination(t *test
  (1,'admin','Admin'),(2,'canvas','Canvas')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Exec(`INSERT INTO user_account(id,username,email,password_hash,is_enabled,created_at,updated_at)
+	if err := db.WithContext(ctx).Exec(`INSERT INTO user_account(id,username,email,password_hash,status,created_at,updated_at)
  VALUES (7,'alice','alice@example.com','',1,?,?)`, now, now).Error; err != nil {
 		t.Fatal(err)
 	}

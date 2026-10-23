@@ -97,7 +97,7 @@ func TestServiceEncryptsNormalizesAndPreservesCredentials(t *testing.T) {
 	service := newTestService(t, db, keys, tester)
 	endpoint := " https://cos.example.com "
 	domain := " https://cdn.example.com "
-	id, err := service.Create(ctx, CreateInput{Name: " Main ", AppID: " 1250000000 ", SecretID: " secret-id ", SecretKey: " secret-key ", Bucket: " assets ", Region: " ap-guangzhou ", Endpoint: &endpoint, BucketDomain: &domain, IsEnabled: yesno.Yes, Remark: " primary "})
+	id, err := service.Create(ctx, CreateInput{Name: " Main ", AppID: " 1250000000 ", SecretID: " secret-id ", SecretKey: " secret-key ", Bucket: " assets ", Region: " ap-guangzhou ", Endpoint: &endpoint, BucketDomain: &domain, Status: yesno.Yes, Remark: " primary "})
 	if err != nil || id < 1 {
 		t.Fatalf("create = %d,%v", id, err)
 	}
@@ -113,7 +113,7 @@ func TestServiceEncryptsNormalizesAndPreservesCredentials(t *testing.T) {
 	assertConfigGeneration(t, db, ctx, id, 1)
 	assertConfigOutbox(t, db, ctx, id, 1, 1)
 
-	if _, err := service.Create(ctx, CreateInput{Name: "main", AppID: "1250000000", SecretID: "id", SecretKey: "key", Bucket: "assets", Region: "ap-guangzhou", IsEnabled: yesno.Yes}); appCode(err) != apperror.CodeConflict {
+	if _, err := service.Create(ctx, CreateInput{Name: "main", AppID: "1250000000", SecretID: "id", SecretKey: "key", Bucket: "assets", Region: "ap-guangzhou", Status: yesno.Yes}); appCode(err) != apperror.CodeConflict {
 		t.Fatalf("duplicate create error = %v", err)
 	}
 
@@ -161,11 +161,11 @@ func TestServiceAllowsDisableAndRequiresNoReferencesToDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := newTestService(t, db, keys, &recordingConnectionTester{})
-	id, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1250000000", SecretID: "id", SecretKey: "key", Bucket: "assets", Region: "ap-guangzhou", IsEnabled: yesno.Yes})
+	id, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1250000000", SecretID: "id", SecretKey: "key", Bucket: "assets", Region: "ap-guangzhou", Status: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Exec("INSERT INTO storage_upload_rule (cos_config_id, is_enabled) VALUES (?, 1)", id).Error; err != nil {
+	if err := db.WithContext(ctx).Exec("INSERT INTO storage_upload_rule (cos_config_id, status) VALUES (?, 1)", id).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -174,8 +174,8 @@ func TestServiceAllowsDisableAndRequiresNoReferencesToDelete(t *testing.T) {
 		t.Fatalf("disable referenced config error = %v", err)
 	}
 	stored := readCurrentConfig(t, db, ctx, id)
-	if stored.IsEnabled != yesno.No {
-		t.Fatalf("stored isEnabled = %d want disabled", stored.IsEnabled)
+	if stored.Status != yesno.No {
+		t.Fatalf("stored status = %d want disabled", stored.Status)
 	}
 	if err := service.Delete(ctx, id); appCode(err) != apperror.CodeConflict {
 		t.Fatalf("delete referenced config error = %v", err)
@@ -218,16 +218,16 @@ func TestServiceRejectsInvalidInputsAndUnavailableTester(t *testing.T) {
 	}
 	service := newTestService(t, db, keys, nil)
 	for _, input := range []CreateInput{
-		{Name: "", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", IsEnabled: yesno.Yes},
-		{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", Endpoint: stringPointer("http://cos.example.com"), IsEnabled: yesno.Yes},
-		{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", Endpoint: stringPointer("https://bad_host"), IsEnabled: yesno.Yes},
-		{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", BucketDomain: stringPointer("not a url"), IsEnabled: yesno.Yes},
+		{Name: "", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", Status: yesno.Yes},
+		{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", Endpoint: stringPointer("http://cos.example.com"), Status: yesno.Yes},
+		{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", Endpoint: stringPointer("https://bad_host"), Status: yesno.Yes},
+		{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", BucketDomain: stringPointer("not a url"), Status: yesno.Yes},
 	} {
 		if _, err := service.Create(ctx, input); appCode(err) != apperror.CodeInvalidRequest {
 			t.Fatalf("invalid create error = %v input=%+v", err, input)
 		}
 	}
-	id, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", IsEnabled: yesno.Yes})
+	id, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", Status: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestServiceRequiresGenerationRepositoryForMutations(t *testing.T) {
 		t.Fatal(err)
 	}
 	service := NewService(NewRepository(db), keys, &recordingConnectionTester{})
-	if _, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", IsEnabled: yesno.Yes}); appCode(err) != apperror.CodeDependencyUnavailable {
+	if _, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "bucket", Region: "region", Status: yesno.Yes}); appCode(err) != apperror.CodeDependencyUnavailable {
 		t.Fatalf("create without generations error = %v", err)
 	}
 }

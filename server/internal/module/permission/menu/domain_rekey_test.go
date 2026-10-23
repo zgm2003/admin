@@ -155,7 +155,7 @@ func TestPrepareSchemaRepairsCorruptedAccessRootI18nKey(t *testing.T) {
 	access := menu.Menu{
 		PlatformID: adminPlatform.ID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access",
 		I18nKey: &corrupted, Icon: &corrupted, SortOrder: 200,
-		IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		Status: yesno.Yes, IsHidden: yesno.No,
 	}
 	if err := db.Create(&access).Error; err != nil {
 		t.Fatalf("create corrupted access root: %v", err)
@@ -266,7 +266,7 @@ func openDomainRekeySchema(t *testing.T, suffix string) (*gorm.DB, context.Conte
 			view_key VARCHAR(128),
 			icon VARCHAR(128),
 			sort_order INTEGER NOT NULL DEFAULT 0,
-			is_enabled SMALLINT NOT NULL DEFAULT 1,
+			status SMALLINT NOT NULL DEFAULT 1,
 			is_hidden SMALLINT NOT NULL DEFAULT 0,
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -299,7 +299,7 @@ func openDomainRekeySchema(t *testing.T, suffix string) (*gorm.DB, context.Conte
 		if err := tx.Exec(`
 			INSERT INTO permission_menu
 				(id, parent_id, menu_type, code, i18n_key, path, component_path, view_key, icon,
-				 sort_order, is_enabled, is_hidden, deleted_at)
+				 sort_order, status, is_hidden, deleted_at)
 			VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1, ?, ?)`,
 			row.id, row.parentID, row.menuType, row.code, row.i18nKey, row.path, row.viewKey, row.icon,
 			row.sortOrder, boolToSmallint(row.menuType == "action"), row.deletedAt).Error; err != nil {

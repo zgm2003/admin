@@ -21,7 +21,7 @@ func (r *Repository) Current(ctx context.Context, userID int64) (Current, error)
 	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", userID).Take(&row).Error; err != nil {
 		return Current{}, fmt.Errorf("find current phone identity: %w", err)
 	}
-	return Current{UserID: row.ID, Phone: row.Phone, IsEnabled: row.IsEnabled == yesno.Yes}, nil
+	return Current{UserID: row.ID, Phone: row.Phone, Status: row.Status == yesno.Yes}, nil
 }
 
 func (r *Repository) PhoneInUse(ctx context.Context, userID int64, value string) (bool, error) {

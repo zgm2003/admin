@@ -54,7 +54,7 @@ describe('user management', () => {
       phone: '+86 138-0000-0000',
       updatedAt: '2026-08-20T02:00:00Z',
     })
-    updateStatus.mockResolvedValue({ id: 7, isEnabled: YesNo.No })
+    updateStatus.mockResolvedValue({ id: 7, status: YesNo.No })
     deleteUser.mockResolvedValue({})
     getUserRoles.mockResolvedValue({
       user: {
@@ -62,7 +62,7 @@ describe('user management', () => {
         username: 'alice',
         email: 'alice@example.com',
         phone: '+86 138-0000-0000',
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
       },
       roles: roles(),
       roleIds: [2, 3],
@@ -133,7 +133,7 @@ describe('user management', () => {
       page: 1,
       pageSize: 20,
       keyword: 'alice',
-      isEnabled: YesNo.No,
+      status: YesNo.No,
       roleId: 2,
     })
   })
@@ -496,14 +496,14 @@ describe('user management', () => {
         username: 'alice',
         email: 'alice@example.com',
         phone: '+86 138-0000-0000',
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
       },
       roles: [
         {
           id: 3,
           code: 'ai_tester',
           name: 'AI Tester',
-          isEnabled: YesNo.No,
+          status: YesNo.No,
           selectable: true,
           locked: false,
         },
@@ -511,7 +511,7 @@ describe('user management', () => {
           id: 2,
           code: 'member',
           name: 'Member',
-          isEnabled: YesNo.Yes,
+          status: YesNo.Yes,
           selectable: true,
           locked: false,
         },
@@ -519,7 +519,7 @@ describe('user management', () => {
           id: 1,
           code: 'super_admin',
           name: 'Super Admin',
-          isEnabled: YesNo.Yes,
+          status: YesNo.Yes,
           selectable: false,
           locked: false,
         },
@@ -543,14 +543,14 @@ describe('user management', () => {
         username: 'alice',
         email: 'alice@example.com',
         phone: null,
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
       },
       roles: [
         {
           id: 1,
           code: 'backend_locked',
           name: 'Locked',
-          isEnabled: YesNo.No,
+          status: YesNo.No,
           selectable: false,
           locked: true,
         },
@@ -572,7 +572,7 @@ describe('user management', () => {
         username: 'alice',
         email: 'alice@example.com',
         phone: null,
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
       },
       roles: roles(),
       roleIds: [2],
@@ -646,7 +646,7 @@ function row() {
     username: 'alice',
     email: 'alice@example.com',
     phone: '+86 138-0000-0000',
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
     actions: { update: true, status: true, delete: true, authorize: true },
     actionLabels: { update: '编辑', status: '禁用', delete: '删除用户', authorize: '分配角色' },
     roles: roles(),
@@ -660,7 +660,7 @@ function roles() {
       id: 3,
       code: 'ai_tester',
       name: 'AI Tester',
-      isEnabled: YesNo.No,
+      status: YesNo.No,
       selectable: true,
       locked: false,
     },
@@ -668,7 +668,7 @@ function roles() {
       id: 2,
       code: 'member',
       name: 'Member',
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       selectable: true,
       locked: false,
     },
@@ -708,7 +708,7 @@ function roleResponse(id: number, roleIds: number[]): userAPI.UserRolesResponse 
       username: `user${id}`,
       email: `user${id}@example.com`,
       phone: null,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
     },
     roles: roles(),
     roleIds,

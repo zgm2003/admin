@@ -21,7 +21,7 @@ export interface PaymentConfig {
   sellerId: string
   currentVersion: number
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
   notifyUrl: string
   notifyUrlTemplate: string
   payMethods: number[]
@@ -39,7 +39,7 @@ export interface PaymentConfig {
 }
 export interface PaymentConfigQuery extends PageRequest {
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
 }
 export interface PaymentConfigOptions {
   providers: NumericOption[]
@@ -50,7 +50,7 @@ export interface PaymentConfigOptions {
     provider: number
     environment: number
     payMethods: number[]
-    isEnabled: YesNo
+    status: YesNo
     sortOrder: number
     notifyUrl: string
   }
@@ -78,7 +78,7 @@ export interface CreatePaymentConfigInput {
   notifyUrl: string
   payMethods: number[]
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
 }
 export interface UpdatePaymentConfigInput {
   name: string
@@ -125,11 +125,11 @@ export function publishPaymentConfigVersion(
 }
 export function updatePaymentConfigStatus(
   id: number,
-  isEnabled: YesNo,
-): Promise<{ id: number; isEnabled: YesNo }> {
-  return request.patch<{ id: number; isEnabled: YesNo }, { isEnabled: YesNo }>(
+  status: YesNo,
+): Promise<{ id: number; status: YesNo }> {
+  return request.patch<{ id: number; status: YesNo }, { status: YesNo }>(
     `${base}/${id}/status`,
-    { isEnabled },
+    { status },
   )
 }
 export function deletePaymentConfig(id: number): Promise<Record<string, never>> {

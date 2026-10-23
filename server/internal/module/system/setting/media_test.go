@@ -16,7 +16,7 @@ func TestAdvancedListIncludesMediaSettings(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	now := time.Now().UTC()
 	for _, key := range []string{BrandTitleZhCNKey, BrandTitleEnUSKey, BrandDefaultAvatarKey, sharedsetting.MailRecipientRuleImportTemplateObjectKey, LegalUserAgreementKey, LegalPrivacyPolicyKey, "auth.captcha.ttl_minutes"} {
-		row := Model{Key: key, Value: "value", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+		row := Model{Key: key, Value: "value", ValueType: ValueTypeString, Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 		if err := db.WithContext(ctx).Create(&row).Error; err != nil {
 			t.Fatal(err)
 		}
@@ -69,7 +69,7 @@ func TestVisualMediaValueTypeRejectsDocumentsAndSurvivesCache(t *testing.T) {
 		if err := validateInput("app.assets.visual", key, 6, ""); err != nil {
 			t.Fatal(err)
 		}
-		row := Record{Key: "app.assets.visual", Value: key, ValueType: 6, IsEnabled: yesno.Yes}
+		row := Record{Key: "app.assets.visual", Value: key, ValueType: 6, Status: yesno.Yes}
 		raw, err := encodeRecordPayload(1, row)
 		if err != nil {
 			t.Fatal(err)
@@ -105,7 +105,7 @@ func TestMediaIsAValueTypeForAnySettingKey(t *testing.T) {
 
 func TestMediaTypeSurvivesCacheRoundTrip(t *testing.T) {
 	now := time.Now().UTC()
-	row := Record{ID: 1, Key: "app.assets.custom", Value: settingImageKey, ValueType: 5, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	row := Record{ID: 1, Key: "app.assets.custom", Value: settingImageKey, ValueType: 5, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	encoded, err := encodeRecordPayload(1, row)
 	if err != nil {
 		t.Fatal(err)
@@ -126,9 +126,9 @@ func TestMediaTypeSurvivesCacheRoundTrip(t *testing.T) {
 func TestBrandColdReadRejectsInvalidMediaBeforeCaching(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "Title", ValueType: ValueTypeString, IsEnabled: yesno.Yes},
-		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "Title", ValueType: ValueTypeString, IsEnabled: yesno.Yes},
-		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "https://example.com/avatar.png", ValueType: 5, IsEnabled: yesno.Yes},
+		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "Title", ValueType: ValueTypeString, Status: yesno.Yes},
+		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "Title", ValueType: ValueTypeString, Status: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "https://example.com/avatar.png", ValueType: 5, Status: yesno.Yes},
 	}}
 	if _, err := harness.service(fake).Brand(harness.ctx); err == nil {
 		t.Fatal("bad brand media source returned as success")

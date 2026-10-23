@@ -98,7 +98,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	if err := validateTemplate(input.VariableKeys, input.ExampleVariables, content); err != nil {
 		return Safe{}, apperror.InvalidRequest(err)
 	}
-	if current.IsEnabled == yesno.Yes && templateID == "" {
+	if current.Status == yesno.Yes && templateID == "" {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("an enabled sms template requires a provider template id"))
 	}
 
@@ -124,7 +124,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 
 func (s *Service) UpdateStatus(ctx context.Context, id int64, status yesno.Value) error {
 	if !yesno.IsValid(status) {
-		return apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+		return apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 	}
 	current, err := s.repository.FindByID(ctx, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {

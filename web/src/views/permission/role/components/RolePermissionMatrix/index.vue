@@ -112,7 +112,7 @@ function toggleGroupCollapse(group: RoleMatrixGroup): void {
             @update:model-value="(value: unknown) => setGroupChecked(group, Boolean(value))"
           >
             {{ group.groupName }} · {{ group.groupCode }}
-            <el-tag v-if="group.groupIsEnabled === YesNo.No" size="small" type="danger">
+            <el-tag v-if="group.groupStatus === YesNo.No" size="small" type="danger">
               {{ t('common.disable') }}
             </el-tag>
           </el-checkbox>
@@ -165,7 +165,7 @@ function toggleGroupCollapse(group: RoleMatrixGroup): void {
                     {{ t('common.actions') }}
                     {{ selectedActionCount(row) }}/{{ row.actions.length }}
                   </span>
-                  <el-tag v-if="row.pageIsEnabled === YesNo.No" size="small" type="danger">
+                  <el-tag v-if="row.pageStatus === YesNo.No" size="small" type="danger">
                     {{ t('common.disable') }}
                   </el-tag>
                 </span>
@@ -187,7 +187,7 @@ function toggleGroupCollapse(group: RoleMatrixGroup): void {
                   <span class="role-permission-matrix__permission-copy">
                     <strong>{{ action.name }}</strong>
                     <span>{{ action.code }}</span>
-                    <el-tag v-if="action.isEnabled === YesNo.No" size="small" type="danger">
+                    <el-tag v-if="action.status === YesNo.No" size="small" type="danger">
                       {{ t('common.disable') }}
                     </el-tag>
                   </span>

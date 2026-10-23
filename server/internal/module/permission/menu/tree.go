@@ -191,7 +191,7 @@ func (index menuIndex) ancestors(id int64) ([]int64, error) {
 
 func (index menuIndex) validateEnabledAncestors() error {
 	for id, item := range index.byID {
-		if item.IsEnabled != yesno.Yes {
+		if item.Status != yesno.Yes {
 			continue
 		}
 		ancestors, err := index.ancestors(id)
@@ -199,7 +199,7 @@ func (index menuIndex) validateEnabledAncestors() error {
 			return err
 		}
 		for _, ancestorID := range ancestors {
-			if index.byID[ancestorID].IsEnabled != yesno.Yes {
+			if index.byID[ancestorID].Status != yesno.Yes {
 				return &menuParentDisabledViolation{code: item.Code}
 			}
 		}
@@ -227,7 +227,7 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 		return ManagedMenu{
 			ID: item.ID, PlatformID: item.PlatformID, ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
 			I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon, Remark: item.Remark,
-			SortOrder: item.SortOrder, IsEnabled: item.IsEnabled, IsHidden: item.IsHidden,
+			SortOrder: item.SortOrder, Status: item.Status, IsHidden: item.IsHidden,
 			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt, IsProtected: IsProtectedCode(item.Code), Children: children,
 		}, nil
 	}
@@ -242,7 +242,7 @@ func (index menuIndex) buildManagedTree() ([]ManagedMenu, error) {
 }
 
 func validateStoredMenu(item Menu) error {
-	if item.ID < 1 || item.PlatformID < 1 || !yesno.IsValid(item.IsEnabled) || !yesno.IsValid(item.IsHidden) || !validMenuName(item.Name) || !validMenuCode(item.Code) {
+	if item.ID < 1 || item.PlatformID < 1 || !yesno.IsValid(item.Status) || !yesno.IsValid(item.IsHidden) || !validMenuName(item.Name) || !validMenuCode(item.Code) {
 		return fmt.Errorf("%w: code or stored scalar is invalid", errMenuFields)
 	}
 	if err := validateMenuTypeCode(item.MenuType, item.Code); err != nil {
@@ -337,7 +337,7 @@ func normalizeRemark(value *string) (*string, error) {
 }
 
 func normalizeCreateInput(input CreateInput) (CreateInput, error) {
-	if input.PlatformID < 1 || !validMenuName(input.Name) || !validMenuCode(input.Code) || !yesno.IsValid(input.IsEnabled) ||
+	if input.PlatformID < 1 || !validMenuName(input.Name) || !validMenuCode(input.Code) || !yesno.IsValid(input.Status) ||
 		!yesno.IsValid(input.IsHidden) || input.SortOrder < 0 {
 		return CreateInput{}, fmt.Errorf("%w: create scalar is invalid", errMenuFields)
 	}

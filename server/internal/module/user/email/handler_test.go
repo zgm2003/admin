@@ -94,7 +94,7 @@ func TestSendCodeReturnsMailFailureAndCleansUpUnsentProof(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			current := "old@example.com"
-			accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, IsEnabled: true}}
+			accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, Status: true}}
 			verification := &fakeVerificationStore{}
 			if cleanupFails {
 				verification.deleteErr = errors.New("verification store unavailable")

@@ -185,14 +185,14 @@ describe('ObjectStorage', () => {
 
   it('opens the upload-rule AppDialog with platform and global COS config options', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
         {
           id: 8,
           name: '默认 COS',
           bucket: 'admin-assets',
           region: 'ap-guangzhou',
-          isEnabled: 1,
+          status: 1,
         },
       ],
     })
@@ -213,9 +213,9 @@ describe('ObjectStorage', () => {
 
   it('uses required business fields and creatable multi-selects in the upload-rule form', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
@@ -255,9 +255,9 @@ describe('ObjectStorage', () => {
       Object.assign('confirm' as const, { value: '', action: 'confirm' as const }),
     )
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
@@ -296,9 +296,9 @@ describe('ObjectStorage', () => {
 
   it('selects all built-in extensions and MIME types from the dropdown headers', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
@@ -356,9 +356,9 @@ describe('ObjectStorage', () => {
 
   it('rejects an upload rule without allowed extensions before creating', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
@@ -386,9 +386,9 @@ describe('ObjectStorage', () => {
 
   it('shows the public-access warning when public mode is selected', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
@@ -420,7 +420,7 @@ describe('ObjectStorage', () => {
           region: 'ap-guangzhou',
           endpoint: null,
           bucketDomain: null,
-          isEnabled: 1,
+          status: 1,
           hasCredentials: true,
           remark: '',
           createdAt: '2026-08-30T00:00:00Z',
@@ -519,7 +519,7 @@ describe('ObjectStorage', () => {
       page: 1,
       pageSize: 20,
       keyword: '主配置',
-      isEnabled: 1,
+      status: 1,
     })
   })
 
@@ -534,7 +534,7 @@ describe('ObjectStorage', () => {
           region: 'ap-guangzhou',
           endpoint: null,
           bucketDomain: null,
-          isEnabled: 1,
+          status: 1,
           hasCredentials: true,
           remark: '',
           createdAt: '2026-08-30T00:00:00Z',
@@ -569,9 +569,9 @@ describe('ObjectStorage', () => {
 
   it('keeps upload codes editable and includes them in the upload-rule update payload', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     vi.mocked(listUploadRules).mockResolvedValue({
@@ -589,7 +589,7 @@ describe('ObjectStorage', () => {
           allowedExtensions: ['png'],
           allowedMimeTypes: ['image/png'],
           accessMode: 'private',
-          isEnabled: 1,
+          status: 1,
           remark: '',
           createdAt: '2026-08-30T00:00:00Z',
           updatedAt: '2026-08-30T00:00:00Z',
@@ -652,9 +652,9 @@ describe('ObjectStorage', () => {
 
   it('places create status beside access mode and submits a disabled rule', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     const wrapper = mountPage(['storage:object:list', 'storage:uploadRule:create'])
@@ -693,16 +693,16 @@ describe('ObjectStorage', () => {
       allowedExtensions: ['png'],
       allowedMimeTypes: [],
       accessMode: 'private',
-      isEnabled: 0,
+      status: 0,
       remark: '',
     })
   })
 
   it('updates status from the edit form only with the status permission', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     vi.mocked(listUploadRules).mockResolvedValue({
@@ -720,7 +720,7 @@ describe('ObjectStorage', () => {
           allowedExtensions: ['png'],
           allowedMimeTypes: ['image/png'],
           accessMode: 'private',
-          isEnabled: 1,
+          status: 1,
           remark: '',
           createdAt: '2026-08-30T00:00:00Z',
           updatedAt: '2026-08-30T00:00:00Z',
@@ -730,7 +730,7 @@ describe('ObjectStorage', () => {
       page: 1,
       pageSize: 20,
     })
-    vi.mocked(updateUploadRuleStatus).mockResolvedValue({ id: 9, isEnabled: 0 })
+    vi.mocked(updateUploadRuleStatus).mockResolvedValue({ id: 9, status: 0 })
     const wrapper = mountPage([
       'storage:object:list',
       'storage:uploadRule:update',
@@ -761,16 +761,16 @@ describe('ObjectStorage', () => {
       allowedExtensions: ['png'],
       allowedMimeTypes: ['image/png'],
       remark: '',
-      isEnabled: 0,
+      status: 0,
     })
     expect(updateUploadRuleStatus).not.toHaveBeenCalled()
   })
 
   it('confirms replacing the enabled rule before creating another enabled rule', async () => {
     vi.mocked(getUploadRulePageInit).mockResolvedValue({
-      platforms: [{ id: 1, code: 'admin', name: 'Admin', isEnabled: 1 }],
+      platforms: [{ id: 1, code: 'admin', name: 'Admin', status: 1 }],
       configs: [
-        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', isEnabled: 1 },
+        { id: 8, name: '默认 COS', bucket: 'admin-assets', region: 'ap-guangzhou', status: 1 },
       ],
     })
     vi.mocked(listUploadRules).mockResolvedValue({
@@ -788,7 +788,7 @@ describe('ObjectStorage', () => {
           allowedExtensions: ['png'],
           allowedMimeTypes: ['image/png'],
           accessMode: 'private',
-          isEnabled: 1,
+          status: 1,
           remark: '',
           createdAt: '2026-09-17T00:00:00Z',
           updatedAt: '2026-09-17T00:00:00Z',

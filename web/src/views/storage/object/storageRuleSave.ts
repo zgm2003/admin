@@ -10,13 +10,13 @@ export async function saveExistingRule(
   id: number,
   form: RuleForm,
   canUpdateStatus: boolean,
-  mutable: Omit<Parameters<typeof updateUploadRule>[1], 'isEnabled'>,
+  mutable: Omit<Parameters<typeof updateUploadRule>[1], 'status'>,
   t: Translate,
 ): Promise<void> {
   if (canUpdateStatus) {
     await ElMessageBox.confirm(
       t(
-        form.isEnabled === YesNo.Yes
+        form.status === YesNo.Yes
           ? 'storage.confirmEnabledRuleReplacement'
           : 'storage.confirmStatus',
       ),
@@ -28,7 +28,7 @@ export async function saveExistingRule(
   }
   await updateUploadRule(id, {
     ...mutable,
-    ...(canUpdateStatus ? { isEnabled: form.isEnabled } : {}),
+    ...(canUpdateStatus ? { status: form.status } : {}),
   })
 }
 
@@ -37,7 +37,7 @@ export async function saveNewRule(
   mutable: Parameters<typeof createUploadRule>[0],
   t: Translate,
 ): Promise<void> {
-  if (form.isEnabled === YesNo.Yes) {
+  if (form.status === YesNo.Yes) {
     await ElMessageBox.confirm(t('storage.confirmEnabledRuleReplacement'), t('common.status'), {
       type: 'warning',
     })

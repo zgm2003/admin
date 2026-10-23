@@ -27,7 +27,7 @@ var platformConstraints = []constraintDefinition{
 	{name: "ck_permission_auth_platform_bind_ip", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_bind_ip CHECK (bind_ip IN (0, 1))`},
 	{name: "ck_permission_auth_platform_max_sessions", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_max_sessions CHECK (max_sessions BETWEEN 0 AND 100)`},
 	{name: "ck_permission_auth_platform_allow_register", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_allow_register CHECK (allow_register IN (0, 1))`},
-	{name: "ck_permission_auth_platform_is_enabled", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_is_enabled CHECK (is_enabled IN (0, 1))`},
+	{name: "ck_permission_auth_platform_status", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_status CHECK (status IN (0, 1))`},
 	{name: "ck_permission_auth_platform_is_builtin", ddl: `ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_permission_auth_platform_is_builtin CHECK (is_builtin IN (0, 1))`},
 }
 
@@ -151,7 +151,7 @@ func builtinAdmin(now time.Time) Platform {
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		AllowRegister: yesno.Yes, Status: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 }
@@ -162,7 +162,7 @@ func builtinCanvas(now time.Time) Platform {
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		AllowRegister: yesno.Yes, Status: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 }

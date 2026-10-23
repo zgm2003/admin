@@ -64,7 +64,7 @@ func TestRetentionUsesDynamicCutoffAndTenBatchLimit(t *testing.T) {
 }
 
 func retentionRecord(value string, valueType int, enabled, builtin yesno.Value) sharedsetting.Record {
-	return sharedsetting.Record{Key: sharedsetting.RealtimeEventRetentionDaysKey, Value: value, ValueType: valueType, IsEnabled: enabled, IsBuiltin: builtin}
+	return sharedsetting.Record{Key: sharedsetting.RealtimeEventRetentionDaysKey, Value: value, ValueType: valueType, Status: enabled, IsBuiltin: builtin}
 }
 
 type retentionSettingStub struct {

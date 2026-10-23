@@ -131,7 +131,7 @@ func TestStatusForwardsAValidatedFlag(t *testing.T) {
 	router.PATCH("/template/:id/status", NewHandler(service).Status)
 
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodPatch, "/template/4/status", strings.NewReader(`{"isEnabled":1}`))
+	request := httptest.NewRequest(http.MethodPatch, "/template/4/status", strings.NewReader(`{"status":1}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK || service.statusID != 4 || service.statusVal != yesno.Yes {
@@ -139,7 +139,7 @@ func TestStatusForwardsAValidatedFlag(t *testing.T) {
 	}
 
 	invalid := httptest.NewRecorder()
-	badRequest := httptest.NewRequest(http.MethodPatch, "/template/4/status", strings.NewReader(`{"isEnabled":7}`))
+	badRequest := httptest.NewRequest(http.MethodPatch, "/template/4/status", strings.NewReader(`{"status":7}`))
 	badRequest.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(invalid, badRequest)
 	if invalid.Code != http.StatusBadRequest {

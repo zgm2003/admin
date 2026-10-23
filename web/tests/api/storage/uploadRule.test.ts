@@ -55,7 +55,7 @@ describe('thin API HTTP contract', () => {
   it('createUploadRule preserves the HTTP contract and backend data', async () => {
     const data: Parameters<typeof api.createUploadRule>[0] = {
       platformId: 1,
-      isEnabled: 0,
+      status: 0,
       codes: ['sample'],
       name: 'sample',
       cosConfigId: 1,
@@ -74,7 +74,7 @@ describe('thin API HTTP contract', () => {
   it('createUploadRule propagates request failures unchanged', async () => {
     const data: Parameters<typeof api.createUploadRule>[0] = {
       platformId: 1,
-      isEnabled: 0,
+      status: 0,
       codes: ['sample'],
       name: 'sample',
       cosConfigId: 1,
@@ -123,22 +123,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateUploadRuleStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateUploadRuleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateUploadRuleStatus>[1] = 0
+    const status: Parameters<typeof api.updateUploadRuleStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateUploadRuleStatus(id, isEnabled)
+    const result = await api.updateUploadRuleStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/storage/uploadrule/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateUploadRuleStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateUploadRuleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateUploadRuleStatus>[1] = 0
+    const status: Parameters<typeof api.updateUploadRuleStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateUploadRuleStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateUploadRuleStatus(id, status)).rejects.toBe(error)
   })
   it('deleteUploadRule preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.deleteUploadRule>[0] = 1

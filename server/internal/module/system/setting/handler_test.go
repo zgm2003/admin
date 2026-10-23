@@ -24,7 +24,7 @@ func (f detailHandlerService) List(context.Context, ListQuery) (ListResult, erro
 	return ListResult{}, nil
 }
 func (f detailHandlerService) FindByKey(context.Context, string) (sharedsetting.Record, error) {
-	return sharedsetting.Record{Key: f.record.Key, Value: f.record.Value, ValueType: f.record.ValueType, Description: f.record.Description, IsEnabled: f.record.IsEnabled, IsBuiltin: f.record.IsBuiltin}, nil
+	return sharedsetting.Record{Key: f.record.Key, Value: f.record.Value, ValueType: f.record.ValueType, Description: f.record.Description, Status: f.record.Status, IsBuiltin: f.record.IsBuiltin}, nil
 }
 func (f detailHandlerService) Find(context.Context, string) (Record, error) { return f.record, nil }
 func (f detailHandlerService) Create(context.Context, CreateInput) (int64, error) {
@@ -48,7 +48,7 @@ func TestDetailReturnsPersistenceMetadata(t *testing.T) {
 	updatedAt := createdAt.Add(time.Hour)
 	handler := NewHandler(detailHandlerService{record: Record{
 		ID: 42, Key: "auth.captcha.ttl_minutes", Value: "2", ValueType: ValueTypeNumber,
-		Description: "Captcha lifetime", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		Description: "Captcha lifetime", Status: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: createdAt, UpdatedAt: updatedAt,
 	}})
 	router := gin.New()

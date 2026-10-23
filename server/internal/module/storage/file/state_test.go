@@ -159,7 +159,7 @@ func fileFixture(t *testing.T) (*Service, *gorm.DB, context.Context, *memoryCOS,
 	if e != nil {
 		t.Fatal(e)
 	}
-	runtime := cosconfig.RuntimeConfig{ID: 1, AppID: "1", SecretIDCiphertext: encrypted(t, keys.StorageEncryptionKey(), "sid"), SecretKeyCiphertext: encrypted(t, keys.StorageEncryptionKey(), "key"), CurrentVersion: 1, IsEnabled: yesno.Yes, Versions: []cosconfig.RuntimeVersion{{Version: 1, Bucket: "fixture", Region: "ap-guangzhou"}}}
+	runtime := cosconfig.RuntimeConfig{ID: 1, AppID: "1", SecretIDCiphertext: encrypted(t, keys.StorageEncryptionKey(), "sid"), SecretKeyCiphertext: encrypted(t, keys.StorageEncryptionKey(), "key"), CurrentVersion: 1, Status: yesno.Yes, Versions: []cosconfig.RuntimeVersion{{Version: 1, Bucket: "fixture", Region: "ap-guangzhou"}}}
 	var data bytes.Buffer
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 	img.Set(0, 0, color.White)

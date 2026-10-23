@@ -24,7 +24,7 @@ func (s *Store) ReadUser(ctx context.Context, userID int64) (UserState, bool, er
 		return UserState{}, found, err
 	}
 	var state UserState
-	if err := decodeClosedJSON(raw, []string{"schemaVersion", "state", "userId", "generation", "isEnabled", "deleted", "mutationToken"}, &state); err != nil {
+	if err := decodeClosedJSON(raw, []string{"schemaVersion", "state", "userId", "generation", "status", "deleted", "mutationToken"}, &state); err != nil {
 		return UserState{}, true, fmt.Errorf("decode authentication user state: %w", err)
 	}
 	if err := validateUserState(userID, state); err != nil {
@@ -102,7 +102,7 @@ func (s *Store) readOrRepairUser(ctx context.Context, userID int64, desired User
 		return s.readOrRepairUser(ctx, userID, desired, desiredPayload)
 	}
 	var current UserState
-	decodeErr := decodeClosedJSON(raw, []string{"schemaVersion", "state", "userId", "generation", "isEnabled", "deleted", "mutationToken"}, &current)
+	decodeErr := decodeClosedJSON(raw, []string{"schemaVersion", "state", "userId", "generation", "status", "deleted", "mutationToken"}, &current)
 	if decodeErr == nil {
 		decodeErr = validateUserState(userID, current)
 	}
@@ -185,7 +185,7 @@ func (s *Store) repairExact(ctx context.Context, key, corruptPayload, readyPaylo
 func userStateFromFact(fact UserFact, state string, token *string) UserState {
 	return UserState{
 		SchemaVersion: SchemaVersion, State: state, UserID: fact.UserID, Generation: fact.Generation,
-		IsEnabled: fact.IsEnabled, Deleted: fact.Deleted, MutationToken: token,
+		Status: fact.Status, Deleted: fact.Deleted, MutationToken: token,
 	}
 }
 

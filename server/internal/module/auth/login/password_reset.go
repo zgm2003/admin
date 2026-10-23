@@ -63,7 +63,7 @@ func (s *Service) ForgotPassword(ctx context.Context, input ForgotPasswordInput)
 		}
 		return SendCodeResult{}, apperror.DependencyUnavailable(err)
 	}
-	if credential.IsEnabled != yesno.Yes {
+	if credential.Status != yesno.Yes {
 		return SendCodeResult{}, apperror.NotFound(fmt.Errorf("account is not registered"))
 	}
 	if input.LoginType == authplatform.LoginTypePhone {
@@ -267,7 +267,7 @@ func (s *Service) ResetPassword(ctx context.Context, input ResetPasswordInput) e
 		}
 		return apperror.DependencyUnavailable(err)
 	}
-	if credential.IsEnabled != yesno.Yes {
+	if credential.Status != yesno.Yes {
 		return apperror.NotFound(fmt.Errorf("account is not registered"))
 	}
 	scene := messagemail.SceneForget

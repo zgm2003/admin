@@ -25,7 +25,7 @@ func (r *Repository) Current(ctx context.Context, userID int64) (Current, error)
 	if row.Email != "" {
 		value = &row.Email
 	}
-	return Current{UserID: row.ID, Email: value, IsEnabled: row.IsEnabled == yesno.Yes}, nil
+	return Current{UserID: row.ID, Email: value, Status: row.Status == yesno.Yes}, nil
 }
 
 func (r *Repository) EmailInUse(ctx context.Context, userID int64, value string) (bool, error) {

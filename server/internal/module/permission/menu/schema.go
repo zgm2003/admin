@@ -41,9 +41,9 @@ var menuConstraints = []constraintDefinition{
 		ddl:   `ALTER TABLE permission_menu ADD CONSTRAINT ck_permission_menu_sort_order CHECK (sort_order >= 0)`,
 	},
 	{
-		name:  "ck_permission_menu_is_enabled",
+		name:  "ck_permission_menu_status",
 		table: "permission_menu",
-		ddl:   `ALTER TABLE permission_menu ADD CONSTRAINT ck_permission_menu_is_enabled CHECK (is_enabled IN (0, 1))`,
+		ddl:   `ALTER TABLE permission_menu ADD CONSTRAINT ck_permission_menu_status CHECK (status IN (0, 1))`,
 	},
 	{
 		name:  "ck_permission_menu_is_hidden",

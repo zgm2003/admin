@@ -124,7 +124,7 @@ func readySendingFixture(t *testing.T) (*Service, *sendingLogStoreTest, *verific
 		Config: ConfiguredConfig{
 			SecretIDCiphertext: secretID, SecretKeyCiphertext: secretKey,
 			SDKAppID: "sdk-app", SignName: "sign", Region: "ap-guangzhou",
-			TTLMinutes: 5, IsEnabled: yesno.Yes,
+			TTLMinutes: 5, Status: yesno.Yes,
 		},
 		Templates: map[string]TemplateFact{
 			template.SceneLogin:          readyTemplateFact("登录验证码", "123456"),
@@ -149,7 +149,7 @@ func readyTemplateFact(name, providerID string) TemplateFact {
 		Name: name, TencentTemplateID: providerID,
 		VariableKeys:     []string{"code", "ttl_minutes"},
 		ExampleVariables: map[string]string{"code": "123456", "ttl_minutes": "5"},
-		IsEnabled:        yesno.Yes,
+		Status:        yesno.Yes,
 	}
 }
 
@@ -260,7 +260,7 @@ func TestPreparePhoneVerifyCodeTreatsDisabledTemplateAsDependencyFailure(t *test
 	service, _, _, _ := readySendingFixture(t)
 	facts := service.stores.Runtime.(runtimeStoreTest).facts
 	fact := facts.Templates[template.SceneLogin]
-	fact.IsEnabled = yesno.No
+	fact.Status = yesno.No
 	facts.Templates[template.SceneLogin] = fact
 	service.stores.Runtime = runtimeStoreTest{facts: facts}
 	_, err := service.PreparePhoneVerifyCode(context.Background(), PhoneVerifyCodePrepareInput{PlatformID: 2, Scene: template.SceneLogin, ToPhone: "15671628271"})

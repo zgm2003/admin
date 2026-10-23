@@ -85,19 +85,19 @@ function matrixGroups(): RoleMatrixGroup[] {
       groupKey: 'menu:1',
       groupCode: 'system',
       groupName: '系统管理',
-      groupIsEnabled: YesNo.Yes,
+      groupStatus: YesNo.Yes,
       rows: [
         {
           pageId: 2,
           pageCode: 'permission:role:list',
           pageName: '角色管理',
-          pageIsEnabled: YesNo.Yes,
+          pageStatus: YesNo.Yes,
           actions: [
             {
               id: 3,
               code: 'permission:role:create',
               name: '新增角色',
-              isEnabled: YesNo.No,
+              status: YesNo.No,
             },
           ],
         },

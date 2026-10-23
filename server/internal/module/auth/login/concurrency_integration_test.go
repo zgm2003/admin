@@ -187,7 +187,7 @@ func TestCreateVerifiedIdentityRollsBackWhenProfileInsertFails(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := db.WithContext(ctx).Create(&role.Role{Code: "default", Name: "Default", IsDefault: yesno.Yes, IsEnabled: yesno.Yes}).Error; err != nil {
+	if err := db.WithContext(ctx).Create(&role.Role{Code: "default", Name: "Default", IsDefault: yesno.Yes, Status: yesno.Yes}).Error; err != nil {
 		t.Fatal(err)
 	}
 
@@ -217,7 +217,7 @@ func TestPostgresLoginLogFailureDoesNotChangeSuccessfulCredential(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	users := &fakeUserStore{credential: user.Credential{ID: userID, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: userID, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, Status: yesno.Yes}}
 	sessions := &fakeSessionStore{createSession: Session{ID: sessionID, UserID: userID, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: testAuthClient().ClientIP}}
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: testPolicy()})
 	failingDB, _ := openAuthFaultDatabase(t, "test_auth_login_log_fault")

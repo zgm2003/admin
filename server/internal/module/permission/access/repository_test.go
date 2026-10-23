@@ -59,7 +59,7 @@ func TestFindSourceWithVersionRecognizesSuperAdminWithoutDirectGrants(t *testing
 	if err := fixture.db.WithContext(fixture.ctx).Delete(&fixture.userRole).Error; err != nil {
 		t.Fatal(err)
 	}
-	superRole := role.Role{Code: role.CodeSuperAdmin, Name: "Super Administrator", IsDefault: yesno.No, IsEnabled: yesno.Yes}
+	superRole := role.Role{Code: role.CodeSuperAdmin, Name: "Super Administrator", IsDefault: yesno.No, Status: yesno.Yes}
 	if err := fixture.db.WithContext(fixture.ctx).Create(&superRole).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestFindSourceWithVersionRecognizesSuperAdminWithoutDirectGrants(t *testing
 func TestFindSourceWithVersionRejectsUnavailableUserOrMissingVersion(t *testing.T) {
 	for _, mutate := range []func(*accessRepositoryFixture) error{
 		func(fixture *accessRepositoryFixture) error {
-			return fixture.db.WithContext(fixture.ctx).Model(&account.User{}).Where("id = ?", fixture.user.ID).Update("is_enabled", yesno.No).Error
+			return fixture.db.WithContext(fixture.ctx).Model(&account.User{}).Where("id = ?", fixture.user.ID).Update("status", yesno.No).Error
 		},
 		func(fixture *accessRepositoryFixture) error {
 			return fixture.db.WithContext(fixture.ctx).Delete(&permission.Version{}, fixture.user.ID).Error
@@ -107,7 +107,7 @@ func TestFindSourceWithVersionRejectsUnavailableUserOrMissingVersion(t *testing.
 func TestRepositoryFiltersMenusAndDeduplicatesGrantsByPlatform(t *testing.T) {
 	fixture := openAccessRepositoryFixture(t)
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	canvasRole := role.Role{Code: fmt.Sprintf("canvas_role_%d", now.UnixNano()), Name: "Canvas Role", IsDefault: yesno.No, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	canvasRole := role.Role{Code: fmt.Sprintf("canvas_role_%d", now.UnixNano()), Name: "Canvas Role", IsDefault: yesno.No, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := fixture.db.WithContext(fixture.ctx).Create(&canvasRole).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -192,11 +192,11 @@ func openAccessRepositoryFixture(t *testing.T) *accessRepositoryFixture {
 	if err := connection.GORM.WithContext(ctx).Create(&canvasPlatform).Error; err != nil {
 		t.Fatal(err)
 	}
-	assignedRole := role.Role{Code: fmt.Sprintf("access_role_%d", now.UnixNano()), Name: "Access Role", IsDefault: yesno.No, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	assignedRole := role.Role{Code: fmt.Sprintf("access_role_%d", now.UnixNano()), Name: "Access Role", IsDefault: yesno.No, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&assignedRole).Error; err != nil {
 		t.Fatal(err)
 	}
-	createdUser := account.User{Username: fmt.Sprintf("access_user_%d", now.UnixNano()), Email: fmt.Sprintf("access_%d@example.com", now.UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	createdUser := account.User{Username: fmt.Sprintf("access_user_%d", now.UnixNano()), Email: fmt.Sprintf("access_%d@example.com", now.UnixNano()), PasswordHash: "hash", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&createdUser).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -208,17 +208,17 @@ func openAccessRepositoryFixture(t *testing.T) *accessRepositoryFixture {
 		t.Fatal(err)
 	}
 	accountI18nKey := "navigation.user"
-	root := menu.Menu{PlatformID: adminPlatform.ID, MenuType: menu.TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: &accountI18nKey, SortOrder: 10, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	root := menu.Menu{PlatformID: adminPlatform.ID, MenuType: menu.TypeDirectory, Name: "用户与账号", Code: "account", I18nKey: &accountI18nKey, SortOrder: 10, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
 	path, componentPath := "/user/account", "user/account"
 	pageI18nKey := "navigation.userAccount"
-	page := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "用户管理", Code: "user:account:list", I18nKey: &pageI18nKey, Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
+	page := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "用户管理", Code: "user:account:list", I18nKey: &pageI18nKey, Path: &path, ComponentPath: &componentPath, SortOrder: 10, Status: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
-	action := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "新增用户", Code: "user:account:create", SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	action := menu.Menu{PlatformID: adminPlatform.ID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "新增用户", Code: "user:account:create", SortOrder: 10, Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&action).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -227,11 +227,11 @@ func openAccessRepositoryFixture(t *testing.T) *accessRepositoryFixture {
 	}
 	canvasPath, canvasComponentPath := "/test", "test"
 	canvasI18nKey := "navigation.system"
-	canvasPage := menu.Menu{PlatformID: canvasPlatform.ID, MenuType: menu.TypePage, Name: "Canvas Test", Code: "canvas:test:list", I18nKey: &canvasI18nKey, Path: &canvasPath, ComponentPath: &canvasComponentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
+	canvasPage := menu.Menu{PlatformID: canvasPlatform.ID, MenuType: menu.TypePage, Name: "Canvas Test", Code: "canvas:test:list", I18nKey: &canvasI18nKey, Path: &canvasPath, ComponentPath: &canvasComponentPath, Status: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&canvasPage).Error; err != nil {
 		t.Fatal(err)
 	}
-	canvasAction := menu.Menu{PlatformID: canvasPlatform.ID, ParentID: &canvasPage.ID, MenuType: menu.TypeAction, Name: "Canvas Test Button", Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	canvasAction := menu.Menu{PlatformID: canvasPlatform.ID, ParentID: &canvasPage.ID, MenuType: menu.TypeAction, Name: "Canvas Test Button", Code: "canvas:test:button", Status: yesno.Yes, IsHidden: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&canvasAction).Error; err != nil {
 		t.Fatal(err)
 	}

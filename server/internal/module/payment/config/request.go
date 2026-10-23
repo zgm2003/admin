@@ -29,7 +29,7 @@ type CreateInput struct {
 	PrivateKey, AppCertPEM, AlipayCertPEM, RootCertPEM, NotifyURL string
 	PayMethods                                                    []payment.PayMethod
 	SortOrder                                                     int32
-	IsEnabled                                                     yesno.Value
+	Status                                                     yesno.Value
 }
 type MetadataInput struct {
 	Name      string
@@ -43,7 +43,7 @@ type VersionInput struct {
 type ListQuery struct {
 	Page, PageSize int
 	Keyword        string
-	IsEnabled      *yesno.Value
+	Status      *yesno.Value
 }
 
 var identityPattern = regexp.MustCompile(`^[0-9]{1,64}$`)
@@ -55,7 +55,7 @@ func validateMetadata(v MetadataInput) error {
 	return nil
 }
 func validateCreate(v CreateInput) error {
-	if !v.Provider.Supported() || !v.Environment.Valid() || !yesno.IsValid(v.IsEnabled) {
+	if !v.Provider.Supported() || !v.Environment.Valid() || !yesno.IsValid(v.Status) {
 		return fmt.Errorf("configuration identity or flags invalid")
 	}
 	if err := validateMetadata(MetadataInput{v.Name, v.SortOrder}); err != nil {
@@ -107,14 +107,14 @@ type createRequest struct {
 	NotifyURL     *string              `json:"notifyUrl"`
 	PayMethods    []payment.PayMethod  `json:"payMethods"`
 	SortOrder     *int32               `json:"sortOrder"`
-	IsEnabled     *yesno.Value         `json:"isEnabled"`
+	Status     *yesno.Value         `json:"status"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Name == nil || r.Provider == nil || r.Environment == nil || r.AppID == nil || r.SellerID == nil || r.PrivateKey == nil || r.AppCertPEM == nil || r.AlipayCertPEM == nil || r.RootCertPEM == nil || r.NotifyURL == nil || r.SortOrder == nil || r.IsEnabled == nil {
+	if r.Name == nil || r.Provider == nil || r.Environment == nil || r.AppID == nil || r.SellerID == nil || r.PrivateKey == nil || r.AppCertPEM == nil || r.AlipayCertPEM == nil || r.RootCertPEM == nil || r.NotifyURL == nil || r.SortOrder == nil || r.Status == nil {
 		return CreateInput{}, fmt.Errorf("every creation field required")
 	}
-	v := CreateInput{*r.Name, *r.AppID, *r.SellerID, *r.Provider, *r.Environment, *r.PrivateKey, *r.AppCertPEM, *r.AlipayCertPEM, *r.RootCertPEM, *r.NotifyURL, r.PayMethods, *r.SortOrder, *r.IsEnabled}
+	v := CreateInput{*r.Name, *r.AppID, *r.SellerID, *r.Provider, *r.Environment, *r.PrivateKey, *r.AppCertPEM, *r.AlipayCertPEM, *r.RootCertPEM, *r.NotifyURL, r.PayMethods, *r.SortOrder, *r.Status}
 	err := validateCreate(v)
 	if err != nil {
 		return CreateInput{}, err
@@ -189,12 +189,12 @@ func (r versionRequest) input() (VersionInput, error) {
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {
 	for key, entries := range values {
-		if (key != "page" && key != "pageSize" && key != "keyword" && key != "isEnabled") || len(entries) != 1 {
+		if (key != "page" && key != "pageSize" && key != "keyword" && key != "status") || len(entries) != 1 {
 			return ListQuery{}, fmt.Errorf("query invalid")
 		}
 	}
@@ -206,16 +206,16 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 	if utf8.RuneCountInString(q.Keyword) > 128 || (q.Page-1) > (int(^uint(0)>>1)/q.PageSize) {
 		return q, fmt.Errorf("query bounds invalid")
 	}
-	if vs, exists := values["isEnabled"]; exists {
+	if vs, exists := values["status"]; exists {
 		switch vs[0] {
 		case "0":
 			v := yesno.No
-			q.IsEnabled = &v
+			q.Status = &v
 		case "1":
 			v := yesno.Yes
-			q.IsEnabled = &v
+			q.Status = &v
 		default:
-			return q, fmt.Errorf("isEnabled invalid")
+			return q, fmt.Errorf("status invalid")
 		}
 	}
 	return q, nil

@@ -32,7 +32,7 @@ const row: api.PaymentConfig = {
   sellerId: '20880001',
   currentVersion: 1,
   sortOrder: 0,
-  isEnabled: 0,
+  status: 0,
   notifyUrl: 'https://pay.example.test/api/admin/v1/payment/callback/alipay/7/1',
   notifyUrlTemplate:
     'https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}',
@@ -84,7 +84,7 @@ const options: api.PaymentConfigOptions = {
     environment: 1,
     payMethods: [1, 2],
     sortOrder: 0,
-    isEnabled: 0,
+    status: 0,
     notifyUrl: 'https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}',
   },
   limits: {
@@ -229,7 +229,7 @@ it.each(statusCases)(
     permissions(['payment:config:list', 'payment:config:status'])
     vi.mocked(api.getPaymentConfigs).mockResolvedValue({
       list: [
-        { ...row, isEnabled: current, presentation: { ...row.presentation, status: currentLabel } },
+        { ...row, status: current, presentation: { ...row.presentation, status: currentLabel } },
       ],
       total: 1,
       page: 1,
@@ -243,7 +243,7 @@ it.each(statusCases)(
             resolve('confirm' as unknown as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
         }),
     )
-    vi.mocked(api.updatePaymentConfigStatus).mockResolvedValue({ id: row.id, isEnabled: next })
+    vi.mocked(api.updatePaymentConfigStatus).mockResolvedValue({ id: row.id, status: next })
     const w = await page()
     const button = w.get('[data-testid="payment-config-status"]')
     expect(button.text()).toBe(actionLabel)
@@ -258,7 +258,7 @@ it.each(statusCases)(
     expect(api.updatePaymentConfigStatus).not.toHaveBeenCalled()
     expect(w.text()).toContain(currentLabel)
     vi.mocked(api.getPaymentConfigs).mockResolvedValue({
-      list: [{ ...row, isEnabled: next, presentation: { ...row.presentation, status: nextLabel } }],
+      list: [{ ...row, status: next, presentation: { ...row.presentation, status: nextLabel } }],
       total: 1,
       page: 1,
       pageSize: 20,
@@ -564,7 +564,7 @@ it.each(['create', 'version'] as const)(
         appId: '20260001',
         sellerId: '20880001',
         sortOrder: 0,
-        isEnabled: 0,
+        status: 0,
       })
     } else {
       expect(api.publishPaymentConfigVersion).toHaveBeenCalledExactlyOnceWith(7, credentials)

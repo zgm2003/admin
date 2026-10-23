@@ -13,7 +13,7 @@ import (
 func TestRoleListReturnsBusinessActions(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
-	stored := role.Role{Code: "actions_" + suffix, Name: "Actions " + suffix, IsEnabled: yesno.Yes}
+	stored := role.Role{Code: "actions_" + suffix, Name: "Actions " + suffix, Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&stored).Error; err != nil {
 		t.Fatal(err)
 	}

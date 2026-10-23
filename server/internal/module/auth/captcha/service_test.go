@@ -54,8 +54,8 @@ func (f fakeSettings) FindByKey(_ context.Context, key string) (sharedsetting.Re
 func TestServiceGenerateAndVerifyConsumesChallenge(t *testing.T) {
 	store := &fakeStore{}
 	service := NewService(fakeEngine{challenge: GeneratedChallenge{AnswerX: 120, AnswerY: 80}}, store, fakeSettings{values: map[string]sharedsetting.Record{
-		sharedsetting.AuthCaptchaTTLKey:          {Key: sharedsetting.AuthCaptchaTTLKey, Value: "2", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes},
-		sharedsetting.AuthCaptchaSlidePaddingKey: {Key: sharedsetting.AuthCaptchaSlidePaddingKey, Value: "3", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes},
+		sharedsetting.AuthCaptchaTTLKey:          {Key: sharedsetting.AuthCaptchaTTLKey, Value: "2", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes},
+		sharedsetting.AuthCaptchaSlidePaddingKey: {Key: sharedsetting.AuthCaptchaSlidePaddingKey, Value: "3", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes},
 	}}, WithIDGenerator(func() (string, error) { return "captcha-id", nil }))
 	challenge, err := service.Generate(context.Background())
 	if err != nil {
@@ -78,7 +78,7 @@ func TestServiceGenerateAndVerifyConsumesChallenge(t *testing.T) {
 func TestServiceRejectsWrongAnswerAndStoreFailure(t *testing.T) {
 	store := &fakeStore{value: &Secret{AnswerX: 120, AnswerY: 80}}
 	service := NewService(fakeEngine{}, store, fakeSettings{values: map[string]sharedsetting.Record{
-		sharedsetting.AuthCaptchaSlidePaddingKey: {Key: sharedsetting.AuthCaptchaSlidePaddingKey, Value: "3", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes},
+		sharedsetting.AuthCaptchaSlidePaddingKey: {Key: sharedsetting.AuthCaptchaSlidePaddingKey, Value: "3", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes},
 	}}, WithIDGenerator(func() (string, error) { return "captcha-id", nil }))
 	if err := service.Verify(context.Background(), VerifyInput{ID: "captcha-id", X: 10, Y: 80}); err == nil {
 		t.Fatal("expected wrong answer to fail")

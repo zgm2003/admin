@@ -126,18 +126,18 @@ func (h *Handler) Status(c *gin.Context) {
 		return
 	}
 	var r statusRequest
-	if e = validate.BindJSON(c, &r); e != nil || r.IsEnabled == nil {
+	if e = validate.BindJSON(c, &r); e != nil || r.Status == nil {
 		if e == nil {
-			e = invalid(fmt.Errorf("isEnabled required"))
+			e = invalid(fmt.Errorf("status required"))
 		}
 		response.Fail(c, e)
 		return
 	}
-	if e = h.s.UpdateStatus(c.Request.Context(), id, *r.IsEnabled); e != nil {
+	if e = h.s.UpdateStatus(c.Request.Context(), id, *r.Status); e != nil {
 		response.Fail(c, e)
 		return
 	}
-	response.OK(c, http.StatusOK, statusResponse{id, int16(*r.IsEnabled)})
+	response.OK(c, http.StatusOK, statusResponse{id, int16(*r.Status)})
 }
 func (h *Handler) Delete(c *gin.Context) {
 	id, e := validate.ParsePositiveInt64(c.Param("id"), "id")

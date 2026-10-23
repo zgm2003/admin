@@ -8,7 +8,7 @@ export interface MenuPlatformOption {
   id: number
   code: string
   name: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface MenuPresentation {
@@ -46,7 +46,7 @@ export interface ManagedMenuNode {
   icon: MenuIconName | null
   remark?: string | null
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
   isHidden: YesNo
   isProtected: YesNo
   createdAt: string
@@ -76,7 +76,7 @@ export interface CreateMenuInput {
   icon: MenuIconName | null
   remark: string | null
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
   isHidden: YesNo
 }
 
@@ -99,7 +99,7 @@ export interface MenuIDResult {
 
 export interface MenuStatusResult {
   id: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface RebuildAccessCacheResult {
@@ -122,9 +122,9 @@ export async function updateMenu(id: number, input: UpdateMenuInput): Promise<Me
   return request.put<MenuIDResult>(`/api/admin/v1/permission/menu/${id}`, input)
 }
 
-export async function updateMenuStatus(id: number, isEnabled: YesNo): Promise<MenuStatusResult> {
+export async function updateMenuStatus(id: number, status: YesNo): Promise<MenuStatusResult> {
   return request.patch<MenuStatusResult>(`/api/admin/v1/permission/menu/${id}/status`, {
-    isEnabled,
+    status,
   })
 }
 

@@ -31,7 +31,7 @@ import (
 func TestRegisterUsesPlatformPolicyAndRequiresRedis(t *testing.T) {
 	redisClient := openAuthRedis(t)
 	users := &fakeUserStore{createFn: func(_ context.Context, input user.CreateInput) (user.User, error) {
-		return user.User{ID: 81001, Username: input.Username, Email: input.Email, IsEnabled: yesno.Yes}, nil
+		return user.User{ID: 81001, Username: input.Username, Email: input.Email, Status: yesno.Yes}, nil
 	}}
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{defaultRole: role.Role{ID: 3}}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
 	registered, err := service.Register(context.Background(), RegisterInput{
@@ -87,7 +87,7 @@ func TestLoginUsesPolicyTTLAndPublishesSessionSnapshot(t *testing.T) {
 	policy.AccessTTL = 23 * time.Minute
 	policy.RefreshTTL = 5 * time.Minute
 	sessions := &fakeSessionStore{createSession: Session{ID: 82002, UserID: 82001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1"}}
-	users := &fakeUserStore{credential: user.Credential{ID: 82001, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 82001, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, Status: yesno.Yes}}
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
 	service.now = func() time.Time { return fixedNow }
 	service.jwt.now = service.now
@@ -125,7 +125,7 @@ func TestLoginNormalizesEmailAndKeepsCredentialErrorsUniform(t *testing.T) {
 		t.Fatal(err)
 	}
 	users := &fakeUserStore{credential: user.Credential{
-		ID: 1, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes,
+		ID: 1, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, Status: yesno.Yes,
 	}}
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
 	_, wrongErr := service.Login(ctx, LoginInput{LoginType: authplatform.LoginTypePassword, LoginAccount: " Admin@Example.COM ", Password: "wrong", Client: testAuthClient()})
@@ -193,7 +193,7 @@ func TestLoginPreservesPasswordWhitespaceForBcrypt(t *testing.T) {
 		t.Fatal(err)
 	}
 	users := &fakeUserStore{credential: user.Credential{
-		ID: 82501, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.Yes,
+		ID: 82501, Username: "admin", Email: "admin@example.com", PasswordHash: passwordHash, Status: yesno.Yes,
 	}}
 	sessions := &fakeSessionStore{createSession: Session{
 		ID: 82502, UserID: 82501, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1",
@@ -229,7 +229,7 @@ func TestLoginMapsDisabledAndRepositoryCredentialErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	users := &fakeUserStore{credential: user.Credential{ID: 1, Email: "admin@example.com", PasswordHash: passwordHash, IsEnabled: yesno.No}}
+	users := &fakeUserStore{credential: user.Credential{ID: 1, Email: "admin@example.com", PasswordHash: passwordHash, Status: yesno.No}}
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: testPolicy()})
 	if _, err := service.Login(context.Background(), LoginInput{LoginType: authplatform.LoginTypePassword, LoginAccount: "admin@example.com", Password: "password", Client: testAuthClient()}); appErrorCode(err) != apperror.CodeForbidden {
 		t.Fatalf("disabled user error = %v", err)
@@ -261,7 +261,7 @@ func TestLoginPhoneUsesVerifiedNormalizedIdentity(t *testing.T) {
 	policy := testPolicy()
 	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
 	store := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
-	users := &fakeUserStore{credential: user.Credential{ID: 82601, Username: "phone-user", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 82601, Username: "phone-user", Status: yesno.Yes}}
 	sessions := &fakeSessionStore{createSession: Session{ID: 82602, UserID: 82601, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1"}}
 	cleanupAuthRedisKeys(t, redisClient, 82601, "admin", 82602)
 	service := newRedisTestService(t, redisClient, users, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
@@ -353,7 +353,7 @@ func TestLoginPhoneAutoRegistersVerifiedIdentity(t *testing.T) {
 	store := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
 	users := &fakeUserStore{
 		credentialErr: gorm.ErrRecordNotFound,
-		verifiedUser:  user.User{ID: 82701, Username: "phone_82701", Phone: pointerString("+8615671628271"), IsEnabled: yesno.Yes},
+		verifiedUser:  user.User{ID: 82701, Username: "phone_82701", Phone: pointerString("+8615671628271"), Status: yesno.Yes},
 	}
 	sessions := &fakeSessionStore{createSession: Session{ID: 82702, UserID: 82701, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1"}}
 	cleanupAuthRedisKeys(t, redisClient, 82701, "admin", 82702)
@@ -395,7 +395,7 @@ func TestLoginPhoneRegistrationPolicyAndConflictWinner(t *testing.T) {
 
 	policy.AllowRegister = true
 	users = &fakeUserStore{credentialErr: gorm.ErrRecordNotFound, createErr: user.ErrPhoneConflict}
-	winner := user.Credential{ID: 82801, Username: "winner", IsEnabled: yesno.Yes}
+	winner := user.Credential{ID: 82801, Username: "winner", Status: yesno.Yes}
 	users.verifiedFn = func(context.Context, user.VerifiedIdentityInput) (user.User, error) {
 		users.credential = winner
 		users.credentialErr = nil
@@ -437,7 +437,7 @@ func pointerString(value string) *string { return &value }
 
 func TestLoginRejectsEmptyPasswordHashBeforeBcrypt(t *testing.T) {
 	policy := testPolicy()
-	users := &fakeUserStore{credential: user.Credential{ID: 1, Email: "admin@example.com", PasswordHash: "", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 1, Email: "admin@example.com", PasswordHash: "", Status: yesno.Yes}}
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	compareCalls := 0
 	service.comparePassword = func(string, string) error {
@@ -529,7 +529,7 @@ func TestLoginCodeDoesNotConsumeWhenRegistrationIsDisabled(t *testing.T) {
 func TestLoginCodeDoesNotConsumeForDisabledUser(t *testing.T) {
 	policy := testPolicy()
 	store := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
-	users := &fakeUserStore{credential: user.Credential{ID: 1, Email: "user@example.com", IsEnabled: yesno.No}}
+	users := &fakeUserStore{credential: user.Credential{ID: 1, Email: "user@example.com", Status: yesno.No}}
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	service.SetVerificationCodeStore(store)
 
@@ -730,7 +730,7 @@ func TestAuthenticateUsesWarmRedisWithoutPostgreSQL(t *testing.T) {
 	service.jwt.now = service.now
 	installWarmSession(t, service, SessionAuthority{
 		Session: Session{ID: 83002, UserID: 83001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 4, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
-		UserID:  83001, UserIsEnabled: yesno.Yes,
+		UserID:  83001, UserStatus: yesno.Yes,
 	}, policy)
 	rawToken, _, err := service.jwt.Issue(TokenIdentity{UserID: 83001, SessionID: 83002, Platform: "admin", Version: 4}, policy.AccessTTL)
 	if err != nil {
@@ -752,7 +752,7 @@ func TestAuthenticateFallsBackToPostgreSQLAndRebuildsRedis(t *testing.T) {
 	policy := testPolicy()
 	authority := SessionAuthority{
 		Session: Session{ID: 84002, UserID: 84001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 2, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
-		UserID:  84001, UserIsEnabled: yesno.Yes,
+		UserID:  84001, UserStatus: yesno.Yes,
 	}
 	sessions := &fakeSessionStore{authority: authority}
 	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
@@ -777,7 +777,7 @@ func TestAuthenticateRejectsCorruptStateWithoutPostgreSQL(t *testing.T) {
 	policy := testPolicy()
 	authority := SessionAuthority{
 		Session: Session{ID: 84502, UserID: 84501, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 2, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
-		UserID:  84501, UserIsEnabled: yesno.Yes,
+		UserID:  84501, UserStatus: yesno.Yes,
 	}
 	sessions := &fakeSessionStore{authority: authority}
 	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
@@ -804,7 +804,7 @@ func TestAuthenticateDoesNotQueryPostgreSQLWhenRedisFails(t *testing.T) {
 	policy := testPolicy()
 	authority := SessionAuthority{
 		Session: Session{ID: 85002, UserID: 85001, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
-		UserID:  85001, UserIsEnabled: yesno.Yes,
+		UserID:  85001, UserStatus: yesno.Yes,
 	}
 	sessions := &fakeSessionStore{authority: authority}
 	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
@@ -834,7 +834,7 @@ func TestAuthenticateRejectsInvalidatingStateWithoutPostgreSQL(t *testing.T) {
 	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return fixedNow }
 	service.jwt.now = service.now
-	userFact := authstate.UserFact{UserID: 86001, Generation: "user-ready", IsEnabled: true}
+	userFact := authstate.UserFact{UserID: 86001, Generation: "user-ready", Status: true}
 	_, _, _ = service.states.InstallUserReadyIfMissing(context.Background(), userFact)
 	lease, err := service.invalidator.Acquire(context.Background(), authstate.MutationFacts{Users: []authstate.UserFact{userFact}})
 	if err != nil {
@@ -857,7 +857,7 @@ func TestAuthenticateRevokesDeviceMismatchOnlyAfterRedisInvalidation(t *testing.
 	fixedNow := time.Date(2026, time.August, 20, 10, 0, 0, 0, time.UTC)
 	authority := SessionAuthority{
 		Session: Session{ID: 86502, UserID: 86501, Platform: "admin", DeviceID: testAuthClient().DeviceID, Version: 1, ClientIP: "127.0.0.1", RefreshExpiresAt: fixedNow.Add(time.Hour)},
-		UserID:  86501, UserIsEnabled: yesno.Yes,
+		UserID:  86501, UserStatus: yesno.Yes,
 	}
 	sessions := &fakeSessionStore{authority: authority}
 	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, sessions, &fakePolicyStore{policy: policy})
@@ -903,7 +903,7 @@ func TestRefreshRotatesWithinSessionInvalidationAndKeepsAbsoluteExpiry(t *testin
 	expiresAt := fixedNow.Add(2 * time.Hour)
 	authority := SessionAuthority{
 		Session: Session{ID: 86802, UserID: 86801, Platform: "admin", DeviceID: testAuthClient().DeviceID, RefreshTokenHash: strings.Repeat("a", 64), Version: 3, ClientIP: "127.0.0.1", RefreshExpiresAt: expiresAt},
-		UserID:  86801, UserIsEnabled: yesno.Yes,
+		UserID:  86801, UserStatus: yesno.Yes,
 		PasswordSetRequired: true,
 	}
 	rotated := authority.Session
@@ -914,7 +914,7 @@ func TestRefreshRotatesWithinSessionInvalidationAndKeepsAbsoluteExpiry(t *testin
 	service.SetLoginLogRecorder(recorder)
 	service.now = func() time.Time { return fixedNow }
 	service.jwt.now = service.now
-	_, _, _ = service.states.InstallUserReadyIfMissing(context.Background(), authstate.UserFact{UserID: 86801, Generation: "user-ready", IsEnabled: true})
+	_, _, _ = service.states.InstallUserReadyIfMissing(context.Background(), authstate.UserFact{UserID: 86801, Generation: "user-ready", Status: true})
 	_, _, _ = service.states.InstallSessionsReadyIfMissing(context.Background(), authstate.SessionsFact{Platform: "admin", UserID: 86801, Generation: "sessions-ready"})
 
 	credential, err := service.Refresh(context.Background(), RefreshInput{RefreshToken: "old-refresh", Client: testAuthClient()})
@@ -1006,7 +1006,7 @@ func TestValidateRealtimeSessionFailsClosedAfterInvalidation(t *testing.T) {
 	redisClient := openAuthRedis(t)
 	policy := testPolicy()
 	service := newRedisTestService(t, redisClient, &fakeUserStore{}, &fakeRoleStore{}, &fakeSessionStore{}, &fakePolicyStore{policy: policy})
-	authority := SessionAuthority{Session: usersession.Record{ID: 902, UserID: 901, PlatformID: 1, Platform: "admin", Version: 3, DeviceID: testAuthClient().DeviceID, ClientIP: "127.0.0.1", RefreshExpiresAt: time.Now().UTC().Add(time.Hour)}, UserID: 901, UserIsEnabled: yesno.Yes}
+	authority := SessionAuthority{Session: usersession.Record{ID: 902, UserID: 901, PlatformID: 1, Platform: "admin", Version: 3, DeviceID: testAuthClient().DeviceID, ClientIP: "127.0.0.1", RefreshExpiresAt: time.Now().UTC().Add(time.Hour)}, UserID: 901, UserStatus: yesno.Yes}
 	cleanupAuthRedisKeys(t, redisClient, authority.UserID, authority.Session.Platform, authority.Session.ID)
 	installWarmSession(t, service, authority, policy)
 	if err := service.ValidateRealtimeSession(context.Background(), "admin", 901, 902, 3); err != nil {
@@ -1033,7 +1033,7 @@ func testPolicy() authplatform.Policy {
 	return authplatform.Policy{
 		ID: 1, Code: "admin", Name: "Admin", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, PolicyVersion: 1, AccessTTL: 15 * time.Minute,
 		RefreshTTL: 14 * 24 * time.Hour, SessionCacheTTL: 30 * time.Minute, AccessCacheTTL: 30 * time.Minute,
-		MaxSessions: 1, AllowRegister: true, IsEnabled: true, IsBuiltin: true,
+		MaxSessions: 1, AllowRegister: true, Status: true, IsBuiltin: true,
 	}
 }
 
@@ -1041,7 +1041,7 @@ func installWarmSession(t *testing.T, service *Service, authority SessionAuthori
 	t.Helper()
 	userGeneration, _ := authstate.NewGeneration()
 	sessionsGeneration, _ := authstate.NewGeneration()
-	userFact := authstate.UserFact{UserID: authority.UserID, Generation: userGeneration, IsEnabled: authority.UserIsEnabled == yesno.Yes, Deleted: authority.UserDeleted}
+	userFact := authstate.UserFact{UserID: authority.UserID, Generation: userGeneration, Status: authority.UserStatus == yesno.Yes, Deleted: authority.UserDeleted}
 	sessionsFact := authstate.SessionsFact{Platform: authority.Session.Platform, UserID: authority.UserID, Generation: sessionsGeneration}
 	if _, _, err := service.states.InstallUserReadyIfMissing(context.Background(), userFact); err != nil {
 		t.Fatal(err)
@@ -1381,7 +1381,7 @@ func TestForgotPasswordSendsCodeWithForgetScene(t *testing.T) {
 		readiness:   messagemail.VerifyCodeReadiness{Ready: true, TTLMinutes: 5},
 		preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
 	}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "hash", Status: yesno.Yes}}
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
@@ -1436,7 +1436,7 @@ func TestForgotPasswordRequiresPasswordLoginType(t *testing.T) {
 		readiness:   messagemail.VerifyCodeReadiness{Ready: true, TTLMinutes: 5},
 		preparation: messagemail.EmailVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60},
 	}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "hash", Status: yesno.Yes}}
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: emailOnly}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetVerificationCodeStore(store)
 	service.SetVerifyCodeSender(sender)
@@ -1455,7 +1455,7 @@ func TestForgotPasswordPhoneUsesSMSForgetScene(t *testing.T) {
 	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
 	store := &fakeVerificationCodeStore{acquired: true}
 	sender := &fakePhoneVerifyCodeSender{preparation: messagesms.PhoneVerifyCodePreparation{TTLMinutes: 5, ResendAfterSeconds: 60}}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Username: "phone-user", PasswordHash: "hash", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Username: "phone-user", PasswordHash: "hash", Status: yesno.Yes}}
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetVerificationCodeStore(store)
 	service.SetPhoneVerifyCodeSender(sender)
@@ -1478,7 +1478,7 @@ func TestForgotPasswordPhoneFailsClosedWhenSMSIsUnavailable(t *testing.T) {
 	policy.LoginTypes = []authplatform.LoginType{authplatform.LoginTypePhone, authplatform.LoginTypePassword}
 	store := &fakeVerificationCodeStore{acquired: true}
 	sender := &fakePhoneVerifyCodeSender{prepareErr: apperror.DependencyUnavailable(errors.New("sms not ready"))}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Status: yesno.Yes}}
 	service := NewService(users, nil, nil, &fakePolicyStore{policy: policy}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetVerificationCodeStore(store)
 	service.SetPhoneVerifyCodeSender(sender)
@@ -1550,7 +1550,7 @@ func newResetPasswordService(t *testing.T, users *fakeUserStore, passwords *fake
 func TestResetPasswordReplacesHashAndRevokesSessions(t *testing.T) {
 	passwords := &fakePasswordStore{platforms: []string{"admin"}, revokeResult: []user.RevokedSessionRef{{Platform: "admin", ID: 42}}}
 	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", Status: yesno.Yes}}
 	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
 
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
@@ -1575,7 +1575,7 @@ func TestResetPasswordPhoneNormalizesIdentityAndRevokesEveryPlatform(t *testing.
 		revokeResult: []user.RevokedSessionRef{{Platform: "admin", ID: 42}, {Platform: "canvas", ID: 43}},
 	}
 	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Username: "phone-user", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Username: "phone-user", PasswordHash: "old", Status: yesno.Yes}}
 	service := newResetPasswordService(t, users, passwords, codes, policy)
 
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
@@ -1593,7 +1593,7 @@ func TestResetPasswordPhoneNormalizesIdentityAndRevokesEveryPlatform(t *testing.
 func TestResetPasswordRejectsInvalidChallengeBeforeCodeLookup(t *testing.T) {
 	passwords := &fakePasswordStore{}
 	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Status: yesno.Yes}}
 	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
 	for _, challengeID := range []string{"", " challenge", "challenge\n", strings.Repeat("x", 129)} {
 		err := service.ResetPassword(context.Background(), ResetPasswordInput{
@@ -1612,7 +1612,7 @@ func TestResetPasswordRejectsInvalidChallengeBeforeCodeLookup(t *testing.T) {
 func TestResetPasswordWrongCodeDoesNotConsumeOrRevoke(t *testing.T) {
 	passwords := &fakePasswordStore{platforms: []string{"admin"}}
 	codes := &fakeVerificationCodeStore{checkValid: false}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", Status: yesno.Yes}}
 	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
 
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
@@ -1629,7 +1629,7 @@ func TestResetPasswordWrongCodeDoesNotConsumeOrRevoke(t *testing.T) {
 func TestResetPasswordRateLimitedBeforeConsume(t *testing.T) {
 	passwords := &fakePasswordStore{platforms: []string{"admin"}}
 	codes := &fakeVerificationCodeStore{checkValid: false, checkLimited: true}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", Status: yesno.Yes}}
 	service := newResetPasswordService(t, users, passwords, codes, testPolicy())
 
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
@@ -1658,7 +1658,7 @@ func TestResetPasswordRejectsUnknownAndDisabledEmail(t *testing.T) {
 		t.Fatalf("check=%d; unknown email must fail before code verification", codes.checkCalls)
 	}
 
-	disabled := &fakeUserStore{credential: user.Credential{ID: 8, Email: "disabled@example.com", PasswordHash: "old", IsEnabled: yesno.No}}
+	disabled := &fakeUserStore{credential: user.Credential{ID: 8, Email: "disabled@example.com", PasswordHash: "old", Status: yesno.No}}
 	service = newResetPasswordService(t, disabled, passwords, codes, testPolicy())
 	err = service.ResetPassword(context.Background(), ResetPasswordInput{
 		Account: "disabled@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
@@ -1673,7 +1673,7 @@ func TestResetPasswordRequiresPasswordLoginTypeAndConfirmation(t *testing.T) {
 	emailOnly.LoginTypes = []authplatform.LoginType{authplatform.LoginTypeEmail}
 	passwords := &fakePasswordStore{}
 	codes := &fakeVerificationCodeStore{checkValid: true, consumeValid: true}
-	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", IsEnabled: yesno.Yes}}
+	users := &fakeUserStore{credential: user.Credential{ID: 7, Email: "user@example.com", PasswordHash: "old", Status: yesno.Yes}}
 	service := newResetPasswordService(t, users, passwords, codes, emailOnly)
 	err := service.ResetPassword(context.Background(), ResetPasswordInput{
 		Account: "user@example.com", LoginType: authplatform.LoginTypeEmail, ChallengeID: "challenge-1", Code: "123456", NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!", Client: testAuthClient(),
@@ -1695,7 +1695,7 @@ func TestResetPasswordRequiresPasswordLoginTypeAndConfirmation(t *testing.T) {
 }
 
 func TestSetPasswordStoresHashWithoutRevokingSessions(t *testing.T) {
-	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, PasswordHash: "", IsEnabled: yesno.Yes}}
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, PasswordHash: "", Status: yesno.Yes}}
 	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetPasswordStore(passwords)
 
@@ -1711,7 +1711,7 @@ func TestSetPasswordStoresHashWithoutRevokingSessions(t *testing.T) {
 }
 
 func TestSetPasswordRejectsAccountWithExistingPassword(t *testing.T) {
-	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, PasswordHash: "existing", IsEnabled: yesno.Yes}}
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, PasswordHash: "existing", Status: yesno.Yes}}
 	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetPasswordStore(passwords)
 
@@ -1725,7 +1725,7 @@ func TestSetPasswordRejectsAccountWithExistingPassword(t *testing.T) {
 }
 
 func TestSetPasswordMapsConcurrentWinnerToConflict(t *testing.T) {
-	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, IsEnabled: yesno.Yes}, setErr: user.ErrPasswordAlreadySet}
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, Status: yesno.Yes}, setErr: user.ErrPasswordAlreadySet}
 	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetPasswordStore(passwords)
 	err := service.SetPassword(context.Background(), Identity{UserID: 7}, SetPasswordInput{NewPassword: "NewPassw0rd!", ConfirmPassword: "NewPassw0rd!"})
@@ -1738,7 +1738,7 @@ func TestSetPasswordMapsConcurrentWinnerToConflict(t *testing.T) {
 }
 
 func TestSetPasswordRejectsInvalidInputAndMissingIdentity(t *testing.T) {
-	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, IsEnabled: yesno.Yes}}
+	passwords := &fakePasswordStore{credentialByID: user.Credential{ID: 7, Status: yesno.Yes}}
 	service := NewService(&fakeUserStore{}, nil, nil, &fakePolicyStore{policy: testPolicy()}, nil, nil, nil, nil, nil, nil, slog.New(slog.DiscardHandler))
 	service.SetPasswordStore(passwords)
 

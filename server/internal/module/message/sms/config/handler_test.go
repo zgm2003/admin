@@ -74,7 +74,7 @@ func TestUpdateRejectsUnknownAndMissingFields(t *testing.T) {
 	for _, test := range []struct{ name, body string }{
 		{
 			name: "unknown field",
-			body: `{"secretId":"a","secretKey":"b","smsSdkAppId":"c","signName":"d","region":"e","endpoint":"","ttlMinutes":5,"isEnabled":1,"extra":true}`,
+			body: `{"secretId":"a","secretKey":"b","smsSdkAppId":"c","signName":"d","region":"e","endpoint":"","ttlMinutes":5,"status":1,"extra":true}`,
 		},
 		{
 			name: "missing field",
@@ -98,20 +98,20 @@ func TestUpdateRejectsUnknownAndMissingFields(t *testing.T) {
 
 func TestUpdateForwardsEveryFieldToTheService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	service := &stubService{updateSafe: Safe{Configured: true, TTLMinutes: 5, IsEnabled: yesno.Yes}}
+	service := &stubService{updateSafe: Safe{Configured: true, TTLMinutes: 5, Status: yesno.Yes}}
 	router := gin.New()
 	router.PUT("/config", NewHandler(service).Update)
 
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPut, "/config", strings.NewReader(
-		`{"secretId":"id","secretKey":"key","smsSdkAppId":"1400006666","signName":"签名","region":"ap-guangzhou","endpoint":"","ttlMinutes":5,"isEnabled":1}`))
+		`{"secretId":"id","secretKey":"key","smsSdkAppId":"1400006666","signName":"签名","region":"ap-guangzhou","endpoint":"","ttlMinutes":5,"status":1}`))
 	request.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d body = %s", recorder.Code, recorder.Body)
 	}
-	want := Input{SecretID: "id", SecretKey: "key", SDKAppID: "1400006666", SignName: "签名", Region: "ap-guangzhou", Endpoint: "", TTLMinutes: 5, IsEnabled: yesno.Yes}
+	want := Input{SecretID: "id", SecretKey: "key", SDKAppID: "1400006666", SignName: "签名", Region: "ap-guangzhou", Endpoint: "", TTLMinutes: 5, Status: yesno.Yes}
 	if service.updateInput != want {
 		t.Fatalf("input = %+v, want %+v", service.updateInput, want)
 	}

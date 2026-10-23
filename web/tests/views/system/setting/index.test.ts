@@ -616,7 +616,7 @@ describe('system setting page', () => {
       page: 1,
       pageSize: 20,
       keyword: 'auth.captcha',
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
     })
 
     wrapper.getComponent({ name: 'ElPagination' }).vm.$emit('current-change', 2)
@@ -625,7 +625,7 @@ describe('system setting page', () => {
       page: 2,
       pageSize: 20,
       keyword: 'auth.captcha',
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
     })
   })
 
@@ -898,7 +898,7 @@ function settingRow(overrides: Partial<SystemSetting>): SystemSetting {
     value: '2',
     valueType: 2,
     description: '',
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
     isBuiltin: YesNo.No,
     createdAt: '2026-09-12T00:00:00Z',
     updatedAt: '2026-09-12T00:00:00Z',

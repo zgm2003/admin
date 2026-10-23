@@ -68,9 +68,9 @@ const { t } = useI18n()
       </el-tag>
     </template>
     <template #cell-status="{ row }">
-      <el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
+      <el-tag size="small" :type="row.status === YesNo.Yes ? 'success' : 'info'">
         {{
-          row.isEnabled === YesNo.Yes ? t('common.enable') : t('common.disable')
+          row.status === YesNo.Yes ? t('common.enable') : t('common.disable')
         }}
       </el-tag>
     </template>
@@ -90,10 +90,10 @@ const { t } = useI18n()
         <el-button
           v-if="props.can('storage:cosConfig:status')"
           text
-          :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
+          :type="row.status === YesNo.Yes ? 'warning' : 'success'"
           @click="emit('status', row)"
         >
-          {{ row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable') }}
+          {{ row.status === YesNo.Yes ? t('common.disable') : t('common.enable') }}
         </el-button>
         <el-button
           v-if="props.can('storage:cosConfig:delete')"

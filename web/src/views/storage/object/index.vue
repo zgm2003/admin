@@ -186,7 +186,7 @@ function searchConfigs(): void {
     page: 1,
     pageSize: configQuery.value.pageSize,
     ...(configKeyword.value.trim() ? { keyword: configKeyword.value.trim() } : {}),
-    ...(configStatus.value ? { isEnabled: configStatus.value } : {}),
+    ...(configStatus.value ? { status: configStatus.value } : {}),
   }
   void loadConfigs()
 }
@@ -203,7 +203,7 @@ function searchRules(): void {
     ...(ruleKeyword.value.trim() ? { keyword: ruleKeyword.value.trim() } : {}),
     ...(rulePlatform.value === '' ? {} : { platformId: rulePlatform.value }),
     ...(ruleConfig.value === '' ? {} : { cosConfigId: ruleConfig.value }),
-    ...(ruleStatus.value ? { isEnabled: ruleStatus.value } : {}),
+    ...(ruleStatus.value ? { status: ruleStatus.value } : {}),
   }
   void loadRules()
 }
@@ -264,7 +264,7 @@ async function saveConfig(): Promise<void> {
         appId: configForm.value.appId.trim(),
         secretId: configForm.value.secretId,
         secretKey: configForm.value.secretKey,
-        isEnabled: configForm.value.isEnabled,
+        status: configForm.value.status,
       }
       await createCosConfig(data)
     }
@@ -307,7 +307,7 @@ async function saveRule(): Promise<void> {
           platformId: ruleForm.value.platformId,
           cosConfigId: ruleForm.value.cosConfigId,
           accessMode: ruleForm.value.accessMode,
-          isEnabled: ruleForm.value.isEnabled,
+          status: ruleForm.value.status,
         },
         t,
       )
@@ -324,7 +324,7 @@ async function toggleConfig(row: CosConfig): Promise<void> {
     await ElMessageBox.confirm(t('storage.confirmStatus'), t('common.status'), {
       type: 'warning',
     })
-    await updateCosConfigStatus(row.id, row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes)
+    await updateCosConfigStatus(row.id, row.status === YesNo.Yes ? YesNo.No : YesNo.Yes)
     await loadConfigs()
   } catch {
     /* MessageBox cancellation stays silent; request.ts reports request errors. */
@@ -332,12 +332,12 @@ async function toggleConfig(row: CosConfig): Promise<void> {
 }
 async function toggleRule(row: UploadRule): Promise<void> {
   try {
-    const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+    const next = row.status === YesNo.Yes ? YesNo.No : YesNo.Yes
     const replacesEnabled =
       next === YesNo.Yes &&
       rules.value.some(
         (rule) =>
-          rule.id !== row.id && rule.platformId === row.platformId && rule.isEnabled === YesNo.Yes,
+          rule.id !== row.id && rule.platformId === row.platformId && rule.status === YesNo.Yes,
       )
     await ElMessageBox.confirm(
       t(replacesEnabled ? 'storage.confirmEnabledRuleReplacement' : 'storage.confirmStatus'),

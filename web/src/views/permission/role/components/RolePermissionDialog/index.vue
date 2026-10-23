@@ -189,7 +189,7 @@ async function save(): Promise<void> {
                 <span>{{ platform.platformName }}</span>
                 <code>{{ platform.platformCode }}</code>
                 <el-tag
-                  v-if="platform.platformIsEnabled === YesNo.No"
+                  v-if="platform.platformStatus === YesNo.No"
                   size="small"
                   type="info"
                   effect="plain"

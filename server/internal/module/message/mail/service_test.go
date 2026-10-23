@@ -320,7 +320,7 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 			from_name VARCHAR(128) NOT NULL,
 			reply_to VARCHAR(254),
 			ttl_minutes SMALLINT NOT NULL,
-			is_enabled SMALLINT NOT NULL,
+			status SMALLINT NOT NULL,
 			last_test_at TIMESTAMPTZ,
 			last_test_error VARCHAR(512) NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL,
@@ -336,7 +336,7 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 			content TEXT NOT NULL,
 			variable_keys JSONB NOT NULL,
 			example_variables JSONB NOT NULL,
-			is_enabled SMALLINT NOT NULL,
+			status SMALLINT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL,
 			updated_at TIMESTAMPTZ NOT NULL,
 			deleted_at TIMESTAMPTZ
@@ -371,11 +371,11 @@ func openMailServiceDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (secret_id_ciphertext, secret_key_ciphertext, region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, "configured", "configured", "ap-guangzhou", "sender@example.com", "Sender", 5, yesno.Yes, now, now).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (secret_id_ciphertext, secret_key_ciphertext, region, from_email, from_name, ttl_minutes, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, "configured", "configured", "ap-guangzhou", "sender@example.com", "Sender", 5, yesno.Yes, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
 	for index, scene := range []string{SceneLogin, SceneForget, SceneBindEmail, SceneChangePassword} {
-		if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (scene, name, subject, tencent_template_id, content, variable_keys, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, scene, scene, scene+" code", 47941+index, `<html>{{code}} {{ttl_minutes}}</html>`, `["code","ttl_minutes"]`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
+		if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (scene, name, subject, tencent_template_id, content, variable_keys, example_variables, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, scene, scene, scene+" code", 47941+index, `<html>{{code}} {{ttl_minutes}}</html>`, `["code","ttl_minutes"]`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

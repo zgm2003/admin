@@ -74,7 +74,7 @@ func (s *Service) Update(ctx context.Context, input Input) (Safe, error) {
 		SignName:      normalized.SignName,
 		Region:        normalized.Region,
 		TTLMinutes:    int16(normalized.TTLMinutes),
-		IsEnabled:     normalized.IsEnabled,
+		Status:     normalized.Status,
 		LastTestAt:    current.LastTestAt,
 		LastTestError: current.LastTestError,
 	}
@@ -194,7 +194,7 @@ func (s *Service) normalize(input Input) (Input, error) {
 		Region:     strings.TrimSpace(input.Region),
 		Endpoint:   strings.TrimSpace(input.Endpoint),
 		TTLMinutes: input.TTLMinutes,
-		IsEnabled:  input.IsEnabled,
+		Status:  input.Status,
 	}
 	if !utf8.ValidString(normalized.SecretID) || !utf8.ValidString(normalized.SecretKey) {
 		return Input{}, apperror.InvalidRequest(fmt.Errorf("sms credentials are invalid"))
@@ -217,8 +217,8 @@ func (s *Service) normalize(input Input) (Input, error) {
 	if normalized.TTLMinutes < minTTLMinutes || normalized.TTLMinutes > maxTTLMinutes {
 		return Input{}, apperror.InvalidRequest(fmt.Errorf("sms ttl minutes is invalid"))
 	}
-	if !yesno.IsValid(normalized.IsEnabled) {
-		return Input{}, apperror.InvalidRequest(fmt.Errorf("sms isEnabled must be 0 or 1"))
+	if !yesno.IsValid(normalized.Status) {
+		return Input{}, apperror.InvalidRequest(fmt.Errorf("sms status must be 0 or 1"))
 	}
 	return normalized, nil
 }
@@ -230,7 +230,7 @@ func safeOf(value Model) Safe {
 		SignName:      value.SignName,
 		Region:        value.Region,
 		TTLMinutes:    int(value.TTLMinutes),
-		IsEnabled:     value.IsEnabled,
+		Status:     value.Status,
 		LastTestError: value.LastTestError,
 	}
 	if value.Endpoint != nil {

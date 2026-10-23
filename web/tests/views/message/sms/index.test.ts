@@ -44,7 +44,7 @@ const config: smsApi.SmsConfig = {
   region: 'ap-guangzhou',
   endpoint: '',
   ttlMinutes: 5,
-  isEnabled: YesNo.Yes,
+  status: YesNo.Yes,
   lastTestAt: null,
   lastTestError: '',
 }
@@ -56,7 +56,7 @@ const template: smsApi.SmsTemplate = {
   content: '{1} 有效期 {2} 分钟',
   variableKeys: ['code', 'ttl_minutes'],
   exampleVariables: { code: '123456', ttl_minutes: '5' },
-  isEnabled: YesNo.Yes,
+  status: YesNo.Yes,
   createdAt: timestamp,
   updatedAt: timestamp,
 }
@@ -67,7 +67,7 @@ const rule: smsApi.SmsRule = {
   action: 0,
   name: '阻止号码',
   remark: '测试',
-  isEnabled: YesNo.Yes,
+  status: YesNo.Yes,
   createdAt: timestamp,
   updatedAt: timestamp,
 }
@@ -306,7 +306,7 @@ describe('SMS management page', () => {
       region: 'ap-guangzhou',
       endpoint: '',
       ttlMinutes: 5,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
     })
   })
 
@@ -319,7 +319,7 @@ describe('SMS management page', () => {
     vi.mocked(smsApi.getSmsConfig).mockResolvedValueOnce({
       ...config,
       configured: false,
-      isEnabled: YesNo.No,
+      status: YesNo.No,
     })
     const unconfigured = mountPage(['message:sms:list', 'message:sms:config:delete'])
     await flushPromises()
@@ -420,7 +420,7 @@ describe('SMS management page', () => {
       pattern: '+8615671628271',
       name: '阻止号码',
       remark: '测试',
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
     })
 
     const status = wrapper

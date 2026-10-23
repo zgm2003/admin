@@ -43,7 +43,7 @@ func (s *RetentionService) Cleanup(ctx context.Context) (CleanupResult, error) {
 	if err != nil {
 		return CleanupResult{}, fmt.Errorf("read realtime retention setting: %w", err)
 	}
-	if record.Key != sharedsetting.RealtimeEventRetentionDaysKey || record.IsEnabled != yesno.Yes || record.IsBuiltin != yesno.Yes {
+	if record.Key != sharedsetting.RealtimeEventRetentionDaysKey || record.Status != yesno.Yes || record.IsBuiltin != yesno.Yes {
 		return CleanupResult{}, errors.New("realtime retention setting must be enabled and builtin")
 	}
 	days, err := record.Number()

@@ -5,14 +5,14 @@ export interface RoleMatrixAction {
   id: number
   code: string
   name: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface RoleMatrixRow {
   pageId: number
   pageCode: string
   pageName: string
-  pageIsEnabled: YesNo
+  pageStatus: YesNo
   actions: RoleMatrixAction[]
 }
 
@@ -20,7 +20,7 @@ export interface RoleMatrixGroup {
   groupKey: string
   groupCode: string
   groupName: string
-  groupIsEnabled: YesNo
+  groupStatus: YesNo
   rows: RoleMatrixRow[]
 }
 
@@ -28,7 +28,7 @@ export interface RoleMatrixPlatform {
   platformId: number
   platformCode: string
   platformName: string
-  platformIsEnabled: YesNo
+  platformStatus: YesNo
   groups: RoleMatrixGroup[]
 }
 
@@ -51,7 +51,7 @@ export function buildRolePermissionMatrix(
     platformId: platform.id,
     platformCode: platform.code,
     platformName: platform.name,
-    platformIsEnabled: platform.isEnabled,
+    platformStatus: platform.status,
     groups: buildPlatformGroups(platform),
   }))
 }
@@ -74,7 +74,7 @@ function buildPlatformGroups(platform: RolePermissionPlatform): RoleMatrixGroup[
         groupKey: `menu:${node.id}`,
         groupCode: node.code,
         groupName: node.name,
-        groupIsEnabled: node.isEnabled,
+        groupStatus: node.status,
         rows,
       })
     }
@@ -84,7 +84,7 @@ function buildPlatformGroups(platform: RolePermissionPlatform): RoleMatrixGroup[
       groupKey: `platform:${platform.id}`,
       groupCode: platform.code,
       groupName: platform.name,
-      groupIsEnabled: platform.isEnabled,
+      groupStatus: platform.status,
       rows: rootPageRows,
     })
   }
@@ -113,7 +113,7 @@ function buildRow(node: RolePermissionTreeNode): RoleMatrixRow {
     pageId: node.id,
     pageCode: node.code,
     pageName: node.name,
-    pageIsEnabled: node.isEnabled,
+    pageStatus: node.status,
     actions: node.children.map((action) => {
       if (action.menuType !== 'action' || action.children.length !== 0) {
         throw new Error(`page permission menu ${node.id} contains an invalid action child`)
@@ -122,7 +122,7 @@ function buildRow(node: RolePermissionTreeNode): RoleMatrixRow {
         id: action.id,
         code: action.code,
         name: action.name,
-        isEnabled: action.isEnabled,
+        status: action.status,
       }
     }),
   }

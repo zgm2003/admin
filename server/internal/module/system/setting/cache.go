@@ -164,7 +164,7 @@ type recordPayload struct {
 	Value         string      `json:"value"`
 	ValueType     int         `json:"valueType"`
 	Description   string      `json:"description"`
-	IsEnabled     yesno.Value `json:"isEnabled"`
+	Status     yesno.Value `json:"status"`
 	IsBuiltin     yesno.Value `json:"isBuiltin"`
 	CreatedAt     time.Time   `json:"createdAt"`
 	UpdatedAt     time.Time   `json:"updatedAt"`
@@ -173,7 +173,7 @@ type recordPayload struct {
 func (p recordPayload) record() Record {
 	return Record{
 		ID: p.ID, Key: p.Key, Value: p.Value, ValueType: p.ValueType, Description: p.Description,
-		IsEnabled: p.IsEnabled, IsBuiltin: p.IsBuiltin, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
+		Status: p.Status, IsBuiltin: p.IsBuiltin, CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt,
 	}
 }
 
@@ -187,7 +187,7 @@ func encodeRecordPayload(generation int64, row Record) (string, error) {
 	payload, err := json.Marshal(recordPayload{
 		SchemaVersion: cachePayloadSchemaVersion, Generation: generation,
 		ID: row.ID, Key: row.Key, Value: row.Value, ValueType: row.ValueType, Description: row.Description,
-		IsEnabled: row.IsEnabled, IsBuiltin: row.IsBuiltin, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		Status: row.Status, IsBuiltin: row.IsBuiltin, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	})
 	if err != nil {
 		return "", fmt.Errorf("encode setting snapshot: %w", err)
@@ -219,7 +219,7 @@ func decodeRecordPayload(raw string) (recordPayload, error) {
 	if payload.Key == sharedsetting.MailRecipientRuleImportTemplateObjectKey && validateInput(payload.Key, payload.Value, payload.ValueType, payload.Description) != nil {
 		return recordPayload{}, fmt.Errorf("%w: setting template object key is invalid", ErrSnapshotCorrupt)
 	}
-	if !yesno.IsValid(payload.IsEnabled) || !yesno.IsValid(payload.IsBuiltin) {
+	if !yesno.IsValid(payload.Status) || !yesno.IsValid(payload.IsBuiltin) {
 		return recordPayload{}, fmt.Errorf("%w: setting snapshot flags are invalid", ErrSnapshotCorrupt)
 	}
 	return payload, nil

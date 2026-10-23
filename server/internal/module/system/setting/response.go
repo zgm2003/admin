@@ -17,11 +17,11 @@ type idResponse struct {
 }
 type statusResponse struct {
 	Key       string `json:"key"`
-	IsEnabled int16  `json:"isEnabled"`
+	Status int16  `json:"status"`
 }
 
 func itemResponse(row Record) listItem {
-	return listItem{Presentation: presentationFor(row), ID: row.ID, Key: row.Key, Value: row.Value, ValueType: row.ValueType, Description: row.Description, IsEnabled: row.IsEnabled, IsBuiltin: row.IsBuiltin, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
+	return listItem{Presentation: presentationFor(row), ID: row.ID, Key: row.Key, Value: row.Value, ValueType: row.ValueType, Description: row.Description, Status: row.Status, IsBuiltin: row.IsBuiltin, CreatedAt: row.CreatedAt.UTC(), UpdatedAt: row.UpdatedAt.UTC()}
 }
 func listResultResponse(result ListResult) listResponse {
 	items := make([]listItem, 0, len(result.Items))

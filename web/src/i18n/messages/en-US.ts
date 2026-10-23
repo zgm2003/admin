@@ -823,7 +823,7 @@ export const enUS = {
   'permission.authPlatform.bindIP': 'Bind IP',
   'permission.authPlatform.maxSessionsField': 'Maximum sessions',
   'permission.authPlatform.allowRegister': 'Allow registration',
-  'permission.authPlatform.isEnabled': 'Enable platform',
+  'permission.authPlatform.status': 'Enable platform',
   'permission.authPlatform.confirm.disable':
     'Disabling logs out every user of this platform immediately. Continue?',
   'permission.authPlatform.confirm.delete':
@@ -1173,7 +1173,7 @@ export const enUS = {
   'menu.form.icon': 'Icon',
   'menu.form.selectIcon': 'Select icon',
   'menu.form.noMatchingIcon': 'No matching icons',
-  'menu.form.isEnabled': 'Enable after creation',
+  'menu.form.status': 'Enable after creation',
   'menu.form.codePlaceholder': 'For example user:account:view',
   'menu.form.pathPlaceholder': 'For example /user/account',
   'menu.form.componentPathPlaceholder': 'For example user/account',

@@ -15,7 +15,7 @@ type Model struct {
 	SecretIDCiphertext  string         `gorm:"column:secret_id_ciphertext;not null"`
 	SecretKeyCiphertext string         `gorm:"column:secret_key_ciphertext;not null"`
 	CurrentVersion      int64          `gorm:"column:current_version;not null"`
-	IsEnabled           yesno.Value    `gorm:"column:is_enabled;type:smallint;not null"`
+	Status           yesno.Value    `gorm:"column:status;type:smallint;not null"`
 	Remark              string         `gorm:"column:remark;type:varchar(512);not null"`
 	CreatedAt           time.Time      `gorm:"column:created_at;not null"`
 	UpdatedAt           time.Time      `gorm:"column:updated_at;not null"`
@@ -63,7 +63,7 @@ type RuntimeConfig struct {
 	SecretIDCiphertext  string
 	SecretKeyCiphertext string
 	CurrentVersion      int64
-	IsEnabled           yesno.Value
+	Status           yesno.Value
 	Deleted             bool
 	Versions            []RuntimeVersion
 }
@@ -76,7 +76,7 @@ type SafeValue struct {
 	Region         string      `json:"region"`
 	Endpoint       *string     `json:"endpoint"`
 	BucketDomain   *string     `json:"bucketDomain"`
-	IsEnabled      yesno.Value `json:"isEnabled"`
+	Status      yesno.Value `json:"status"`
 	HasCredentials bool        `json:"hasCredentials"`
 	Remark         string      `json:"remark"`
 	CreatedAt      time.Time   `json:"createdAt"`

@@ -33,8 +33,8 @@ it('metadata editing does not submit immutable identity or credentials', async (
 it('forwards query and failures without swallowing errors', async () => {
   const error = new Error('unavailable')
   vi.mocked(request.get).mockRejectedValue(error)
-  await expect(api.getPaymentConfigs({ page: 1, pageSize: 20, isEnabled: 0 })).rejects.toBe(error)
+  await expect(api.getPaymentConfigs({ page: 1, pageSize: 20, status: 0 })).rejects.toBe(error)
   expect(request.get).toHaveBeenCalledWith('/api/admin/v1/payment/config', {
-    params: { page: 1, pageSize: 20, isEnabled: 0 },
+    params: { page: 1, pageSize: 20, status: 0 },
   })
 })

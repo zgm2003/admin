@@ -202,9 +202,9 @@ function selectMenuIcon(value: MenuIconName): void {
         </el-col>
 
         <el-col :xs="24" :sm="12">
-          <el-form-item v-if="props.dialogMode === 'create'" :label="t('menu.form.isEnabled')">
+          <el-form-item v-if="props.dialogMode === 'create'" :label="t('menu.form.status')">
             <el-switch
-              v-model="form.isEnabled"
+              v-model="form.status"
               :active-value="YesNo.Yes"
               :inactive-value="YesNo.No"
               data-testid="menu-form-enabled"
@@ -238,9 +238,9 @@ function selectMenuIcon(value: MenuIconName): void {
           </el-form-item>
         </el-col>
         <el-col v-if="props.dialogMode === 'create'" :xs="24" :sm="12">
-          <el-form-item :label="t('menu.form.isEnabled')">
+          <el-form-item :label="t('menu.form.status')">
             <el-switch
-              v-model="form.isEnabled"
+              v-model="form.status"
               :active-value="YesNo.Yes"
               :inactive-value="YesNo.No"
               data-testid="menu-form-enabled"

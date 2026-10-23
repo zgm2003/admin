@@ -35,16 +35,16 @@ func (r *Repository) FileUploadOptions(ctx context.Context, platformID int64, co
 	err := r.db.WithContext(ctx).Table("storage_upload_rule r").
 		Select("k.code,r.name,r.max_file_size_bytes,r.allowed_extensions,r.allowed_mime_types").
 		Joins("JOIN storage_upload_rule_code k ON k.rule_id=r.id AND k.deleted_at IS NULL").
-		Joins("JOIN storage_cos_config c ON c.id=r.cos_config_id AND c.is_enabled=1 AND c.deleted_at IS NULL").
-		Joins("JOIN permission_auth_platform p ON p.id=r.platform_id AND p.is_enabled=1 AND p.deleted_at IS NULL").
-		Where("r.platform_id=? AND r.is_enabled=1 AND r.deleted_at IS NULL AND k.code=?", platformID, code).
+		Joins("JOIN storage_cos_config c ON c.id=r.cos_config_id AND c.status=1 AND c.deleted_at IS NULL").
+		Joins("JOIN permission_auth_platform p ON p.id=r.platform_id AND p.status=1 AND p.deleted_at IS NULL").
+		Where("r.platform_id=? AND r.status=1 AND r.deleted_at IS NULL AND k.code=?", platformID, code).
 		Scan(&rows).Error
 	return rows, err
 }
 
 func (r *Repository) PlatformEnabled(ctx context.Context, id int64) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Table("permission_auth_platform").Where("id = ? AND is_enabled = 1 AND deleted_at IS NULL", id).Count(&count).Error
+	err := r.db.WithContext(ctx).Table("permission_auth_platform").Where("id = ? AND status = 1 AND deleted_at IS NULL", id).Count(&count).Error
 	return count == 1, err
 }
 
@@ -54,7 +54,7 @@ func (r *Repository) Config(ctx context.Context, id int64) (cosconfig.Current, e
 	err := r.db.WithContext(ctx).Table("storage_cos_config").
 		Select("storage_cos_config.*, current_version.bucket AS bucket, current_version.region AS region, current_version.endpoint AS endpoint, current_version.bucket_domain AS bucket_domain").
 		Joins("JOIN storage_cos_config_version AS current_version ON current_version.cos_config_id = storage_cos_config.id AND current_version.version = storage_cos_config.current_version").
-		Where("storage_cos_config.id = ? AND storage_cos_config.is_enabled = 1 AND storage_cos_config.deleted_at IS NULL", id).Take(&row).Error
+		Where("storage_cos_config.id = ? AND storage_cos_config.status = 1 AND storage_cos_config.deleted_at IS NULL", id).Take(&row).Error
 	return row, err
 }
 
@@ -78,8 +78,8 @@ func filter(db *gorm.DB, q ListQuery) *gorm.DB {
 		p := "%" + q.Keyword + "%"
 		db = db.Where("storage_upload_rule.name ILIKE ? OR EXISTS (SELECT 1 FROM storage_upload_rule_code k WHERE k.rule_id = storage_upload_rule.id AND k.deleted_at IS NULL AND k.code ILIKE ?)", p, p)
 	}
-	if q.IsEnabled != nil {
-		db = db.Where("storage_upload_rule.is_enabled = ?", *q.IsEnabled)
+	if q.Status != nil {
+		db = db.Where("storage_upload_rule.status = ?", *q.Status)
 	}
 	return db
 }
@@ -97,7 +97,7 @@ func (r *Repository) List(ctx context.Context, q ListQuery) ([]RuleValue, error)
 		AllowedExtensions StringArray
 		AllowedMimeTypes  StringArray
 		AccessMode        string
-		IsEnabled         int16
+		Status         int16
 		Remark            string
 		CreatedAt         time.Time
 		UpdatedAt         time.Time
@@ -109,7 +109,7 @@ func (r *Repository) List(ctx context.Context, q ListQuery) ([]RuleValue, error)
 	}
 	out := make([]RuleValue, 0, len(rows))
 	for _, v := range rows {
-		out = append(out, RuleValue{ID: v.ID, PlatformID: v.PlatformID, PlatformCode: v.PlatformCode, PlatformName: v.PlatformName, Codes: []string(v.Codes), Name: v.Name, CosConfigID: v.CosConfigID, CosConfigName: v.CosConfigName, MaxFileSizeBytes: v.MaxFileSizeBytes, AllowedExtensions: []string(v.AllowedExtensions), AllowedMimeTypes: []string(v.AllowedMimeTypes), AccessMode: v.AccessMode, IsEnabled: yesno.Value(v.IsEnabled), Remark: v.Remark, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt})
+		out = append(out, RuleValue{ID: v.ID, PlatformID: v.PlatformID, PlatformCode: v.PlatformCode, PlatformName: v.PlatformName, Codes: []string(v.Codes), Name: v.Name, CosConfigID: v.CosConfigID, CosConfigName: v.CosConfigName, MaxFileSizeBytes: v.MaxFileSizeBytes, AllowedExtensions: []string(v.AllowedExtensions), AllowedMimeTypes: []string(v.AllowedMimeTypes), AccessMode: v.AccessMode, Status: yesno.Value(v.Status), Remark: v.Remark, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt})
 	}
 	return out, nil
 }
@@ -213,7 +213,7 @@ func (r *Repository) ReplaceCodes(ctx context.Context, ruleID int64, current, ne
 	return nil
 }
 func (r *Repository) MarkDeleted(ctx context.Context, id int64, now time.Time) error {
-	res := r.db.WithContext(ctx).Model(&Model{}).Where("id=? AND deleted_at IS NULL AND is_enabled=0", id).Updates(map[string]any{"deleted_at": now, "updated_at": now})
+	res := r.db.WithContext(ctx).Model(&Model{}).Where("id=? AND deleted_at IS NULL AND status=0", id).Updates(map[string]any{"deleted_at": now, "updated_at": now})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -227,15 +227,15 @@ func (r *Repository) MarkCodesDeleted(ctx context.Context, ruleID int64, now tim
 }
 func (r *Repository) FindPlatformOptions(ctx context.Context) ([]PlatformOption, error) {
 	var out []PlatformOption
-	err := r.db.WithContext(ctx).Model(&authplatform.Platform{}).Select("id,code,name,is_enabled").Where("deleted_at IS NULL AND is_enabled=1").Order("id").Scan(&out).Error
+	err := r.db.WithContext(ctx).Model(&authplatform.Platform{}).Select("id,code,name,status").Where("deleted_at IS NULL AND status=1").Order("id").Scan(&out).Error
 	return out, err
 }
 func (r *Repository) FindConfigSummaries(ctx context.Context) ([]ConfigSummary, error) {
 	var out []ConfigSummary
 	err := r.db.WithContext(ctx).Table("storage_cos_config").
-		Select("storage_cos_config.id, storage_cos_config.name, current_version.bucket AS bucket, current_version.region AS region, storage_cos_config.is_enabled").
+		Select("storage_cos_config.id, storage_cos_config.name, current_version.bucket AS bucket, current_version.region AS region, storage_cos_config.status").
 		Joins("JOIN storage_cos_config_version AS current_version ON current_version.cos_config_id = storage_cos_config.id AND current_version.version = storage_cos_config.current_version").
-		Where("storage_cos_config.deleted_at IS NULL AND storage_cos_config.is_enabled = 1").
+		Where("storage_cos_config.deleted_at IS NULL AND storage_cos_config.status = 1").
 		Order("storage_cos_config.id").Scan(&out).Error
 	return out, err
 }
@@ -244,7 +244,7 @@ func (r *Repository) FindUploadTarget(ctx context.Context, pid int64, code strin
 	err := r.db.WithContext(ctx).Table("storage_upload_rule r").
 		Select("r.id as rule_id,r.platform_id,r.cos_config_id,k.code,r.max_file_size_bytes,r.allowed_extensions,r.allowed_mime_types,r.access_mode").
 		Joins("JOIN storage_upload_rule_code k ON k.rule_id=r.id AND k.deleted_at IS NULL").
-		Where("r.platform_id=? AND k.code=? AND r.is_enabled=1 AND r.deleted_at IS NULL", pid, code).Take(&t).Error
+		Where("r.platform_id=? AND k.code=? AND r.status=1 AND r.deleted_at IS NULL", pid, code).Take(&t).Error
 	return t, err
 }
 
@@ -261,7 +261,7 @@ func (r *Repository) RuleRoute(ctx context.Context, ruleID int64) (ObjectRoute, 
 func (r *Repository) LockPlatform(ctx context.Context, id int64) error {
 	var ids []int64
 	if err := r.db.WithContext(ctx).Raw(
-		`SELECT id FROM permission_auth_platform WHERE id = ? AND is_enabled = 1 AND deleted_at IS NULL FOR UPDATE`, id).Scan(&ids).Error; err != nil {
+		`SELECT id FROM permission_auth_platform WHERE id = ? AND status = 1 AND deleted_at IS NULL FOR UPDATE`, id).Scan(&ids).Error; err != nil {
 		return err
 	}
 	if len(ids) != 1 {
@@ -281,7 +281,7 @@ func (r *Repository) lockConfig(ctx context.Context, id int64, enabledOnly bool)
 		Joins("JOIN storage_cos_config_version AS current_version ON current_version.cos_config_id = storage_cos_config.id AND current_version.version = storage_cos_config.current_version").
 		Where("storage_cos_config.id = ? AND storage_cos_config.deleted_at IS NULL", id)
 	if enabledOnly {
-		query = query.Where("storage_cos_config.is_enabled=1")
+		query = query.Where("storage_cos_config.status=1")
 	}
 	err := query.Take(&row).Error
 	return row, err
@@ -291,7 +291,7 @@ func (r *Repository) lockConfig(ctx context.Context, id int64, enabledOnly bool)
 func (r *Repository) LockEnabledOtherRules(ctx context.Context, platformID, keepID int64) ([]int64, error) {
 	var ids []int64
 	if err := r.db.WithContext(ctx).Raw(
-		`SELECT id FROM storage_upload_rule WHERE platform_id = ? AND is_enabled = 1 AND deleted_at IS NULL AND id <> ? ORDER BY id FOR UPDATE`,
+		`SELECT id FROM storage_upload_rule WHERE platform_id = ? AND status = 1 AND deleted_at IS NULL AND id <> ? ORDER BY id FOR UPDATE`,
 		platformID, keepID).Scan(&ids).Error; err != nil {
 		return nil, err
 	}
@@ -304,7 +304,7 @@ func (r *Repository) DisableRules(ctx context.Context, ids []int64, now time.Tim
 		return nil
 	}
 	return r.db.WithContext(ctx).Model(&Model{}).Where("id IN ? AND deleted_at IS NULL", ids).
-		Updates(map[string]any{"is_enabled": yesno.No, "updated_at": now}).Error
+		Updates(map[string]any{"status": yesno.No, "updated_at": now}).Error
 }
 
 func (r *Repository) loadCodes(ctx context.Context, m *Model) error {

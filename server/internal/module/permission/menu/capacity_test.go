@@ -22,7 +22,7 @@ func TestMenuMutationDoesNotReadOrLockUserTables(t *testing.T) {
 	}
 	work, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	_, err := service.Create(work, CreateInput{PlatformID: platformID, MenuType: TypeDirectory, Name: "No user scan", Code: "capacity", I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes})
+	_, err := service.Create(work, CreateInput{PlatformID: platformID, MenuType: TypeDirectory, Name: "No user scan", Code: "capacity", I18nKey: stringPointer("navigation.system"), Status: yesno.Yes})
 	if err != nil {
 		t.Fatalf("menu mutation blocked on user tables: %v", err)
 	}

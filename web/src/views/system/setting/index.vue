@@ -147,7 +147,7 @@ const columns = computed<TableColumn<SystemSetting>[]>(() => [
     minWidth: 220,
     overflowTooltip: true,
   },
-  { key: 'status', prop: 'isEnabled', label: t('common.status'), width: 110 },
+  { key: 'status', prop: 'status', label: t('common.status'), width: 110 },
   { key: 'actions', prop: 'key', label: t('common.actions'), width: 230, fixed: 'right' },
 ])
 const pagination = computed<TablePaginationState>(() => ({
@@ -167,7 +167,7 @@ async function load(): Promise<void> {
       page: page.value,
       pageSize: pageSize.value,
       ...(keyword.value.trim() ? { keyword: keyword.value.trim() } : {}),
-      ...(status.value === '' ? {} : { isEnabled: status.value }),
+      ...(status.value === '' ? {} : { status: status.value }),
     })
     if (current()) {
       rows.value = result.list
@@ -326,7 +326,7 @@ async function save(): Promise<void> {
 }
 async function toggle(row: SystemSetting): Promise<void> {
   if (!canStatus.value || !row.presentation.actions.status) return
-  const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+  const next = row.status === YesNo.Yes ? YesNo.No : YesNo.Yes
   try {
     await ElMessageBox.confirm(
       t('confirm.status', {
@@ -431,9 +431,9 @@ onMounted(() => {
             typeLabel(row.valueType)
           }}</template>
           <template #cell-status="{ row }: { row: SystemSetting }">
-            <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">
+            <el-tag :type="row.status === YesNo.Yes ? 'success' : 'info'">
               {{
-                row.isEnabled === YesNo.Yes
+                row.status === YesNo.Yes
                   ? t('common.enable')
                   : t('common.disable')
               }}
@@ -452,11 +452,11 @@ onMounted(() => {
             <el-button
               v-if="canStatus && row.presentation.actions.status"
               data-testid="setting-status-toggle"
-              :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
+              :type="row.status === YesNo.Yes ? 'warning' : 'success'"
               text
               @click="toggle(row)"
               >{{
-                row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
+                row.status === YesNo.Yes ? t('common.disable') : t('common.enable')
               }}</el-button
             >
             <el-button

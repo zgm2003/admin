@@ -147,11 +147,11 @@ func encodeXlsx(ctx context.Context, rows []Model) (XlsxExportFile, error) {
 	for _, r := range rows {
 		scope, se := formatXlsxScope(r.Scope)
 		action, ae := formatXlsxAction(r.Action)
-		if se != nil || ae != nil || (r.IsEnabled != 0 && r.IsEnabled != 1) {
+		if se != nil || ae != nil || (r.Status != 0 && r.Status != 1) {
 			return XlsxExportFile{}, fmt.Errorf("invalid stored rule enums")
 		}
 		status := "停用"
-		if r.IsEnabled == 1 {
+		if r.Status == 1 {
 			status = "启用"
 		}
 		cells := []string{scope, r.Pattern, action, r.Name, r.Remark, status}

@@ -24,7 +24,7 @@ func avatarDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		dsn = values["POSTGRES_DSN"]
 	}
 	db, ctx := testschema.Open(t, dsn, "test_profile_avatar")
-	schema := `CREATE TABLE user_account(id BIGINT PRIMARY KEY,username TEXT,email TEXT,phone TEXT,is_enabled SMALLINT,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ);
+	schema := `CREATE TABLE user_account(id BIGINT PRIMARY KEY,username TEXT,email TEXT,phone TEXT,status SMALLINT,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ);
  CREATE TABLE user_profile(user_id BIGINT PRIMARY KEY,avatar TEXT NOT NULL,birthday DATE,gender SMALLINT,created_at TIMESTAMPTZ,updated_at TIMESTAMPTZ);
  INSERT INTO user_account VALUES(7,'alice','alice@example.com',NULL,1,NULL,CURRENT_TIMESTAMP);
  INSERT INTO user_profile VALUES(7,'avatar/legacy.png',NULL,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);`

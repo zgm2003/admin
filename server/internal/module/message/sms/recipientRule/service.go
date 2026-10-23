@@ -51,7 +51,7 @@ func (s *Service) List(ctx context.Context) ([]Safe, error) {
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (Safe, error) {
-	if !validAction(input.Action) || !yesno.IsValid(input.IsEnabled) {
+	if !validAction(input.Action) || !yesno.IsValid(input.Status) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule input is invalid"))
 	}
 	name, remark, err := validateMeta(input.Name, input.Remark)
@@ -69,7 +69,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (Safe, error) {
 		Action:    input.Action,
 		Name:      name,
 		Remark:    remark,
-		IsEnabled: input.IsEnabled,
+		Status: input.Status,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -89,7 +89,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	if err != nil {
 		return Safe{}, apperror.DependencyUnavailable(fmt.Errorf("sms recipient rule repository: %w", err))
 	}
-	if !validAction(input.Action) || !yesno.IsValid(input.IsEnabled) {
+	if !validAction(input.Action) || !yesno.IsValid(input.Status) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule input is invalid"))
 	}
 	name, remark, err := validateMeta(input.Name, input.Remark)
@@ -114,7 +114,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 	current.Action = input.Action
 	current.Name = name
 	current.Remark = remark
-	current.IsEnabled = input.IsEnabled
+	current.Status = input.Status
 
 	now := time.Now().UTC()
 	if err := s.mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
@@ -128,7 +128,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (Safe
 
 func (s *Service) UpdateStatus(ctx context.Context, id int64, status yesno.Value) error {
 	if !yesno.IsValid(status) {
-		return apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+		return apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 	}
 	if _, err := s.repository.FindByID(ctx, id); errors.Is(err, gorm.ErrRecordNotFound) {
 		return apperror.NotFound(err)
@@ -168,7 +168,7 @@ func (s *Service) Evaluate(ctx context.Context, toPhone string) (Decision, error
 	}
 	patterns := make([]RulePattern, 0, len(rows))
 	for _, row := range rows {
-		if row.IsEnabled != yesno.Yes {
+		if row.Status != yesno.Yes {
 			continue
 		}
 		patterns = append(patterns, RulePattern{ID: row.ID, Scope: row.Scope, Action: row.Action, Pattern: row.Pattern})

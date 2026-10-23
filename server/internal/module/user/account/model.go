@@ -13,7 +13,7 @@ type User struct {
 	Email        string         `gorm:"column:email;type:varchar(254);not null"`
 	Phone        *string        `gorm:"column:phone;type:varchar(32)"`
 	PasswordHash string         `gorm:"column:password_hash;type:varchar(255);not null"`
-	IsEnabled    yesno.Value    `gorm:"column:is_enabled;type:smallint;not null;default:1;check:ck_user_account_is_enabled,is_enabled IN (0,1)"`
+	Status    yesno.Value    `gorm:"column:status;type:smallint;not null;default:1;check:ck_user_account_status,status IN (0,1)"`
 	CreatedAt    time.Time      `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 	UpdatedAt    time.Time      `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt    gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz"`

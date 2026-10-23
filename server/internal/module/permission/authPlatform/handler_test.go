@@ -32,7 +32,7 @@ type platformHTTPService struct {
 func (s *platformHTTPService) CurrentPolicy(_ context.Context, code string) (authplatform.Policy, error) {
 	s.policyCalls++
 	s.policyCode = code
-	return authplatform.Policy{ID: 1, Code: "admin", Name: "Admin", AllowRegister: true, IsEnabled: true}, nil
+	return authplatform.Policy{ID: 1, Code: "admin", Name: "Admin", AllowRegister: true, Status: true}, nil
 }
 
 func (s *platformHTTPService) List(_ context.Context, query authplatform.ListQuery) (pagination.Result[authplatform.ListItem], error) {
@@ -43,7 +43,7 @@ func (s *platformHTTPService) List(_ context.Context, query authplatform.ListQue
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		AllowRegister: yesno.Yes, Status: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: time.Date(2026, 8, 20, 8, 0, 0, 123, time.UTC),
 		UpdatedAt: time.Date(2026, 8, 20, 9, 0, 0, 456, time.UTC),
 	}}}, Total: 1, Page: query.Page, PageSize: query.PageSize}, nil
@@ -108,9 +108,9 @@ func TestPolicyRejectsInvalidClientBeforeService(t *testing.T) {
 func TestManagementListRequiresStrictQueryAndReturnsClosedPage(t *testing.T) {
 	service, router := managementRouter(t)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/permission/authplatform?page=1&pageSize=20&keyword=admin&isEnabled=1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/v1/permission/authplatform?page=1&pageSize=20&keyword=admin&status=1", nil)
 	router.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK || service.listCalls != 1 || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 || service.listQuery.Keyword != "admin" || service.listQuery.IsEnabled == nil || *service.listQuery.IsEnabled != yesno.Yes {
+	if recorder.Code != http.StatusOK || service.listCalls != 1 || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 || service.listQuery.Keyword != "admin" || service.listQuery.Status == nil || *service.listQuery.Status != yesno.Yes {
 		t.Fatalf("status=%d calls=%d query=%+v body=%s", recorder.Code, service.listCalls, service.listQuery, recorder.Body)
 	}
 	for _, forbidden := range []string{"deletedAt", "redisUrl", "postgres", "cookieSecure"} {
@@ -139,7 +139,7 @@ func TestManagementListRequiresStrictQueryAndReturnsClosedPage(t *testing.T) {
 
 func TestManagementJSONContractsRejectMissingAndUnknownFields(t *testing.T) {
 	service, router := managementRouter(t)
-	validCreate := `{"code":"app","name":"App","loginTypes":["email","password"],"accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":0,"bindIP":0,"maxSessions":1,"allowRegister":1,"isEnabled":1}`
+	validCreate := `{"code":"app","name":"App","loginTypes":["email","password"],"accessTTLSeconds":900,"refreshTTLSeconds":1209600,"sessionCacheTTLSeconds":1800,"accessCacheTTLSeconds":1800,"bindDevice":0,"bindIP":0,"maxSessions":1,"allowRegister":1,"status":1}`
 	recorder := performJSON(router, http.MethodPost, "/api/admin/v1/permission/authplatform", validCreate)
 	if recorder.Code != http.StatusCreated || service.createCalls != 1 || recorder.Body.String() != `{"code":0,"data":{"id":2},"message":"ok"}` {
 		t.Fatalf("create status=%d calls=%d body=%s", recorder.Code, service.createCalls, recorder.Body)
@@ -169,11 +169,11 @@ func TestManagementJSONContractsRejectMissingAndUnknownFields(t *testing.T) {
 		}
 	}
 
-	recorder = performJSON(router, http.MethodPatch, "/api/admin/v1/permission/authplatform/2/status", `{"isEnabled":0}`)
+	recorder = performJSON(router, http.MethodPatch, "/api/admin/v1/permission/authplatform/2/status", `{"status":0}`)
 	if recorder.Code != http.StatusOK || service.statusCalls != 1 {
 		t.Fatalf("status update=%d calls=%d body=%s", recorder.Code, service.statusCalls, recorder.Body)
 	}
-	recorder = performJSON(router, http.MethodPatch, "/api/admin/v1/permission/authplatform/2/status", `{"isEnabled":0,"name":"bad"}`)
+	recorder = performJSON(router, http.MethodPatch, "/api/admin/v1/permission/authplatform/2/status", `{"status":0,"name":"bad"}`)
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status unknown field status=%d body=%s", recorder.Code, recorder.Body)
 	}

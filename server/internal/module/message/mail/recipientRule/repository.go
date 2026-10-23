@@ -118,10 +118,10 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, enabled yesno.V
 		if err != nil {
 			return false, err
 		}
-		if row.IsEnabled == enabled {
+		if row.Status == enabled {
 			return false, nil
 		}
-		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{"is_enabled": enabled, "updated_at": now})
+		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{"status": enabled, "updated_at": now})
 		if query.Error != nil {
 			return false, query.Error
 		}
@@ -205,13 +205,13 @@ func applyRuleValues(row *Model, values map[string]any) {
 			row.Name = value.(string)
 		case "remark":
 			row.Remark = value.(string)
-		case "is_enabled":
-			row.IsEnabled = value.(yesno.Value)
+		case "status":
+			row.Status = value.(yesno.Value)
 		}
 	}
 }
 
 func sameRule(left, right Model) bool {
 	return left.Scope == right.Scope && left.Pattern == right.Pattern && left.Action == right.Action &&
-		left.Name == right.Name && left.Remark == right.Remark && left.IsEnabled == right.IsEnabled
+		left.Name == right.Name && left.Remark == right.Remark && left.Status == right.Status
 }

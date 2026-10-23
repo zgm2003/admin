@@ -54,22 +54,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateUserStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateUserStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateUserStatus>[1] = 0
+    const status: Parameters<typeof api.updateUserStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateUserStatus(id, isEnabled)
+    const result = await api.updateUserStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/user/account/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateUserStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateUserStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateUserStatus>[1] = 0
+    const status: Parameters<typeof api.updateUserStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateUserStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateUserStatus(id, status)).rejects.toBe(error)
   })
   it('deleteUser preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.deleteUser>[0] = 1

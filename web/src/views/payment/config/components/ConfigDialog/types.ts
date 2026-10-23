@@ -7,7 +7,7 @@ export interface ConfigForm {
   appId: string
   sellerId: string
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
   notifyUrl: string
   payMethods: number[]
   privateKey: string

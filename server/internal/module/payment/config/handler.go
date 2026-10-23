@@ -139,18 +139,18 @@ func (h *Handler) Status(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if r.IsEnabled == nil {
-		response.Fail(c, invalid(fmt.Errorf("isEnabled required")))
+	if r.Status == nil {
+		response.Fail(c, invalid(fmt.Errorf("status required")))
 		return
 	}
-	if err = h.service.UpdateStatus(c.Request.Context(), id, *r.IsEnabled); err != nil {
+	if err = h.service.UpdateStatus(c.Request.Context(), id, *r.Status); err != nil {
 		response.Fail(c, err)
 		return
 	}
 	response.OK(c, 200, struct {
 		ID        int64       `json:"id"`
-		IsEnabled yesno.Value `json:"isEnabled"`
-	}{id, *r.IsEnabled})
+		Status yesno.Value `json:"status"`
+	}{id, *r.Status})
 }
 func (h *Handler) Delete(c *gin.Context) {
 	id, err := configID(c)

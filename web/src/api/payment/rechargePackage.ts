@@ -13,7 +13,7 @@ export interface RechargePackage {
   amount: string
   badge: string | null
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
   actions: { update: boolean; status: boolean; delete: boolean }
   presentation: { status: string }
   createdAt: string
@@ -22,12 +22,12 @@ export interface RechargePackage {
 
 export interface RechargePackageQuery extends PageRequest {
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
 }
 
 export interface RechargePackageOptions {
   statuses: Array<NumericOption<YesNo>>
-  defaults: { sortOrder: number; isEnabled: YesNo }
+  defaults: { sortOrder: number; status: YesNo }
   limits: {
     name: number
     badge: number
@@ -44,7 +44,7 @@ export interface CreateRechargePackageInput {
   amount: string
   badge: string | null
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface UpdateRechargePackageInput {
@@ -83,11 +83,11 @@ export function updateRechargePackage(
 
 export function updateRechargePackageStatus(
   id: number,
-  isEnabled: YesNo,
-): Promise<{ id: number; isEnabled: YesNo }> {
-  return request.patch<{ id: number; isEnabled: YesNo }, { isEnabled: YesNo }>(
+  status: YesNo,
+): Promise<{ id: number; status: YesNo }> {
+  return request.patch<{ id: number; status: YesNo }, { status: YesNo }>(
     `${base}/${id}/status`,
-    { isEnabled },
+    { status },
   )
 }
 

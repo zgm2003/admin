@@ -49,7 +49,7 @@ func TestConfigStatusActionDoesNotUseCertificateDates(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			current := Current{
-				Config:     Model{ID: 1, Provider: payment.ProviderAlipay, Environment: test.environment, IsEnabled: yesno.No},
+				Config:     Model{ID: 1, Provider: payment.ProviderAlipay, Environment: test.environment, Status: yesno.No},
 				Credential: Version{Version: 1, AppCertPEM: fixture.AppCertPEM, AlipayCertPEM: fixture.AlipayCertPEM, RootCertPEM: fixture.RootCertPEM, NotifyURL: "https://pay.example.test/api/admin/v1/payment/callback/alipay/1/1", PayMethods: PayMethods{payment.PayMethodWeb}},
 			}
 			field := &current.Credential.AlipayCertPEM

@@ -77,7 +77,7 @@ const columns = computed<TableColumn<MailRule>[]>(() => [
   { prop: 'action', label: t('mail.action'), width: 120 },
   { prop: 'name', label: t('mail.name'), minWidth: 160 },
   { prop: 'remark', label: t('common.remark'), minWidth: 200, overflowTooltip: true },
-  { key: 'enabled', prop: 'isEnabled', label: t('common.status'), width: 100 },
+  { key: 'enabled', prop: 'status', label: t('common.status'), width: 100 },
   { key: 'actions', prop: 'id', label: t('common.actions'), width: 200, fixed: 'right' },
 ])
 
@@ -89,7 +89,7 @@ watch(editing, (value) => {
         action: value.action,
         name: value.name,
         remark: value.remark,
-        isEnabled: value.isEnabled,
+        status: value.status,
       }
     : blankRule()
 })
@@ -101,7 +101,7 @@ function blankRule(): RuleForm {
     action: props.options?.ruleDefaults.action,
     name: '',
     remark: '',
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
   }
 }
 
@@ -119,7 +119,7 @@ function edit(row: MailRule): void {
 
 async function toggle(row: MailRule): Promise<void> {
   try {
-    const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+    const next = row.status === YesNo.Yes ? YesNo.No : YesNo.Yes
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: row.name,
@@ -153,11 +153,11 @@ async function saveRule(): Promise<void> {
   const target = editing.value
   saving.value = true
   try {
-    if (target && input.isEnabled !== target.isEnabled) {
+    if (target && input.status !== target.status) {
       await ElMessageBox.confirm(
         t('confirm.status', {
           name: target.name,
-          status: t(input.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable'),
+          status: t(input.status === YesNo.Yes ? 'common.enable' : 'common.disable'),
         }),
         t('confirm.title'),
         { type: 'warning' },
@@ -265,7 +265,7 @@ async function exportRules(): Promise<void> {
       </template>
       <template #cell-enabled="{ row }: { row: MailRule }">
         <el-switch
-          :model-value="row.isEnabled"
+          :model-value="row.status"
           inline-prompt
           :active-text="t('common.enable')"
           :inactive-text="t('common.disable')"
@@ -369,7 +369,7 @@ async function exportRules(): Promise<void> {
         </el-form-item>
         <el-form-item :label="t('common.enable')">
           <el-switch
-            v-model="form.isEnabled"
+            v-model="form.status"
             :active-value="YesNo.Yes"
             :inactive-value="YesNo.No"
           />

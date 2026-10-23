@@ -22,7 +22,7 @@ type authPlatformFormDefaults struct {
 	BindIP                 yesno.Value `json:"bindIP"`
 	MaxSessions            int         `json:"maxSessions"`
 	AllowRegister          yesno.Value `json:"allowRegister"`
-	IsEnabled              yesno.Value `json:"isEnabled"`
+	Status              yesno.Value `json:"status"`
 }
 type authPlatformAdminOptions struct {
 	LoginTypes   []option.Option[LoginType] `json:"loginTypes"`
@@ -46,7 +46,7 @@ func adminOptions(ctx context.Context) (authPlatformAdminOptions, error) {
 			"accessCacheTTLSeconds":  {MinimumAccessCacheTTLSeconds, MaximumAccessCacheTTLSeconds},
 			"maxSessions":            {0, MaximumSessions},
 		},
-		Defaults:    authPlatformFormDefaults{LoginTypes: []LoginType{LoginTypeEmail, LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 86400, SessionCacheTTLSeconds: 7200, AccessCacheTTLSeconds: 600, BindDevice: yesno.Yes, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No, IsEnabled: yesno.Yes},
+		Defaults:    authPlatformFormDefaults{LoginTypes: []LoginType{LoginTypeEmail, LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 86400, SessionCacheTTLSeconds: 7200, AccessCacheTTLSeconds: 600, BindDevice: yesno.Yes, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No, Status: yesno.Yes},
 		CodePattern: authclient.PlatformCodePattern(), NameMaxBytes: MaximumNameBytes,
 	}, nil
 }

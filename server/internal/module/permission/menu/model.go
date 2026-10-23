@@ -29,7 +29,7 @@ type Menu struct {
 	Icon          *string        `gorm:"column:icon;type:varchar(128)"`
 	Remark        *string        `gorm:"column:remark;type:varchar(512)"`
 	SortOrder     int            `gorm:"column:sort_order;type:integer;not null;default:0"`
-	IsEnabled     yesno.Value    `gorm:"column:is_enabled;type:smallint;not null;default:1"`
+	Status     yesno.Value    `gorm:"column:status;type:smallint;not null;default:1"`
 	IsHidden      yesno.Value    `gorm:"column:is_hidden;type:smallint;not null;default:0"`
 	CreatedAt     time.Time      `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 	UpdatedAt     time.Time      `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`

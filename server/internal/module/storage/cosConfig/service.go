@@ -161,7 +161,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		AppID:               strings.TrimSpace(input.AppID),
 		SecretIDCiphertext:  secretIDCiphertext,
 		SecretKeyCiphertext: secretKeyCiphertext,
-		IsEnabled:           input.IsEnabled,
+		Status:           input.Status,
 		Remark:              strings.TrimSpace(input.Remark),
 		CreatedAt:           now,
 		UpdatedAt:           now,
@@ -260,7 +260,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 		return invalid(fmt.Errorf("id is invalid"))
 	}
 	if !yesno.IsValid(value) {
-		return invalid(fmt.Errorf("isEnabled is invalid"))
+		return invalid(fmt.Errorf("status is invalid"))
 	}
 	if _, err := s.repository.FindByID(ctx, id); err != nil {
 		return mapReadError(err)
@@ -278,7 +278,7 @@ func (s *Service) TestConnection(ctx context.Context, id int64) error {
 	if err != nil {
 		return mapReadError(err)
 	}
-	if row.IsEnabled != yesno.Yes {
+	if row.Status != yesno.Yes {
 		return conflict(fmt.Errorf("COS config is disabled"))
 	}
 	if s.tester == nil {

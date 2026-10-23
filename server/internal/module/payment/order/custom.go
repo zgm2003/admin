@@ -25,7 +25,7 @@ func (s *Service) minimumRechargeCents(ctx context.Context) (int64, error) {
 		return 0, apperror.DependencyUnavailable(err)
 	}
 	minimum, err := row.Number()
-	if err != nil || row.Key != sharedsetting.PaymentRechargeMinimumAmountKey || row.IsEnabled != yesno.Yes || minimum < 1 || int64(minimum) > maximumRechargeCents/100 {
+	if err != nil || row.Key != sharedsetting.PaymentRechargeMinimumAmountKey || row.Status != yesno.Yes || minimum < 1 || int64(minimum) > maximumRechargeCents/100 {
 		return 0, apperror.DependencyUnavailable(errors.New("stored recharge minimum is invalid"))
 	}
 	return int64(minimum) * 100, nil

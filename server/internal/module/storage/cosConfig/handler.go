@@ -116,15 +116,15 @@ func (h *Handler) Status(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	if request.IsEnabled == nil {
-		response.Fail(context, invalid(fmt.Errorf("isEnabled is required")))
+	if request.Status == nil {
+		response.Fail(context, invalid(fmt.Errorf("status is required")))
 		return
 	}
-	if err = h.service.UpdateStatus(context.Request.Context(), id, *request.IsEnabled); err != nil {
+	if err = h.service.UpdateStatus(context.Request.Context(), id, *request.Status); err != nil {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, statusResponse{ID: id, IsEnabled: int16(*request.IsEnabled)})
+	response.OK(context, http.StatusOK, statusResponse{ID: id, Status: int16(*request.Status)})
 }
 
 func (h *Handler) Test(context *gin.Context) {

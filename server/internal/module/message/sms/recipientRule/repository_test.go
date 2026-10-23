@@ -33,7 +33,7 @@ CREATE TABLE message_sms_recipient_rule(
  action SMALLINT NOT NULL CHECK(action IN (0,1)),
  name VARCHAR(128) NOT NULL,
  remark VARCHAR(512) NOT NULL DEFAULT '',
- is_enabled SMALLINT NOT NULL DEFAULT 1,
+ status SMALLINT NOT NULL DEFAULT 1,
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  deleted_at TIMESTAMPTZ
@@ -72,7 +72,7 @@ func TestRepositoryRejectsADuplicateActivePatternAndAction(t *testing.T) {
 	service := newMutationService(newSMSRuleRepository(db))
 
 	first, err := service.Create(ctx, CreateInput{
-		Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -82,7 +82,7 @@ func TestRepositoryRejectsADuplicateActivePatternAndAction(t *testing.T) {
 	}
 
 	_, err = service.Create(ctx, CreateInput{
-		Scope: ScopePhone, Pattern: "+86 156-7162-8271", Action: ActionDeny, Name: "重复", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Pattern: "+86 156-7162-8271", Action: ActionDeny, Name: "重复", Status: yesno.Yes,
 	})
 	if !errors.Is(err, ErrConflict) && appErrorCode(err) != 10005 {
 		t.Fatalf("duplicate create error = %v", err)
@@ -90,7 +90,7 @@ func TestRepositoryRejectsADuplicateActivePatternAndAction(t *testing.T) {
 
 	// A different action on the same pattern is a distinct rule.
 	if _, err := service.Create(ctx, CreateInput{
-		Scope: ScopePhone, Pattern: "15671628271", Action: ActionAllow, Name: "放行", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Pattern: "15671628271", Action: ActionAllow, Name: "放行", Status: yesno.Yes,
 	}); err != nil {
 		t.Fatalf("Create() with another action error = %v", err)
 	}
@@ -101,7 +101,7 @@ func TestRepositoryIgnoresSoftDeletedRules(t *testing.T) {
 	service := newMutationService(newSMSRuleRepository(db))
 
 	created, err := service.Create(ctx, CreateInput{
-		Scope: ScopePrefix, Pattern: "+86156", Action: ActionDeny, Name: "前缀", IsEnabled: yesno.Yes,
+		Scope: ScopePrefix, Pattern: "+86156", Action: ActionDeny, Name: "前缀", Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -118,7 +118,7 @@ func TestRepositoryIgnoresSoftDeletedRules(t *testing.T) {
 	}
 	// The same pattern can be created again after the soft delete.
 	if _, err := service.Create(ctx, CreateInput{
-		Scope: ScopePrefix, Pattern: "+86156", Action: ActionDeny, Name: "重建", IsEnabled: yesno.Yes,
+		Scope: ScopePrefix, Pattern: "+86156", Action: ActionDeny, Name: "重建", Status: yesno.Yes,
 	}); err != nil {
 		t.Fatalf("Create() after delete error = %v", err)
 	}
@@ -130,13 +130,13 @@ func TestRepositoryUpdateKeepsTheStoredPatternWhenOmitted(t *testing.T) {
 	service := newMutationService(repository)
 
 	created, err := service.Create(ctx, CreateInput{
-		Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
 	updated, err := service.Update(ctx, created.ID, UpdateInput{
-		Scope: ScopePhone, Action: ActionAllow, Name: "放行", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Action: ActionAllow, Name: "放行", Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)

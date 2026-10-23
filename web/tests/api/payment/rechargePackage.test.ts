@@ -15,7 +15,7 @@ it('uses ID-based recharge package CRUD and preserves decimal strings', async ()
     amount: '10.00',
     badge: null,
     sortOrder: 0,
-    isEnabled: 1 as const,
+    status: 1 as const,
   }
   await api.createRechargePackage(input)
   expect(request.post).toHaveBeenCalledExactlyOnceWith(

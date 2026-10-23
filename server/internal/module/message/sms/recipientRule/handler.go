@@ -30,7 +30,7 @@ type createRequest struct {
 	Action    *Action      `json:"action"`
 	Name      *string      `json:"name"`
 	Remark    *string      `json:"remark"`
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 type updateRequest struct {
@@ -39,30 +39,30 @@ type updateRequest struct {
 	Action    *Action      `json:"action"`
 	Name      *string      `json:"name"`
 	Remark    *string      `json:"remark"`
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Scope == nil || r.Pattern == nil || r.Action == nil || r.Name == nil || r.Remark == nil || r.IsEnabled == nil {
+	if r.Scope == nil || r.Pattern == nil || r.Action == nil || r.Name == nil || r.Remark == nil || r.Status == nil {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule fields are required"))
 	}
 	return CreateInput{
 		Scope: *r.Scope, Pattern: *r.Pattern, Action: *r.Action,
-		Name: *r.Name, Remark: *r.Remark, IsEnabled: *r.IsEnabled,
+		Name: *r.Name, Remark: *r.Remark, Status: *r.Status,
 	}, nil
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
-	if r.Scope == nil || r.Action == nil || r.Name == nil || r.Remark == nil || r.IsEnabled == nil {
+	if r.Scope == nil || r.Action == nil || r.Name == nil || r.Remark == nil || r.Status == nil {
 		return UpdateInput{}, apperror.InvalidRequest(fmt.Errorf("sms recipient rule fields are required"))
 	}
 	return UpdateInput{
 		Scope: *r.Scope, Pattern: r.Pattern, Action: *r.Action,
-		Name: *r.Name, Remark: *r.Remark, IsEnabled: *r.IsEnabled,
+		Name: *r.Name, Remark: *r.Remark, Status: *r.Status,
 	}, nil
 }
 
@@ -129,11 +129,11 @@ func (h *Handler) Status(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if request.IsEnabled == nil || !yesno.IsValid(*request.IsEnabled) {
-		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1")))
+	if request.Status == nil || !yesno.IsValid(*request.Status) {
+		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1")))
 		return
 	}
-	if err := h.service.UpdateStatus(c.Request.Context(), id, *request.IsEnabled); err != nil {
+	if err := h.service.UpdateStatus(c.Request.Context(), id, *request.Status); err != nil {
 		response.Fail(c, err)
 		return
 	}

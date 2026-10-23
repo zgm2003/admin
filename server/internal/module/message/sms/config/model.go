@@ -22,7 +22,7 @@ type Model struct {
 	Region              string         `gorm:"column:region;type:varchar(64);not null"`
 	Endpoint            *string        `gorm:"column:endpoint;type:varchar(255)"`
 	TTLMinutes          int16          `gorm:"column:ttl_minutes;not null"`
-	IsEnabled           yesno.Value    `gorm:"column:is_enabled;not null"`
+	Status           yesno.Value    `gorm:"column:status;not null"`
 	LastTestAt          *time.Time     `gorm:"column:last_test_at"`
 	LastTestError       string         `gorm:"column:last_test_error;type:varchar(512);not null"`
 	CreatedAt           time.Time      `gorm:"column:created_at;not null"`

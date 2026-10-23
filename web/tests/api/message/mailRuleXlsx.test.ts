@@ -26,7 +26,7 @@ const preview = {
         action: 99,
         name: '',
         remark: ' BACKEND-REMARK ',
-        isEnabled: 1,
+        status: 1,
       },
       errors: ['server_added_code'],
       serverAdded: true,

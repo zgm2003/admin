@@ -154,7 +154,7 @@ type runtimePayload struct {
 	SecretIDCiphertext  string                  `json:"secretIdCiphertext"`
 	SecretKeyCiphertext string                  `json:"secretKeyCiphertext"`
 	CurrentVersion      int64                   `json:"currentVersion"`
-	IsEnabled           yesno.Value             `json:"isEnabled"`
+	Status           yesno.Value             `json:"status"`
 	Deleted             bool                    `json:"deleted"`
 	Versions            []runtimeVersionPayload `json:"versions"`
 }
@@ -166,14 +166,14 @@ func (p runtimePayload) runtime() RuntimeConfig {
 	}
 	return RuntimeConfig{
 		ID: p.ConfigID, AppID: p.AppID, SecretIDCiphertext: p.SecretIDCiphertext, SecretKeyCiphertext: p.SecretKeyCiphertext,
-		CurrentVersion: p.CurrentVersion, IsEnabled: p.IsEnabled, Deleted: p.Deleted, Versions: versions,
+		CurrentVersion: p.CurrentVersion, Status: p.Status, Deleted: p.Deleted, Versions: versions,
 	}
 }
 
 func encodeRuntimePayload(generation, id int64, config RuntimeConfig) (string, error) {
 	if generation < 1 || id < 1 || config.ID != id || config.CurrentVersion < 1 ||
 		strings.TrimSpace(config.AppID) == "" || strings.TrimSpace(config.SecretIDCiphertext) == "" || strings.TrimSpace(config.SecretKeyCiphertext) == "" ||
-		!yesno.IsValid(config.IsEnabled) || len(config.Versions) == 0 {
+		!yesno.IsValid(config.Status) || len(config.Versions) == 0 {
 		return "", fmt.Errorf("COS config runtime payload is invalid")
 	}
 	versions := make([]runtimeVersionPayload, 0, len(config.Versions))
@@ -191,7 +191,7 @@ func encodeRuntimePayload(generation, id int64, config RuntimeConfig) (string, e
 	payload, err := json.Marshal(runtimePayload{
 		SchemaVersion: runtimePayloadSchemaVersion, Generation: generation, ConfigID: id,
 		AppID: config.AppID, SecretIDCiphertext: config.SecretIDCiphertext, SecretKeyCiphertext: config.SecretKeyCiphertext,
-		CurrentVersion: config.CurrentVersion, IsEnabled: config.IsEnabled, Deleted: config.Deleted, Versions: versions,
+		CurrentVersion: config.CurrentVersion, Status: config.Status, Deleted: config.Deleted, Versions: versions,
 	})
 	if err != nil {
 		return "", fmt.Errorf("encode COS config runtime snapshot: %w", err)
@@ -217,7 +217,7 @@ func decodeRuntimePayload(raw string) (runtimePayload, error) {
 	if strings.TrimSpace(payload.AppID) == "" || strings.TrimSpace(payload.SecretIDCiphertext) == "" || strings.TrimSpace(payload.SecretKeyCiphertext) == "" {
 		return runtimePayload{}, fmt.Errorf("%w: runtime snapshot credentials are invalid", ErrSnapshotCorrupt)
 	}
-	if !yesno.IsValid(payload.IsEnabled) {
+	if !yesno.IsValid(payload.Status) {
 		return runtimePayload{}, fmt.Errorf("%w: runtime snapshot flags are invalid", ErrSnapshotCorrupt)
 	}
 	if len(payload.Versions) == 0 {

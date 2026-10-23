@@ -10,5 +10,5 @@ export interface AuthPlatformForm {
   bindIP: import('@/enums/yesNo').YesNo
   maxSessions: number
   allowRegister: import('@/enums/yesNo').YesNo
-  isEnabled: import('@/enums/yesNo').YesNo
+  status: import('@/enums/yesNo').YesNo
 }

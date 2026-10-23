@@ -61,7 +61,7 @@ type Input struct {
 	Action    Action      `json:"action"`
 	Name      string      `json:"name"`
 	Remark    string      `json:"remark"`
-	IsEnabled yesno.Value `json:"isEnabled"`
+	Status yesno.Value `json:"status"`
 }
 
 const (

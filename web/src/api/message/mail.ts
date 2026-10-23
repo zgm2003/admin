@@ -35,7 +35,7 @@ export interface MailConfig {
   fromName: string
   replyTo: string
   ttlMinutes: number
-  isEnabled: YesNo
+  status: YesNo
   lastTestAt: string | null
   lastTestError: string
 }
@@ -49,7 +49,7 @@ export interface MailTemplate {
   content: string
   variableKeys: string[]
   exampleVariables: Record<string, string>
-  isEnabled: YesNo
+  status: YesNo
   createdAt: string
   updatedAt: string
 }
@@ -88,7 +88,7 @@ export interface MailRule {
   action: number
   name: string
   remark: string
-  isEnabled: YesNo
+  status: YesNo
   createdAt: string
   updatedAt: string
 }
@@ -102,7 +102,7 @@ export interface MailConfigInput {
   fromName: string
   replyTo: string
   ttlMinutes: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface MailTemplateInput {
@@ -121,7 +121,7 @@ export interface MailRuleInput {
   action: number
   name: string
   remark: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface MailTestInput {
@@ -166,11 +166,11 @@ export function updateMailTemplate(
 
 export function updateMailTemplateStatus(
   id: number,
-  isEnabled: YesNo,
-): Promise<{ id: number; isEnabled: YesNo }> {
-  return request.patch<{ id: number; isEnabled: YesNo }>(
+  status: YesNo,
+): Promise<{ id: number; status: YesNo }> {
+  return request.patch<{ id: number; status: YesNo }>(
     `/api/admin/v1/message/mail/template/${id}/status`,
-    { isEnabled },
+    { status },
   )
 }
 
@@ -207,11 +207,11 @@ export function updateMailRule(id: number, data: MailRuleInput): Promise<Record<
 
 export function updateMailRuleStatus(
   id: number,
-  isEnabled: YesNo,
-): Promise<{ id: number; isEnabled: YesNo }> {
-  return request.patch<{ id: number; isEnabled: YesNo }>(
+  status: YesNo,
+): Promise<{ id: number; status: YesNo }> {
+  return request.patch<{ id: number; status: YesNo }>(
     `/api/admin/v1/message/mail/recipient-rule/${id}/status`,
-    { isEnabled },
+    { status },
   )
 }
 

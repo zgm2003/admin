@@ -28,7 +28,7 @@ func TestServiceListValidatesAndNormalizesQuery(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	service := newRoleTestService(t, role.NewRepository(tx))
 	unique := " service_list_keyword "
-	created := role.Role{Code: "service_list_keyword", Name: "Service List", IsEnabled: yesno.Yes}
+	created := role.Role{Code: "service_list_keyword", Name: "Service List", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestServiceListValidatesAndNormalizesQuery(t *testing.T) {
 		{Page: 0, PageSize: 20},
 		{Page: 1, PageSize: 0},
 		{Page: 1, PageSize: 101},
-		{Page: 1, PageSize: 20, IsEnabled: &invalidEnabled},
+		{Page: 1, PageSize: 20, Status: &invalidEnabled},
 		{Page: 1, PageSize: 20, Keyword: strings.Repeat("界", 65)},
 	} {
 		_, err := service.List(ctx, query)
@@ -75,7 +75,7 @@ func TestServiceCreateNormalizesAndInitializesRole(t *testing.T) {
 	if err := tx.WithContext(ctx).First(&stored, id).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.Code != fmt.Sprintf("ai_tester_%d", unique) || stored.Name != "AI 测试员" || stored.IsDefault != yesno.No || stored.IsEnabled != yesno.Yes {
+	if stored.Code != fmt.Sprintf("ai_tester_%d", unique) || stored.Name != "AI 测试员" || stored.IsDefault != yesno.No || stored.Status != yesno.Yes {
 		t.Fatalf("created role = %+v", stored)
 	}
 	var grantCount int64
@@ -139,7 +139,7 @@ func TestServiceUpdateChangesOnlyCustomRoleName(t *testing.T) {
 	if err := tx.WithContext(ctx).First(&stored, id).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.Code != code || stored.Name != "After" || stored.IsEnabled != yesno.Yes || stored.IsDefault != yesno.No {
+	if stored.Code != code || stored.Name != "After" || stored.Status != yesno.Yes || stored.IsDefault != yesno.No {
 		t.Fatalf("updated role = %+v", stored)
 	}
 	updatedAt := stored.UpdatedAt
@@ -189,7 +189,7 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdUser := account.User{Username: fmt.Sprintf("status_user_%d", time.Now().UnixNano()), Email: fmt.Sprintf("status_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes}
+	createdUser := account.User{Username: fmt.Sprintf("status_user_%d", time.Now().UnixNano()), Email: fmt.Sprintf("status_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdUser).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	}
 	componentPath := fmt.Sprintf("access/menus/status-%d", time.Now().UnixNano())
 	path := "/" + componentPath
-	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Status", Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Status", Code: fmt.Sprintf("status:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestServiceUpdateStatusProtectsRolesAndPreservesRelations(t *testing.T) {
 	}
 	assertRoleAccessState(t, accessStates, createdUser.ID, 2)
 	var stored role.Role
-	if err := tx.WithContext(ctx).First(&stored, customID).Error; err != nil || stored.IsEnabled != yesno.No {
+	if err := tx.WithContext(ctx).First(&stored, customID).Error; err != nil || stored.Status != yesno.No {
 		t.Fatalf("disabled role = %+v,%v", stored, err)
 	}
 	disabledAt := stored.UpdatedAt
@@ -284,7 +284,7 @@ func TestServiceUpdateStatusRedisFailurePreventsPostgreSQLMutation(t *testing.T)
 	if err := tx.WithContext(ctx).Take(&stored, roleID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.IsEnabled != yesno.Yes || readRoleAccessVersion(t, tx, ctx, boundUser.ID) != 1 {
+	if stored.Status != yesno.Yes || readRoleAccessVersion(t, tx, ctx, boundUser.ID) != 1 {
 		t.Fatalf("PostgreSQL mutated without Redis coordination: role=%+v", stored)
 	}
 }
@@ -297,7 +297,7 @@ func TestServiceUpdateStatusRollbackRestoresAccessStateAndVersion(t *testing.T) 
 		t.Fatal(err)
 	}
 	boundUser := createRoleAccessUser(t, tx, ctx, roleID, yesno.Yes, false)
-	if err := tx.WithContext(ctx).Exec(`ALTER TABLE permission_role ADD CONSTRAINT ck_test_role_status_rollback CHECK (is_enabled = 1)`).Error; err != nil {
+	if err := tx.WithContext(ctx).Exec(`ALTER TABLE permission_role ADD CONSTRAINT ck_test_role_status_rollback CHECK (status = 1)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := service.UpdateStatus(ctx, roleID, yesno.No); roleErrorCode(err) != apperror.CodeDependencyUnavailable {
@@ -356,8 +356,8 @@ func TestConcurrentRoleMutationRechecksChangedCandidate(t *testing.T) {
 	if err := db.WithContext(ctx).Take(&stored, roleID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.IsEnabled != yesno.No {
-		t.Fatalf("role status = %d", stored.IsEnabled)
+	if stored.Status != yesno.No {
+		t.Fatalf("role status = %d", stored.Status)
 	}
 	if got := readRoleAccessVersion(t, db, ctx, boundUser.ID); got != 1 {
 		t.Fatalf("removed candidate access version = %d", got)
@@ -381,7 +381,7 @@ func TestServiceUpdateStatusPublishFailureLeavesCommittedVersionUnreachable(t *t
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER delay_role_status_publish
-		BEFORE UPDATE OF is_enabled ON permission_role
+		BEFORE UPDATE OF status ON permission_role
 		FOR EACH ROW EXECUTE FUNCTION delay_role_status_publish()`).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func TestServiceUpdateStatusPublishFailureLeavesCommittedVersionUnreachable(t *t
 	if err := db.WithContext(ctx).Take(&stored, roleID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.IsEnabled != yesno.No || readRoleAccessVersion(t, db, ctx, boundUser.ID) != 2 {
+	if stored.Status != yesno.No || readRoleAccessVersion(t, db, ctx, boundUser.ID) != 2 {
 		t.Fatalf("committed PostgreSQL state = %+v", stored)
 	}
 	if _, found, err := accessStates.Read(ctx, boundUser.ID); err != nil || found {
@@ -479,7 +479,7 @@ func TestServiceDeleteProtectsSystemDefaultAndAttachedRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	createdUser := account.User{Username: fmt.Sprintf("delete_user_%d", time.Now().UnixNano()), Email: fmt.Sprintf("delete_user_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes}
+	createdUser := account.User{Username: fmt.Sprintf("delete_user_%d", time.Now().UnixNano()), Email: fmt.Sprintf("delete_user_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&createdUser).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +504,7 @@ func TestServiceDeleteSoftDeletesRoleAndGrantsWithOneTimestamp(t *testing.T) {
 	}
 	componentPath := fmt.Sprintf("access/menus/delete-%d", time.Now().UnixNano())
 	path := "/" + componentPath
-	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete", Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete", Code: fmt.Sprintf("delete:%d:list", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +539,7 @@ func TestServiceDeleteRollsBackWhenRoleWriteFails(t *testing.T) {
 	}
 	componentPath := fmt.Sprintf("access/menus/delete-rollback-%d", time.Now().UnixNano())
 	path := "/" + componentPath
-	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete rollback", Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "Delete rollback", Code: fmt.Sprintf("delete:rollback:%d", time.Now().UnixNano()), I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -570,27 +570,27 @@ func TestServicePermissionsPreservesIndependentDirectGrants(t *testing.T) {
 	service, accessStates, _ := newRoleMutationTestService(t, role.NewRepository(tx))
 	adminPlatformID := roleTestAdminPlatformID(t, tx, ctx)
 	canvasPlatform := createRoleTestPlatform(t, tx, ctx, "canvas", "Canvas", yesno.No)
-	root := menu.Menu{PlatformID: adminPlatformID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleTestStringPointer("navigation.permission"), IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	root := menu.Menu{PlatformID: adminPlatformID, MenuType: menu.TypeDirectory, Name: "权限与认证", Code: "access", I18nKey: roleTestStringPointer("navigation.permission"), Status: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&root).Error; err != nil {
 		t.Fatal(err)
 	}
 	path := "/system/roles"
 	componentPath := "system/roles"
-	page := menu.Menu{PlatformID: adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "角色管理", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.permissionRole"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "角色管理", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.permissionRole"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
-	action := menu.Menu{PlatformID: adminPlatformID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "配置角色权限", Code: role.PermissionAuthorize, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	action := menu.Menu{PlatformID: adminPlatformID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "配置角色权限", Code: role.PermissionAuthorize, Status: yesno.Yes, IsHidden: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&action).Error; err != nil {
 		t.Fatal(err)
 	}
 	canvasPath := "/test"
 	canvasComponentPath := "test"
-	canvasPage := menu.Menu{PlatformID: canvasPlatform.ID, MenuType: menu.TypePage, Name: "Test", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.test"), Path: &canvasPath, ComponentPath: &canvasComponentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	canvasPage := menu.Menu{PlatformID: canvasPlatform.ID, MenuType: menu.TypePage, Name: "Test", Code: role.PermissionList, I18nKey: roleTestStringPointer("navigation.test"), Path: &canvasPath, ComponentPath: &canvasComponentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&canvasPage).Error; err != nil {
 		t.Fatal(err)
 	}
-	canvasAction := menu.Menu{PlatformID: canvasPlatform.ID, ParentID: &canvasPage.ID, MenuType: menu.TypeAction, Name: "Test Button", Code: role.PermissionAuthorize, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	canvasAction := menu.Menu{PlatformID: canvasPlatform.ID, ParentID: &canvasPage.ID, MenuType: menu.TypeAction, Name: "Test Button", Code: role.PermissionAuthorize, Status: yesno.Yes, IsHidden: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&canvasAction).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -615,7 +615,7 @@ func TestServicePermissionsPreservesIndependentDirectGrants(t *testing.T) {
 	if adminPermissions.ID != adminPlatformID || adminPermissions.Code != "admin" || len(adminPermissions.MenuTree) != 1 || adminPermissions.MenuTree[0].ID != root.ID {
 		t.Fatalf("Admin permissions = %+v", adminPermissions)
 	}
-	if canvasPermissions.ID != canvasPlatform.ID || canvasPermissions.Code != "canvas" || canvasPermissions.IsEnabled != yesno.No || len(canvasPermissions.MenuTree) != 1 || canvasPermissions.MenuTree[0].ID != canvasPage.ID || len(canvasPermissions.MenuTree[0].Children) != 1 {
+	if canvasPermissions.ID != canvasPlatform.ID || canvasPermissions.Code != "canvas" || canvasPermissions.Status != yesno.No || len(canvasPermissions.MenuTree) != 1 || canvasPermissions.MenuTree[0].ID != canvasPage.ID || len(canvasPermissions.MenuTree[0].Children) != 1 {
 		t.Fatalf("Canvas permissions = %+v", canvasPermissions)
 	}
 	var before menu.RoleMenu

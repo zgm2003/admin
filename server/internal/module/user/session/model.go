@@ -29,7 +29,7 @@ type Record = Session
 type Authority struct {
 	Session             Record
 	UserID              int64
-	UserIsEnabled       yesno.Value
+	UserStatus       yesno.Value
 	UserDeleted         bool
 	PasswordSetRequired bool
 }

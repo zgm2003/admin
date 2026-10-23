@@ -116,7 +116,7 @@ func appErrorCode(err error) int {
 func ruleRow(id int64, scope Scope, pattern string, action Action, enabled yesno.Value) Model {
 	return Model{
 		ID: id, Scope: scope, Pattern: pattern,
-		Action: action, Name: "rule", IsEnabled: enabled,
+		Action: action, Name: "rule", Status: enabled,
 		CreatedAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 		UpdatedAt: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 	}
@@ -138,7 +138,7 @@ func TestCreateNormalizesAndStoresThePattern(t *testing.T) {
 	service := newMutationService(repository)
 
 	safe, err := service.Create(context.Background(), CreateInput{
-		Scope: ScopePhone, Pattern: " 156 7162 8271 ", Action: ActionDeny, Name: " 黑名单 ", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Pattern: " 156 7162 8271 ", Action: ActionDeny, Name: " 黑名单 ", Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
@@ -172,7 +172,7 @@ func TestCreateRejectsPatternsOutsideTheirScope(t *testing.T) {
 				scope = Scope(9)
 			}
 			_, err := NewService(repository).Create(context.Background(), CreateInput{
-				Scope: scope, Pattern: test.pattern, Action: ActionAllow, Name: "rule", IsEnabled: yesno.Yes,
+				Scope: scope, Pattern: test.pattern, Action: ActionAllow, Name: "rule", Status: yesno.Yes,
 			})
 			if appErrorCode(err) != apperror.CodeInvalidRequest {
 				t.Fatalf("Create() error = %v, want invalid request", err)
@@ -187,7 +187,7 @@ func TestCreateRejectsPatternsOutsideTheirScope(t *testing.T) {
 func TestCreateMapsUniqueConflictsToConflict(t *testing.T) {
 	repository := &fakeRepository{createErr: ErrConflict}
 	_, err := newMutationService(repository).Create(context.Background(), CreateInput{
-		Scope: ScopePhone, Pattern: "+8615671628271", Action: ActionDeny, Name: "rule", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Pattern: "+8615671628271", Action: ActionDeny, Name: "rule", Status: yesno.Yes,
 	})
 	if appErrorCode(err) != apperror.CodeConflict {
 		t.Fatalf("Create() error = %v, want conflict", err)
@@ -199,7 +199,7 @@ func TestUpdateKeepsThePatternWhenItIsOmitted(t *testing.T) {
 	repository := &fakeRepository{rows: []Model{row}}
 
 	_, err := newMutationService(repository).Update(context.Background(), 3, UpdateInput{
-		Scope: ScopePhone, Action: ActionAllow, Name: "改名", IsEnabled: yesno.Yes,
+		Scope: ScopePhone, Action: ActionAllow, Name: "改名", Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -216,7 +216,7 @@ func TestUpdateRequiresAPatternWhenTheScopeChanges(t *testing.T) {
 	row := ruleRow(3, ScopePhone, "+8615671628271", ActionDeny, yesno.Yes)
 	repository := &fakeRepository{rows: []Model{row}}
 	_, err := NewService(repository).Update(context.Background(), 3, UpdateInput{
-		Scope: ScopePrefix, Action: ActionDeny, Name: "改名", IsEnabled: yesno.Yes,
+		Scope: ScopePrefix, Action: ActionDeny, Name: "改名", Status: yesno.Yes,
 	})
 	if appErrorCode(err) != apperror.CodeInvalidRequest {
 		t.Fatalf("Update() error = %v, want invalid request", err)
@@ -224,7 +224,7 @@ func TestUpdateRequiresAPatternWhenTheScopeChanges(t *testing.T) {
 
 	pattern := "+86156"
 	if _, err := newMutationService(repository).Update(context.Background(), 3, UpdateInput{
-		Scope: ScopePrefix, Pattern: &pattern, Action: ActionDeny, Name: "改名", IsEnabled: yesno.Yes,
+		Scope: ScopePrefix, Pattern: &pattern, Action: ActionDeny, Name: "改名", Status: yesno.Yes,
 	}); err != nil {
 		t.Fatalf("Update() with a new pattern error = %v", err)
 	}
@@ -235,7 +235,7 @@ func TestUpdateRequiresAPatternWhenTheScopeChanges(t *testing.T) {
 
 func TestUpdateAndDeleteRequireAnExistingRule(t *testing.T) {
 	service := NewService(&fakeRepository{})
-	if _, err := service.Update(context.Background(), 42, UpdateInput{Action: ActionDeny, Name: "n", IsEnabled: yesno.Yes}); appErrorCode(err) != apperror.CodeNotFound {
+	if _, err := service.Update(context.Background(), 42, UpdateInput{Action: ActionDeny, Name: "n", Status: yesno.Yes}); appErrorCode(err) != apperror.CodeNotFound {
 		t.Fatalf("Update() error = %v, want not found", err)
 	}
 	if err := service.UpdateStatus(context.Background(), 42, yesno.No); appErrorCode(err) != apperror.CodeNotFound {

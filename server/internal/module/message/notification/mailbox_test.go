@@ -19,7 +19,7 @@ func TestMailboxListAndSummaryCombineTargetedAndPlatformWithIsolation(t *testing
 	db, ctx := openNotificationRepositoryDB(t)
 	repository := NewRepository(db, realtime.NewRepository(db))
 	now := time.Now().UTC()
-	service := NewService(repository, mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes}})
+	service := NewService(repository, mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.Yes}})
 	targeted, err := service.CreateForUsers(ctx, validCreateForUsersInput(1, "mailbox-targeted", []int64{1}))
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestMailboxListAndSummaryCombineTargetedAndPlatformWithIsolation(t *testing
 func TestMailboxListAndSummaryUseOneKeysetQueryEach(t *testing.T) {
 	db, ctx := openNotificationRepositoryDB(t)
 	baseRepository := NewRepository(db, realtime.NewRepository(db))
-	service := NewService(baseRepository, mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes}})
+	service := NewService(baseRepository, mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.Yes}})
 	if _, err := service.CreateForUsers(ctx, validCreateForUsersInput(1, "query-budget", []int64{1})); err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func assertSingleKeysetSelect(t *testing.T, probe *testquery.Counter, operation 
 func TestMailboxMutationsAreAtomicAndIdempotent(t *testing.T) {
 	db, ctx := openNotificationRepositoryDB(t)
 	repository := NewRepository(db, realtime.NewRepository(db))
-	service := NewService(repository, mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes}})
+	service := NewService(repository, mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.Yes}})
 	first, err := service.CreateForUsers(ctx, validCreateForUsersInput(1, "mutation-one", []int64{1}))
 	if err != nil {
 		t.Fatal(err)

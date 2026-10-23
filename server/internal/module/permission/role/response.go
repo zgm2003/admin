@@ -10,7 +10,7 @@ type idResponse struct {
 
 type statusResponse struct {
 	ID        int64 `json:"id"`
-	IsEnabled int16 `json:"isEnabled"`
+	Status int16 `json:"status"`
 }
 
 type defaultResponse struct {
@@ -29,7 +29,7 @@ type listItemResponse struct {
 	Code            string       `json:"code"`
 	Name            string       `json:"name"`
 	IsDefault       int16        `json:"isDefault"`
-	IsEnabled       int16        `json:"isEnabled"`
+	Status       int16        `json:"status"`
 	UserCount       int64        `json:"userCount"`
 	PermissionCount int64        `json:"permissionCount"`
 	CreatedAt       string       `json:"createdAt"`
@@ -48,7 +48,7 @@ type summaryResponse struct {
 	Code      string `json:"code"`
 	Name      string `json:"name"`
 	IsDefault int16  `json:"isDefault"`
-	IsEnabled int16  `json:"isEnabled"`
+	Status int16  `json:"status"`
 }
 
 type permissionTreeResponse struct {
@@ -57,7 +57,7 @@ type permissionTreeResponse struct {
 	MenuType  string                   `json:"menuType"`
 	Code      string                   `json:"code"`
 	Name      string                   `json:"name"`
-	IsEnabled int16                    `json:"isEnabled"`
+	Status int16                    `json:"status"`
 	Children  []permissionTreeResponse `json:"children"`
 }
 
@@ -65,7 +65,7 @@ type permissionPlatformResponse struct {
 	ID        int64                    `json:"id"`
 	Code      string                   `json:"code"`
 	Name      string                   `json:"name"`
-	IsEnabled int16                    `json:"isEnabled"`
+	Status int16                    `json:"status"`
 	MenuTree  []permissionTreeResponse `json:"menuTree"`
 }
 
@@ -84,7 +84,7 @@ func roleListResponse(items []ListItem, total int64, page, pageSize int) listRes
 			Code:            item.Code,
 			Name:            item.Name,
 			IsDefault:       int16(item.IsDefault),
-			IsEnabled:       int16(item.IsEnabled),
+			Status:       int16(item.Status),
 			UserCount:       item.UserCount,
 			PermissionCount: item.PermissionCount,
 			CreatedAt:       item.CreatedAt.UTC().Format(time.RFC3339Nano),
@@ -107,7 +107,7 @@ func newPermissionsResponse(value Permissions) permissionsResponse {
 			Code:      value.Role.Code,
 			Name:      value.Role.Name,
 			IsDefault: int16(value.Role.IsDefault),
-			IsEnabled: int16(value.Role.IsEnabled),
+			Status: int16(value.Role.Status),
 		},
 		Platforms: permissionPlatformResponses(value.Platforms),
 		MenuIDs:   append(make([]int64, 0, len(value.MenuIDs)), value.MenuIDs...),
@@ -118,7 +118,7 @@ func permissionPlatformResponses(platforms []PermissionPlatform) []permissionPla
 	result := make([]permissionPlatformResponse, 0, len(platforms))
 	for _, platform := range platforms {
 		result = append(result, permissionPlatformResponse{
-			ID: platform.ID, Code: platform.Code, Name: platform.Name, IsEnabled: int16(platform.IsEnabled),
+			ID: platform.ID, Code: platform.Code, Name: platform.Name, Status: int16(platform.Status),
 			MenuTree: permissionTreeResponses(platform.MenuTree),
 		})
 	}
@@ -134,7 +134,7 @@ func permissionTreeResponses(nodes []PermissionTreeNode) []permissionTreeRespons
 			MenuType:  string(node.MenuType),
 			Code:      node.Code,
 			Name:      node.Name,
-			IsEnabled: int16(node.IsEnabled),
+			Status: int16(node.Status),
 			Children:  permissionTreeResponses(node.Children),
 		})
 	}

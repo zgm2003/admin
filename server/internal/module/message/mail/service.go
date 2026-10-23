@@ -265,7 +265,7 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 		}
 		c = runtimeConfigFromModel(config)
 	}
-	if c.IsEnabled != yesno.Yes {
+	if c.Status != yesno.Yes {
 		return SendResult{}, dependency(fmt.Errorf("mail config disabled"))
 	}
 	templates := runtime.Templates
@@ -282,7 +282,7 @@ func (s *Service) sendInternal(ctx context.Context, in BusinessSendInput, mode S
 			tpl = t
 		}
 	}
-	if tpl.ID == 0 || tpl.IsEnabled != yesno.Yes || tpl.TencentTemplateID == nil || *tpl.TencentTemplateID < 1 {
+	if tpl.ID == 0 || tpl.Status != yesno.Yes || tpl.TencentTemplateID == nil || *tpl.TencentTemplateID < 1 {
 		return SendResult{}, dependency(fmt.Errorf("mail template disabled"))
 	}
 	tencentTemplateID := *tpl.TencentTemplateID

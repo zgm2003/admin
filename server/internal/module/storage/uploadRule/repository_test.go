@@ -60,7 +60,7 @@ func TestFindConfigSummariesUsesCurrentPhysicalVersionAndOnlyEnabledConfigs(t *t
 	if len(rows) != 1 {
 		t.Fatalf("summaries = %+v, want one enabled config", rows)
 	}
-	if rows[0].ID != currentID || rows[0].Name != "current" || rows[0].Bucket != "assets-v2" || rows[0].Region != "ap-shanghai" || rows[0].IsEnabled != yesno.Yes {
+	if rows[0].ID != currentID || rows[0].Name != "current" || rows[0].Bucket != "assets-v2" || rows[0].Region != "ap-shanghai" || rows[0].Status != yesno.Yes {
 		t.Fatalf("summary = %+v, want current physical version for config %d", rows[0], currentID)
 	}
 	for _, row := range rows {

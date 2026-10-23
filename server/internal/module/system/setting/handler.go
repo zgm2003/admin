@@ -96,15 +96,15 @@ func (h *Handler) Status(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if request.IsEnabled == nil {
-		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("isEnabled is required")))
+	if request.Status == nil {
+		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("status is required")))
 		return
 	}
-	if err := h.service.UpdateStatus(c.Request.Context(), c.Param("key"), *request.IsEnabled); err != nil {
+	if err := h.service.UpdateStatus(c.Request.Context(), c.Param("key"), *request.Status); err != nil {
 		response.Fail(c, err)
 		return
 	}
-	response.OK(c, http.StatusOK, statusResponse{Key: c.Param("key"), IsEnabled: int16(*request.IsEnabled)})
+	response.OK(c, http.StatusOK, statusResponse{Key: c.Param("key"), Status: int16(*request.Status)})
 }
 func (h *Handler) Delete(c *gin.Context) {
 	if err := validate.RequireEmptyBody(c); err != nil {

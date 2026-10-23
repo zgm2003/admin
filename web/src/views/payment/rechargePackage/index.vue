@@ -34,7 +34,7 @@ interface FormState {
   amount: number | null | undefined
   badge: string
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 const emptyForm = (): FormState => ({
@@ -42,14 +42,14 @@ const emptyForm = (): FormState => ({
   amount: undefined,
   badge: '',
   sortOrder: 0,
-  isEnabled: YesNo.No,
+  status: YesNo.No,
 })
 const rows = ref<RechargePackage[]>([])
 const total = ref(0)
 const query = ref<RechargePackageQuery>({ page: 1, pageSize: 20 })
-const filters = ref<SearchFormModel<{ keyword: string; isEnabled: YesNo | '' }>>({
+const filters = ref<SearchFormModel<{ keyword: string; status: YesNo | '' }>>({
   keyword: '',
-  isEnabled: '',
+  status: '',
 })
 const loading = ref(false)
 const loadError = ref('')
@@ -91,7 +91,7 @@ const pagination = computed<TablePaginationState>(() => ({
   pageSize: query.value.pageSize,
   total: total.value,
 }))
-const searchFields = computed<SearchField<{ keyword: string; isEnabled: YesNo | '' }>[]>(() => [
+const searchFields = computed<SearchField<{ keyword: string; status: YesNo | '' }>[]>(() => [
   {
     key: 'keyword',
     type: 'input',
@@ -101,7 +101,7 @@ const searchFields = computed<SearchField<{ keyword: string; isEnabled: YesNo | 
     width: 260,
   },
   {
-    key: 'isEnabled',
+    key: 'status',
     type: 'select-v2',
     label: t('common.status'),
     placeholder: t('common.allStatuses'),
@@ -150,12 +150,12 @@ function search(): void {
     page: 1,
     pageSize: query.value.pageSize,
     ...(filters.value.keyword.trim() ? { keyword: filters.value.keyword.trim() } : {}),
-    ...(filters.value.isEnabled === '' ? {} : { isEnabled: filters.value.isEnabled }),
+    ...(filters.value.status === '' ? {} : { status: filters.value.status }),
   }
   void load()
 }
 function reset(): void {
-  filters.value = { keyword: '', isEnabled: '' }
+  filters.value = { keyword: '', status: '' }
   search()
 }
 function updatePagination(value: TablePaginationState): void {
@@ -181,7 +181,7 @@ function openEdit(row: RechargePackage): void {
     amount: Number(row.amount),
     badge: row.badge ?? '',
     sortOrder: row.sortOrder,
-    isEnabled: row.isEnabled,
+    status: row.status,
   }
   formError.value = ''
   dialogVisible.value = true
@@ -242,7 +242,7 @@ async function save(): Promise<void> {
       sortOrder: form.value.sortOrder,
     }
     if (editingID.value === null) {
-      await api.createRechargePackage({ ...input, isEnabled: form.value.isEnabled })
+      await api.createRechargePackage({ ...input, status: form.value.status })
     } else {
       await api.updateRechargePackage(editingID.value, input)
     }
@@ -275,7 +275,7 @@ async function mutate(row: RechargePackage, action: 'status' | 'delete'): Promis
     if (action === 'status') {
       await api.updateRechargePackageStatus(
         row.id,
-        row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes,
+        row.status === YesNo.Yes ? YesNo.No : YesNo.Yes,
       )
     } else {
       await api.deleteRechargePackage(row.id)
@@ -349,7 +349,7 @@ onBeforeUnmount(() => {
         </el-button>
       </template>
       <template #cell-status="{ row }: { row: RechargePackage }">
-        <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{
+        <el-tag :type="row.status === YesNo.Yes ? 'success' : 'info'">{{
           row.presentation.status
         }}</el-tag>
       </template>
@@ -372,7 +372,7 @@ onBeforeUnmount(() => {
         >
           {{
             t(
-              row.isEnabled === YesNo.Yes
+              row.status === YesNo.Yes
                 ? 'common.disable'
                 : 'common.enable',
             )
@@ -452,7 +452,7 @@ onBeforeUnmount(() => {
           </el-form-item>
         </div>
         <el-form-item v-if="editingID === null" :label="t('common.status')">
-          <el-select-v2 v-model="form.isEnabled" :options="options?.statuses ?? []" />
+          <el-select-v2 v-model="form.status" :options="options?.statuses ?? []" />
         </el-form-item>
         <el-alert v-if="formError" :title="formError" type="error" :closable="false" />
       </el-form>

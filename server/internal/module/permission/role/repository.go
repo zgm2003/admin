@@ -84,7 +84,7 @@ func (r *Repository) FindNotificationBaseMenuIDs(ctx context.Context, codes []st
 		IsHidden   yesno.Value
 	}
 	var rows []row
-	if err := r.db.WithContext(ctx).Table("permission_menu AS menu").Select("menu.id,menu.platform_id,menu.parent_id,menu.menu_type,menu.code,menu.is_hidden").Joins("JOIN permission_auth_platform platform ON platform.id=menu.platform_id AND platform.is_enabled=1 AND platform.deleted_at IS NULL").Where("menu.code IN ? AND menu.is_enabled=1 AND menu.deleted_at IS NULL", codes).Order("menu.platform_id,menu.id").Scan(&rows).Error; err != nil {
+	if err := r.db.WithContext(ctx).Table("permission_menu AS menu").Select("menu.id,menu.platform_id,menu.parent_id,menu.menu_type,menu.code,menu.is_hidden").Joins("JOIN permission_auth_platform platform ON platform.id=menu.platform_id AND platform.status=1 AND platform.deleted_at IS NULL").Where("menu.code IN ? AND menu.status=1 AND menu.deleted_at IS NULL", codes).Order("menu.platform_id,menu.id").Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find notification base menus: %w", err)
 	}
 	byPlatform := map[int64][]row{}
@@ -154,11 +154,11 @@ func (r *Repository) FindPermissionPlatforms(ctx context.Context) ([]PermissionP
 		ID        int64
 		Code      string
 		Name      string
-		IsEnabled yesno.Value
+		Status yesno.Value
 	}
 	rows := make([]permissionPlatformRow, 0)
 	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
-		Select("id, code, name, is_enabled").
+		Select("id, code, name, status").
 		Where("deleted_at IS NULL").
 		Order("is_builtin DESC, code ASC, id ASC").
 		Scan(&rows).Error; err != nil {
@@ -167,7 +167,7 @@ func (r *Repository) FindPermissionPlatforms(ctx context.Context) ([]PermissionP
 	platforms := make([]PermissionPlatform, 0, len(rows))
 	for _, row := range rows {
 		platforms = append(platforms, PermissionPlatform{
-			ID: row.ID, Code: row.Code, Name: row.Name, IsEnabled: row.IsEnabled,
+			ID: row.ID, Code: row.Code, Name: row.Name, Status: row.Status,
 		})
 	}
 	return platforms, nil
@@ -229,7 +229,7 @@ func (r *Repository) UpdateName(ctx context.Context, id int64, name string, upda
 
 func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Value, updatedAt time.Time) error {
 	result := r.db.WithContext(ctx).Model(&Role{}).Where("id = ?", id).Updates(map[string]any{
-		"is_enabled": value, "updated_at": updatedAt.UTC(),
+		"status": value, "updated_at": updatedAt.UTC(),
 	})
 	if result.Error != nil {
 		return fmt.Errorf("update role status: %w", result.Error)
@@ -285,7 +285,7 @@ func (r *Repository) FindEffectiveAccessVersionsByRole(ctx context.Context, role
 		JOIN user_account AS app_user
 		  ON app_user.id = user_role.user_id
 		 AND app_user.deleted_at IS NULL
-		 AND app_user.is_enabled = ?
+		 AND app_user.status = ?
 		LEFT JOIN permission_access_version AS access_version
 		  ON access_version.user_id = app_user.id
 		WHERE user_role.role_id = ?
@@ -307,7 +307,7 @@ func (r *Repository) LockEffectiveAccessVersionsByRole(ctx context.Context, role
 		JOIN user_account AS app_user
 		  ON app_user.id = user_role.user_id
 		 AND app_user.deleted_at IS NULL
-		 AND app_user.is_enabled = ?
+		 AND app_user.status = ?
 		JOIN permission_access_version AS access_version
 		  ON access_version.user_id = app_user.id
 		WHERE user_role.role_id = ?
@@ -423,7 +423,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 			app_role.code,
 			app_role.name,
 			app_role.is_default,
-			app_role.is_enabled,
+			app_role.status,
 			app_role.created_at,
 			app_role.updated_at,
 			(
@@ -461,8 +461,8 @@ func applyRoleListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 		pattern := "%" + escapeRoleLike(query.Keyword) + "%"
 		db = db.Where(`(app_role.code ILIKE ? ESCAPE E'\\' OR app_role.name ILIKE ? ESCAPE E'\\')`, pattern, pattern)
 	}
-	if query.IsEnabled != nil {
-		db = db.Where("app_role.is_enabled = ?", *query.IsEnabled)
+	if query.Status != nil {
+		db = db.Where("app_role.status = ?", *query.Status)
 	}
 	return db
 }
@@ -488,7 +488,7 @@ func mapRoleWriteError(operation string, err error) error {
 func (r *Repository) FindDefault(ctx context.Context) (Role, error) {
 	var roles []Role
 	if err := r.db.WithContext(ctx).
-		Where("is_default = ? AND is_enabled = ?", yesno.Yes, yesno.Yes).
+		Where("is_default = ? AND status = ?", yesno.Yes, yesno.Yes).
 		Limit(2).
 		Find(&roles).Error; err != nil {
 		return Role{}, fmt.Errorf("find default role: %w", err)
@@ -502,7 +502,7 @@ func (r *Repository) FindDefault(ctx context.Context) (Role, error) {
 func (r *Repository) FindByCode(ctx context.Context, code string) (Role, error) {
 	var found Role
 	if err := r.db.WithContext(ctx).
-		Where("code = ? AND is_enabled = ?", code, yesno.Yes).
+		Where("code = ? AND status = ?", code, yesno.Yes).
 		Take(&found).Error; err != nil {
 		return Role{}, fmt.Errorf("find enabled role %s: %w", code, err)
 	}
@@ -518,11 +518,11 @@ func (r *Repository) HasActiveUserWithRole(ctx context.Context, roleID int64) (b
 			JOIN user_account AS app_user
 			  ON app_user.id = user_role.user_id
 			 AND app_user.deleted_at IS NULL
-			 AND app_user.is_enabled = ?
+			 AND app_user.status = ?
 			JOIN permission_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
-			 AND app_role.is_enabled = ?
+			 AND app_role.status = ?
 			WHERE user_role.role_id = ?
 			  AND user_role.deleted_at IS NULL
 		)`, yesno.Yes, yesno.Yes, roleID).Scan(&exists).Error; err != nil {

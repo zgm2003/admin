@@ -72,9 +72,9 @@ func (r createPackageStub) Catalog(context.Context) ([]rechargepackage.CatalogIt
 
 func createServiceFixture(repo *createRepositoryStub) *Service {
 	service := NewService(repo)
-	service.SetSettings(rechargeSettingsStub{row: sharedsetting.Record{Key: sharedsetting.PaymentRechargeMinimumAmountKey, Value: "10", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes}})
+	service.SetSettings(rechargeSettingsStub{row: sharedsetting.Record{Key: sharedsetting.PaymentRechargeMinimumAmountKey, Value: "10", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes}})
 	service.SetRuntime(createRuntimeStub{
-		catalog:    []paymentconfig.CatalogItem{{ID: 3, Name: "Sandbox channel", Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, AppID: "20260001", SellerID: "20880001", CurrentVersion: 4, IsEnabled: yesno.Yes}},
+		catalog:    []paymentconfig.CatalogItem{{ID: 3, Name: "Sandbox channel", Provider: payment.ProviderAlipay, Environment: payment.EnvironmentSandbox, AppID: "20260001", SellerID: "20880001", CurrentVersion: 4, Status: yesno.Yes}},
 		credential: paymentconfig.BoundCredential{ConfigID: 3, Provider: payment.ProviderAlipay, AppID: "20260001", SellerID: "20880001", Environment: payment.EnvironmentSandbox, Version: paymentconfig.CredentialVersion{ConfigID: 3, Version: 4, NotifyURL: "https://pay.example.test/callback", PayMethods: paymentconfig.PayMethods{payment.PayMethodWeb, payment.PayMethodH5}}},
 	}, createPackageStub{rows: []rechargepackage.CatalogItem{{ID: 8, Name: "100 credits", AmountCents: 1000}}})
 	service.SetCheckout(func(context.Context, alipay.Credentials, alipay.CheckoutInput) (string, error) {

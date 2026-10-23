@@ -117,7 +117,7 @@ function search(): void {
     page: 1,
     pageSize: query.value.pageSize,
     ...(normalizedKeyword === '' ? {} : { keyword: normalizedKeyword }),
-    ...(statusFilter.value === '' ? {} : { isEnabled: statusFilter.value }),
+    ...(statusFilter.value === '' ? {} : { status: statusFilter.value }),
   }
   void loadRoles()
 }
@@ -207,7 +207,7 @@ async function submitForm(): Promise<void> {
 
 async function changeStatus(role: RoleListItem): Promise<void> {
   if (!canStatus.value || !role.actions.status) return
-  const next = role.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+  const next = role.status === YesNo.Yes ? YesNo.No : YesNo.Yes
   const message =
     next === YesNo.Yes
       ? t('role.confirm.enableMessage', { count: role.userCount })
@@ -315,8 +315,8 @@ onMounted(() => {
         </el-tag>
       </template>
       <template #cell-status="{ row }: { row: RoleListItem }">
-        <el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">
-          {{ t(row.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable') }}
+        <el-tag :type="row.status === YesNo.Yes ? 'success' : 'danger'">
+          {{ t(row.status === YesNo.Yes ? 'common.enable' : 'common.disable') }}
         </el-tag>
       </template>
       <template #cell-createdAt="{ row }: { row: RoleListItem }">{{
@@ -340,11 +340,11 @@ onMounted(() => {
             <el-tooltip v-if="canStatus" :content="row.actionLabels.status">
               <el-button
                 text
-                :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
+                :type="row.status === YesNo.Yes ? 'warning' : 'success'"
                 :disabled="!row.actions.status"
                 @click="changeStatus(row)"
                 >{{
-                  row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
+                  row.status === YesNo.Yes ? t('common.disable') : t('common.enable')
                 }}</el-button
               >
             </el-tooltip>

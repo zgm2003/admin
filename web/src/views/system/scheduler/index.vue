@@ -71,7 +71,7 @@ const form = ref({
   cronPreset: CUSTOM_CRON_VALUE,
   timezone: '',
   params: {} as Record<string, unknown>,
-  isEnabled: true,
+  status: true,
 })
 const detailVisible = ref(false)
 const selectedJob = ref<Job | null>(null)
@@ -230,7 +230,7 @@ function openCreate(): void {
     ),
     timezone: options.value.defaults.timezone,
     params: first?.defaultParams ?? {},
-    isEnabled: true,
+    status: true,
   }
   dialogVisible.value = true
 }
@@ -244,7 +244,7 @@ function openEdit(row: Schedule): void {
     cronPreset: getCronPresetValue(row.cronExpression, cronPresets.value),
     timezone: row.timezone,
     params: { ...row.params },
-    isEnabled: row.isEnabled,
+    status: row.status,
   }
   dialogVisible.value = true
 }
@@ -272,7 +272,7 @@ async function save(): Promise<void> {
         cronExpression: form.value.cronExpression,
         timezone: form.value.timezone,
         params: form.value.params,
-        isEnabled: form.value.isEnabled,
+        status: form.value.status,
       })
     else
       await updateSchedule(editing.value.id, {
@@ -291,7 +291,7 @@ async function save(): Promise<void> {
 }
 async function toggle(row: Schedule): Promise<void> {
   if (!canStatus.value) return
-  const next = !row.isEnabled
+  const next = !row.status
   try {
     await ElMessageBox.confirm(
       t('confirm.status', {
@@ -434,10 +434,10 @@ onBeforeUnmount(() => {
           }}</el-button
           ><el-button
             v-if="canStatus"
-            :type="row.isEnabled ? 'warning' : 'success'"
+            :type="row.status ? 'warning' : 'success'"
             link
             @click="toggle(row)"
-            >{{ row.isEnabled ? t('common.disable') : t('common.enable') }}</el-button
+            >{{ row.status ? t('common.disable') : t('common.enable') }}</el-button
           ><el-button v-if="canExecute" type="success" link @click="execute(row)">{{
             t('scheduler.execute')
           }}</el-button

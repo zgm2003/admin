@@ -9,7 +9,7 @@ import (
 )
 
 func TestManagedMenuOwnsPresentationAndActions(t *testing.T) {
-	body, err := newMenuCatalogResponse(context.Background(), Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypePage, IsProtected: true, IsEnabled: yesno.Yes}}})
+	body, err := newMenuCatalogResponse(context.Background(), Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypePage, IsProtected: true, Status: yesno.Yes}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestManagedMenuOwnsPresentationAndActions(t *testing.T) {
 
 func TestMenuCapabilitiesPreserveProtectedEditingAndParentRules(t *testing.T) {
 	ctx := i18n.WithLocale(context.Background(), i18n.EnUS)
-	body, err := newMenuCatalogResponse(ctx, Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypeDirectory, IsEnabled: yesno.No, Children: []ManagedMenu{{ID: 2, MenuType: TypePage, IsEnabled: yesno.No, IsProtected: true}}}}})
+	body, err := newMenuCatalogResponse(ctx, Catalog{MenuTree: []ManagedMenu{{ID: 1, MenuType: TypeDirectory, Status: yesno.No, Children: []ManagedMenu{{ID: 2, MenuType: TypePage, Status: yesno.No, IsProtected: true}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestMenuCapabilitiesPreserveProtectedEditingAndParentRules(t *testing.T) {
 	if !child.Actions.Update || !child.Actions.AddChild || child.Actions.Status || child.Actions.Delete || child.Presentation.StatusReason != "Enable parent menus first" {
 		t.Fatalf("protected child: %#v", child)
 	}
-	enabledParent, err := newManagedMenuResponse(ctx, ManagedMenu{MenuType: TypePage, IsProtected: true, IsEnabled: yesno.No}, false)
+	enabledParent, err := newManagedMenuResponse(ctx, ManagedMenu{MenuType: TypePage, IsProtected: true, Status: yesno.No}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

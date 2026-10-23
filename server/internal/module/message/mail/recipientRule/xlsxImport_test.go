@@ -113,7 +113,7 @@ func TestXlsxImportMapsConcurrentDuplicateAndDoesNotWriteOtherRows(t *testing.T)
 	s.SetRuntimeCoordinator(runtimeCoordinatorFunc(func(ctx context.Context, change func(context.Context, int64) (configcache.MutationResult, error)) error {
 		// Another writer wins after preview/recheck, before our transaction.
 		now := time.Now().UTC()
-		row := Model{Scope: ScopeEmail, Pattern: "race@example.com", Action: ActionDeny, Name: "competitor", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+		row := Model{Scope: ScopeEmail, Pattern: "race@example.com", Action: ActionDeny, Name: "competitor", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 		if err := db.WithContext(ctx).Create(&row).Error; err != nil {
 			return err
 		}
@@ -135,7 +135,7 @@ func TestXlsxBatchFailedGenerationRestoresIDsBeforeCoordinatorRetry(t *testing.T
 	db, ctx := openServiceDatabase(t)
 	repository := configuredRepository(db)
 	now := time.Now().UTC()
-	rows := []Model{{Scope: ScopeEmail, Pattern: "retry@example.com", Action: ActionDeny, Name: "retry", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}}
+	rows := []Model{{Scope: ScopeEmail, Pattern: "retry@example.com", Action: ActionDeny, Name: "retry", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}}
 	if _, err := repository.CreateBatch(ctx, rows, 2, now); err == nil {
 		t.Fatal("stale expected generation accepted")
 	}
@@ -172,7 +172,7 @@ func TestXlsxTemplateReadsObjectKeyAndFailsClosed(t *testing.T) {
 			if key != "message.mail.recipient_rule.import_template_object_key" {
 				t.Fatalf("key=%s", key)
 			}
-			return sharedsetting.Record{Value: tc.value, ValueType: tc.valueType, IsEnabled: tc.enabled}, nil
+			return sharedsetting.Record{Value: tc.value, ValueType: tc.valueType, Status: tc.enabled}, nil
 		}))
 		value, err := s.ImportTemplate(context.Background())
 		encoded, _ := json.Marshal(value)

@@ -362,7 +362,7 @@ func prepareLegacyMenuCatalog(db *gorm.DB) error {
 		result := db.Exec(`
 			INSERT INTO permission_menu
 				(parent_id, menu_type, name, code, i18n_key, path, component_path, icon,
-				 sort_order, is_enabled, is_hidden, created_at, updated_at)
+				 sort_order, status, is_hidden, created_at, updated_at)
 			VALUES (NULL, 'directory', ?, ?, ?, NULL, NULL, ?, ?, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
 			root.Name, root.Code, root.I18nKey, root.Icon, root.SortOrder)
 		if result.Error != nil {

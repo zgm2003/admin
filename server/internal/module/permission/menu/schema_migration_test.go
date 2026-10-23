@@ -18,14 +18,14 @@ func TestMenuEnsureSchemaPreservesActiveCatalogAndGrants(t *testing.T) {
 	db := connection.GORM.WithContext(ctx)
 	adminPlatformID := menuAdminPlatformID(t, db)
 
-	createdRole := role.Role{Code: "schema_keeper", Name: "Schema Keeper", IsEnabled: yesno.Yes}
+	createdRole := role.Role{Code: "schema_keeper", Name: "Schema Keeper", Status: yesno.Yes}
 	if err := db.Create(&createdRole).Error; err != nil {
 		t.Fatalf("create role: %v", err)
 	}
 	accessI18nKey := "navigation.permission"
 	root := menu.Menu{
 		PlatformID: adminPlatformID, MenuType: menu.TypeDirectory, Name: "自定义权限中心", Code: "access",
-		I18nKey: &accessI18nKey, SortOrder: 210, IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		I18nKey: &accessI18nKey, SortOrder: 210, Status: yesno.Yes, IsHidden: yesno.No,
 	}
 	if err := db.Create(&root).Error; err != nil {
 		t.Fatalf("create access root: %v", err)
@@ -35,14 +35,14 @@ func TestMenuEnsureSchemaPreservesActiveCatalogAndGrants(t *testing.T) {
 	page := menu.Menu{
 		PlatformID: adminPlatformID, ParentID: &root.ID, MenuType: menu.TypePage, Name: "自定义菜单管理", Code: menu.PermissionList,
 		I18nKey: &pageI18nKey, Path: &path, ComponentPath: &componentPath,
-		SortOrder: 11, IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		SortOrder: 11, Status: yesno.Yes, IsHidden: yesno.No,
 	}
 	if err := db.Create(&page).Error; err != nil {
 		t.Fatalf("create menu page: %v", err)
 	}
 	action := menu.Menu{
 		PlatformID: adminPlatformID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: "自定义新增菜单", Code: menu.PermissionCreate,
-		SortOrder: 12, IsEnabled: yesno.Yes, IsHidden: yesno.Yes,
+		SortOrder: 12, Status: yesno.Yes, IsHidden: yesno.Yes,
 	}
 	if err := db.Create(&action).Error; err != nil {
 		t.Fatalf("create menu action: %v", err)
@@ -101,14 +101,14 @@ func TestPreparePlatformSchemaBackfillsHistoryAndPreservesGrants(t *testing.T) {
 		}
 	}
 
-	createdRole := role.Role{Code: "platform_history", Name: "Platform history", IsEnabled: yesno.Yes}
+	createdRole := role.Role{Code: "platform_history", Name: "Platform history", Status: yesno.Yes}
 	if err := db.Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
 	}
 	var activeID, deletedID int64
 	if err := db.Raw(`
 		INSERT INTO permission_menu
-			(parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at)
+			(parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, status, is_hidden, created_at, updated_at)
 		VALUES
 			(NULL, 'page', 'Old active', 'old:active', 'navigation.oldActive', '/old-active', 'old-active', NULL, 1, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		RETURNING id`).Scan(&activeID).Error; err != nil {
@@ -116,7 +116,7 @@ func TestPreparePlatformSchemaBackfillsHistoryAndPreservesGrants(t *testing.T) {
 	}
 	if err := db.Raw(`
 		INSERT INTO permission_menu
-			(parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, is_enabled, is_hidden, created_at, updated_at, deleted_at)
+			(parent_id, menu_type, name, code, i18n_key, path, component_path, icon, sort_order, status, is_hidden, created_at, updated_at, deleted_at)
 		VALUES
 			(NULL, 'page', 'Old deleted', 'old:deleted', 'navigation.oldDeleted', '/old-deleted', 'old-deleted', NULL, 2, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 		RETURNING id`).Scan(&deletedID).Error; err != nil {
@@ -174,11 +174,11 @@ func TestMenuSchemaRejectsCrossPlatformParent(t *testing.T) {
 	}
 
 	i18nKey, path, componentPath := "navigation.test", "/test", "test"
-	parent := menu.Menu{PlatformID: adminPlatformID, MenuType: menu.TypePage, Name: "Admin test", Code: "test", I18nKey: &i18nKey, Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	parent := menu.Menu{PlatformID: adminPlatformID, MenuType: menu.TypePage, Name: "Admin test", Code: "test", I18nKey: &i18nKey, Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := db.Create(&parent).Error; err != nil {
 		t.Fatal(err)
 	}
-	child := menu.Menu{PlatformID: canvas.ID, ParentID: &parent.ID, MenuType: menu.TypeAction, Name: "Canvas button", Code: "test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	child := menu.Menu{PlatformID: canvas.ID, ParentID: &parent.ID, MenuType: menu.TypeAction, Name: "Canvas button", Code: "test:button", Status: yesno.Yes, IsHidden: yesno.Yes}
 	err := db.Create(&child).Error
 	var postgresError *pgconn.PgError
 	if !errors.As(err, &postgresError) || postgresError.ConstraintName != "fk_permission_menu_parent_platform" {
@@ -192,7 +192,7 @@ func TestMenuSchemaRejectsMismatchedPagePathComponentPath(t *testing.T) {
 	platformID := menuAdminPlatformID(t, db)
 	i18nKey := "navigation.roles"
 	path, componentPath := "/permission/role", "access/roles"
-	row := menu.Menu{PlatformID: platformID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: &i18nKey, Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	row := menu.Menu{PlatformID: platformID, MenuType: menu.TypePage, Name: "角色管理", Code: "permission:role:view", I18nKey: &i18nKey, Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No}
 	err := db.Create(&row).Error
 	var postgresError *pgconn.PgError
 	if !errors.As(err, &postgresError) || postgresError.ConstraintName != "ck_permission_menu_shape" {

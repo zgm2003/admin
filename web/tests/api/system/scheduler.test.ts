@@ -94,7 +94,7 @@ describe('thin API HTTP contract', () => {
       cronExpression: 'sample',
       timezone: 'sample',
       params: {},
-      isEnabled: false,
+      status: false,
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
@@ -113,7 +113,7 @@ describe('thin API HTTP contract', () => {
       cronExpression: 'sample',
       timezone: 'sample',
       params: {},
-      isEnabled: false,
+      status: false,
     }
     const error = new Error('request failed')
     vi.mocked(request.post).mockRejectedValue(error)
@@ -152,22 +152,22 @@ describe('thin API HTTP contract', () => {
   })
   it('setScheduleStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.setScheduleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.setScheduleStatus>[1] = false
+    const status: Parameters<typeof api.setScheduleStatus>[1] = false
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.setScheduleStatus(id, isEnabled)
+    const result = await api.setScheduleStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/system/scheduler/schedule/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('setScheduleStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.setScheduleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.setScheduleStatus>[1] = false
+    const status: Parameters<typeof api.setScheduleStatus>[1] = false
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.setScheduleStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.setScheduleStatus(id, status)).rejects.toBe(error)
   })
   it('deleteSchedule preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.deleteSchedule>[0] = 1

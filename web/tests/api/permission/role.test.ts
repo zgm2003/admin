@@ -61,22 +61,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateRoleStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateRoleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateRoleStatus>[1] = 0
+    const status: Parameters<typeof api.updateRoleStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateRoleStatus(id, isEnabled)
+    const result = await api.updateRoleStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/permission/role/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateRoleStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateRoleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateRoleStatus>[1] = 0
+    const status: Parameters<typeof api.updateRoleStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateRoleStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateRoleStatus(id, status)).rejects.toBe(error)
   })
   it('setDefaultRole preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.setDefaultRole>[0] = 1

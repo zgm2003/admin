@@ -11,7 +11,7 @@ export interface SystemSetting {
   value: string
   valueType: SettingValueType
   description: string
-  isEnabled: YesNo
+  status: YesNo
   isBuiltin: YesNo
   createdAt: string
   updatedAt: string
@@ -41,7 +41,7 @@ export async function getSettings(params: {
   page: number
   pageSize: number
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
 }): Promise<SettingPage> {
   return request.get<SettingPage>('/api/admin/v1/system/setting', { params })
 }
@@ -90,9 +90,9 @@ export async function updateSetting(
   return request.put<void>(`/api/admin/v1/system/setting/${encodeURIComponent(key)}`, input)
 }
 
-export async function updateSettingStatus(key: string, isEnabled: YesNo): Promise<void> {
+export async function updateSettingStatus(key: string, status: YesNo): Promise<void> {
   return request.patch<void>(`/api/admin/v1/system/setting/${encodeURIComponent(key)}/status`, {
-    isEnabled,
+    status,
   })
 }
 

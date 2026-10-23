@@ -156,7 +156,7 @@ func newAdminSessionRevokeFixture(t *testing.T) adminSessionRevokeFixture {
 	}
 	_ = redisClient.DeleteMany(ctx, redisKeys)
 	t.Cleanup(func() { _ = redisClient.DeleteMany(context.Background(), redisKeys) })
-	if _, _, err := states.InstallUserReadyIfMissing(ctx, authstate.UserFact{UserID: targetUser.ID, Generation: userGeneration, IsEnabled: true}); err != nil {
+	if _, _, err := states.InstallUserReadyIfMissing(ctx, authstate.UserFact{UserID: targetUser.ID, Generation: userGeneration, Status: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := states.InstallSessionsReadyIfMissing(ctx, authstate.SessionsFact{Platform: "admin", UserID: targetUser.ID, Generation: sessionsGeneration}); err != nil {

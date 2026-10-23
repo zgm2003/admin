@@ -86,7 +86,7 @@ describe('backend-owned scheduler presentation and actions', () => {
         cronExpression: '*/5 * * * *',
         timezone: 'UTC',
         params: {},
-        isEnabled: true,
+        status: true,
         status: 2,
         actions: { delete: true },
         nextRunAt: null,
@@ -222,7 +222,7 @@ describe('backend-owned scheduler presentation and actions', () => {
 
   it.each([true, false])(
     'confirms status changes from enabled=%s before sending a request',
-    async (isEnabled) => {
+    async (status) => {
       const schedule: api.Schedule = {
         id: 42,
         name: 'Cleanup',
@@ -231,7 +231,7 @@ describe('backend-owned scheduler presentation and actions', () => {
         cronExpression: '*/5 * * * *',
         timezone: 'UTC',
         params: {},
-        isEnabled,
+        status,
         status: 1,
         actions: { delete: true },
         nextRunAt: null,
@@ -245,7 +245,7 @@ describe('backend-owned scheduler presentation and actions', () => {
       await flushPromises()
       const button = wrapper
         .findAll('button')
-        .find((button) => button.text() === (isEnabled ? '停用' : '启用'))
+        .find((button) => button.text() === (status ? '停用' : '启用'))
       expect(button).toBeDefined()
       await button?.trigger('click')
       await flushPromises()
@@ -253,7 +253,7 @@ describe('backend-owned scheduler presentation and actions', () => {
       expect(api.setScheduleStatus).not.toHaveBeenCalled()
       await button?.trigger('click')
       await flushPromises()
-      expect(api.setScheduleStatus).toHaveBeenCalledWith(42, !isEnabled)
+      expect(api.setScheduleStatus).toHaveBeenCalledWith(42, !status)
     },
   )
 

@@ -25,7 +25,7 @@ export function editAuthPlatformForm(platform: AuthPlatformListItem): AuthPlatfo
     bindIP: platform.bindIP,
     maxSessions: platform.maxSessions,
     allowRegister: platform.allowRegister,
-    isEnabled: platform.isEnabled,
+    status: platform.status,
   }
 }
 
@@ -75,7 +75,7 @@ export function createAuthPlatformInput(form: AuthPlatformForm): CreateAuthPlatf
     bindIP: form.bindIP,
     maxSessions: form.maxSessions,
     allowRegister: form.allowRegister,
-    isEnabled: form.isEnabled,
+    status: form.status,
   }
 }
 

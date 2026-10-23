@@ -19,12 +19,12 @@ func TestAuthorityCoordinatorCommitsFreshGenerationAfterSuccessfulMutationWhenRe
 	ctx := context.Background()
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), []string{authstate.UserStateKey(userID)}) })
 	_ = client.DeleteMany(ctx, []string{authstate.UserStateKey(userID)})
-	prior := authstate.UserFact{UserID: userID, Generation: "email-prior", IsEnabled: true}
+	prior := authstate.UserFact{UserID: userID, Generation: "email-prior", Status: true}
 	if _, _, err := store.InstallUserReadyIfMissing(ctx, prior); err != nil {
 		t.Fatal(err)
 	}
 	requestCtx, cancel := context.WithCancel(ctx)
-	err := coordinator.Mutate(requestCtx, Current{UserID: userID, IsEnabled: true}, func(context.Context) error {
+	err := coordinator.Mutate(requestCtx, Current{UserID: userID, Status: true}, func(context.Context) error {
 		cancel()
 		return nil
 	})

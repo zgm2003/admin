@@ -10,7 +10,7 @@ type listResponse struct {
 }
 
 func safeValue(row Current) SafeValue {
-	return SafeValue{ID: row.ID, Name: row.Name, AppID: row.AppID, Bucket: row.Bucket, Region: row.Region, Endpoint: copiedStringPointer(row.Endpoint), BucketDomain: copiedStringPointer(row.BucketDomain), IsEnabled: row.IsEnabled, HasCredentials: row.SecretIDCiphertext != "" && row.SecretKeyCiphertext != "", Remark: row.Remark, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
+	return SafeValue{ID: row.ID, Name: row.Name, AppID: row.AppID, Bucket: row.Bucket, Region: row.Region, Endpoint: copiedStringPointer(row.Endpoint), BucketDomain: copiedStringPointer(row.BucketDomain), Status: row.Status, HasCredentials: row.SecretIDCiphertext != "" && row.SecretKeyCiphertext != "", Remark: row.Remark, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt}
 }
 
 func copiedStringPointer(value *string) *string {
@@ -29,6 +29,6 @@ type idResponse struct {
 }
 type statusResponse struct {
 	ID        int64 `json:"id"`
-	IsEnabled int16 `json:"isEnabled"`
+	Status int16 `json:"status"`
 }
 type emptyResponse struct{}

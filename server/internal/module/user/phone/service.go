@@ -75,7 +75,7 @@ func (s *Service) SendCode(ctx context.Context, actor Actor, input SendCodeInput
 	if current.Deleted {
 		return SendCodeResult{}, apperror.NotFound(fmt.Errorf("phone account is deleted"))
 	}
-	if !current.IsEnabled {
+	if !current.Status {
 		return SendCodeResult{}, apperror.Forbidden(fmt.Errorf("phone account is disabled"))
 	}
 	var destination string
@@ -124,7 +124,7 @@ func (s *Service) BindOrChange(ctx context.Context, actor Actor, input BindOrCha
 	if current.Deleted {
 		return PhoneResult{}, apperror.NotFound(fmt.Errorf("phone account is deleted"))
 	}
-	if !current.IsEnabled {
+	if !current.Status {
 		return PhoneResult{}, apperror.Forbidden(fmt.Errorf("phone account is disabled"))
 	}
 	oldPhone := ""

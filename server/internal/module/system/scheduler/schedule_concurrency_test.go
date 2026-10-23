@@ -20,7 +20,7 @@ func TestScheduleMutationReadsAfterConcurrentWriter(t *testing.T) {
 			if err := db.WithContext(ctx).Exec(`
 CREATE TABLE system_scheduler_schedule (
  id BIGINT PRIMARY KEY, builtin_key TEXT, cron_expression TEXT NOT NULL,
- timezone TEXT NOT NULL, is_enabled SMALLINT NOT NULL, next_run_at TIMESTAMPTZ,
+ timezone TEXT NOT NULL, status SMALLINT NOT NULL, next_run_at TIMESTAMPTZ,
  updated_by BIGINT, updated_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ
 );
 CREATE TABLE system_scheduler_job (id BIGINT PRIMARY KEY, schedule_id BIGINT NOT NULL, status SMALLINT NOT NULL);

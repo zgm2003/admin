@@ -103,7 +103,7 @@ func (s *Service) Get(ctx context.Context, id int64) (RuleValue, error) {
 	if e != nil {
 		return RuleValue{}, dependency(e)
 	}
-	return RuleValue{ID: m.ID, PlatformID: m.PlatformID, Codes: append([]string(nil), m.Codes...), Name: m.Name, CosConfigID: m.CosConfigID, MaxFileSizeBytes: m.MaxFileSizeBytes, AllowedExtensions: []string(m.AllowedExtensions), AllowedMimeTypes: []string(m.AllowedMimeTypes), AccessMode: m.AccessMode, IsEnabled: m.IsEnabled, Remark: m.Remark, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+	return RuleValue{ID: m.ID, PlatformID: m.PlatformID, Codes: append([]string(nil), m.Codes...), Name: m.Name, CosConfigID: m.CosConfigID, MaxFileSizeBytes: m.MaxFileSizeBytes, AllowedExtensions: []string(m.AllowedExtensions), AllowedMimeTypes: []string(m.AllowedMimeTypes), AccessMode: m.AccessMode, Status: m.Status, Remark: m.Remark, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
 }
 func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 	in = normalizeCreateInput(in)
@@ -130,7 +130,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 			return e
 		}
 		now := time.Now().UTC()
-		if in.IsEnabled == yesno.Yes {
+		if in.Status == yesno.Yes {
 			others, e := r.LockEnabledOtherRules(ctx, in.PlatformID, 0)
 			if e != nil {
 				return dependency(e)
@@ -150,7 +150,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (int64, error) {
 }
 func repositoryCreate(r *Repository, ctx context.Context, in CreateInput) (int64, error) {
 	now := time.Now().UTC()
-	m := &Model{PlatformID: in.PlatformID, Name: in.Name, CosConfigID: in.CosConfigID, MaxFileSizeBytes: in.MaxFileSizeBytes, AllowedExtensions: StringArray(in.AllowedExtensions), AllowedMimeTypes: StringArray(in.AllowedMimeTypes), AccessMode: in.AccessMode, IsEnabled: in.IsEnabled, Remark: in.Remark, CreatedAt: now, UpdatedAt: now}
+	m := &Model{PlatformID: in.PlatformID, Name: in.Name, CosConfigID: in.CosConfigID, MaxFileSizeBytes: in.MaxFileSizeBytes, AllowedExtensions: StringArray(in.AllowedExtensions), AllowedMimeTypes: StringArray(in.AllowedMimeTypes), AccessMode: in.AccessMode, Status: in.Status, Remark: in.Remark, CreatedAt: now, UpdatedAt: now}
 	if e := r.Create(ctx, m, in.Codes); e != nil {
 		if errors.Is(e, ErrConflict) {
 			return 0, conflict(e)
@@ -163,15 +163,15 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 	if id < 1 {
 		return invalid(fmt.Errorf("id invalid"))
 	}
-	if in.IsEnabled != nil && !yesno.IsValid(*in.IsEnabled) {
-		return invalid(fmt.Errorf("isEnabled invalid"))
+	if in.Status != nil && !yesno.IsValid(*in.Status) {
+		return invalid(fmt.Errorf("status invalid"))
 	}
 	in = normalizeUpdateInput(in)
 	if err := validateFields(1, in.Codes, in.Name, 1, in.MaxFileSizeBytes, in.AllowedExtensions, in.AllowedMimeTypes, "", in.Remark, false); err != nil {
 		return invalid(err)
 	}
 	return s.repository.Transaction(ctx, func(r *Repository) error {
-		enabling := in.IsEnabled != nil && *in.IsEnabled == yesno.Yes
+		enabling := in.Status != nil && *in.Status == yesno.Yes
 		m, err := lockMutationTarget(ctx, r, id, enabling)
 		if err != nil {
 			return err
@@ -190,8 +190,8 @@ func (s *Service) Update(ctx context.Context, id int64, in UpdateInput) error {
 			return mutationWriteError(err)
 		}
 		values := map[string]any{"name": in.Name, "max_file_size_bytes": in.MaxFileSizeBytes, "allowed_extensions": StringArray(in.AllowedExtensions), "allowed_mime_types": StringArray(in.AllowedMimeTypes), "remark": in.Remark, "updated_at": now}
-		if in.IsEnabled != nil {
-			values["is_enabled"] = *in.IsEnabled
+		if in.Status != nil {
+			values["status"] = *in.Status
 		}
 		return mutationWriteError(r.Update(ctx, id, values))
 	})
@@ -267,7 +267,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 		return invalid(fmt.Errorf("id invalid"))
 	}
 	if !yesno.IsValid(v) {
-		return invalid(fmt.Errorf("isEnabled invalid"))
+		return invalid(fmt.Errorf("status invalid"))
 	}
 	return s.repository.Transaction(ctx, func(r *Repository) error {
 		current, e := lockMutationTarget(ctx, r, id, v == yesno.Yes)
@@ -276,7 +276,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 		}
 		// Only the locked target may establish a no-op; a concurrent PUT/PATCH
 		// can change the status after the parent-key read.
-		if current.IsEnabled == v {
+		if current.Status == v {
 			return nil
 		}
 		now := s.now().UTC()
@@ -289,7 +289,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, v yesno.Value) err
 				return dependency(e)
 			}
 		}
-		return mutationWriteError(r.Update(ctx, id, map[string]any{"is_enabled": v, "updated_at": now}))
+		return mutationWriteError(r.Update(ctx, id, map[string]any{"status": v, "updated_at": now}))
 	})
 }
 
@@ -321,7 +321,7 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 			}
 			return dependency(e)
 		}
-		if m.IsEnabled == yesno.Yes {
+		if m.Status == yesno.Yes {
 			return conflict(fmt.Errorf("rule must be disabled"))
 		}
 		now := time.Now().UTC()
@@ -470,7 +470,7 @@ func (s *Service) currentUploadRuntime(ctx context.Context, configID int64) (cos
 	if err != nil {
 		return cosconfig.RuntimeConfig{}, cosconfig.RuntimeVersion{}, dependency(err)
 	}
-	if runtime.ID != configID || runtime.Deleted || runtime.IsEnabled != yesno.Yes {
+	if runtime.ID != configID || runtime.Deleted || runtime.Status != yesno.Yes {
 		return cosconfig.RuntimeConfig{}, cosconfig.RuntimeVersion{}, conflict(fmt.Errorf("COS config unavailable"))
 	}
 	version, found := findRuntimeVersion(runtime, runtime.CurrentVersion)

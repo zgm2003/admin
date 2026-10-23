@@ -154,7 +154,7 @@ function search(): void {
     page: 1,
     pageSize: query.value.pageSize,
     ...(value === '' ? {} : { keyword: value }),
-    ...(statusFilter.value === '' ? {} : { isEnabled: statusFilter.value }),
+    ...(statusFilter.value === '' ? {} : { status: statusFilter.value }),
     ...(roleFilter.value === '' ? {} : { roleId: roleFilter.value }),
   }
   void loadUsers()
@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
 
 async function changeStatus(row: UserListItem): Promise<void> {
   if (!canStatus.value || !row.actions.status || mutating.value) return
-  const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+  const next = row.status === YesNo.Yes ? YesNo.No : YesNo.Yes
   const message = t(next === YesNo.No ? 'user.disableConfirm' : 'user.enableConfirm')
   try {
     await ElMessageBox.confirm(message, t('common.status'), { type: 'warning' })
@@ -400,9 +400,9 @@ onMounted(() => {
       <template #cell-roles="{ row }: { row: UserListItem }">
         <div v-if="row.id > 0" class="role-tags">
           <el-tooltip v-for="role in row.roles" :key="role.id" :content="role.code"
-            ><el-tag :type="role.isEnabled === YesNo.Yes ? 'primary' : 'info'"
+            ><el-tag :type="role.status === YesNo.Yes ? 'primary' : 'info'"
               >{{ role.name
-              }}<span v-if="role.isEnabled === YesNo.No">
+              }}<span v-if="role.status === YesNo.No">
                 · {{ t('user.roleDisabled') }}</span
               ></el-tag
             ></el-tooltip
@@ -410,8 +410,8 @@ onMounted(() => {
         </div>
       </template>
       <template #cell-status="{ row }: { row: UserListItem }"
-        ><el-tag v-if="row.id > 0" :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
-          t(row.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable')
+        ><el-tag v-if="row.id > 0" :type="row.status === YesNo.Yes ? 'success' : 'danger'">{{
+          t(row.status === YesNo.Yes ? 'common.enable' : 'common.disable')
         }}</el-tag></template
       >
       <template #cell-phone="{ row }: { row: UserListItem }">
@@ -438,11 +438,11 @@ onMounted(() => {
             <el-tooltip v-if="canStatus" :content="row.actionLabels.status"
               ><el-button
                 text
-                :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
+                :type="row.status === YesNo.Yes ? 'warning' : 'success'"
                 :disabled="!row.actions.status || mutating"
                 @click="changeStatus(row)"
                 >{{
-                  row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
+                  row.status === YesNo.Yes ? t('common.disable') : t('common.enable')
                 }}</el-button
               ></el-tooltip
             >

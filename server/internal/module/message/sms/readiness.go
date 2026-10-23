@@ -13,14 +13,14 @@ func readinessOf(facts RuntimeFacts, scene string) (VerifyCodeReadiness, error) 
 	if err := validScene(scene); err != nil {
 		return VerifyCodeReadiness{}, err
 	}
-	if !facts.Configured || facts.Config.IsEnabled != yesno.Yes {
+	if !facts.Configured || facts.Config.Status != yesno.Yes {
 		return VerifyCodeReadiness{}, ErrConfigurationMissing
 	}
 	template, found := facts.Templates[scene]
 	if !found {
 		return VerifyCodeReadiness{}, fmt.Errorf("sms template %q is missing", scene)
 	}
-	if template.IsEnabled != yesno.Yes || template.TencentTemplateID == "" {
+	if template.Status != yesno.Yes || template.TencentTemplateID == "" {
 		return VerifyCodeReadiness{Ready: false}, nil
 	}
 	return VerifyCodeReadiness{Ready: true, TTLMinutes: facts.Config.TTLMinutes}, nil
@@ -31,7 +31,7 @@ func readinessOf(facts RuntimeFacts, scene string) (VerifyCodeReadiness, error) 
 func evaluateRules(rules []RuleFact, toPhone string) (recipientRule.Decision, error) {
 	patterns := make([]recipientRule.RulePattern, 0, len(rules))
 	for _, rule := range rules {
-		if rule.IsEnabled != yesno.Yes {
+		if rule.Status != yesno.Yes {
 			continue
 		}
 		patterns = append(patterns, recipientRule.RulePattern{ID: rule.ID, Scope: rule.Scope, Action: rule.Action, Pattern: rule.Pattern})

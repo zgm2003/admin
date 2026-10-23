@@ -68,7 +68,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if current.Scene != input.Scene {
 		return apperror.InvalidRequest(fmt.Errorf("template scene cannot be changed"))
 	}
-	if current.IsEnabled == yesno.Yes && input.TencentTemplateID == nil {
+	if current.Status == yesno.Yes && input.TencentTemplateID == nil {
 		return apperror.InvalidRequest(fmt.Errorf("enabled template requires a provider template id"))
 	}
 	variableKeys, err := json.Marshal(input.VariableKeys)

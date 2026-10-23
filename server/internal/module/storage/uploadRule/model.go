@@ -46,7 +46,7 @@ type Model struct {
 	AllowedExtensions StringArray    `gorm:"column:allowed_extensions;type:text[];not null"`
 	AllowedMimeTypes  StringArray    `gorm:"column:allowed_mime_types;type:text[];not null"`
 	AccessMode        string         `gorm:"column:access_mode;type:varchar(16);not null"`
-	IsEnabled         yesno.Value    `gorm:"column:is_enabled;not null"`
+	Status         yesno.Value    `gorm:"column:status;not null"`
 	Remark            string         `gorm:"column:remark;not null"`
 	CreatedAt         time.Time      `gorm:"column:created_at;not null"`
 	UpdatedAt         time.Time      `gorm:"column:updated_at;not null"`
@@ -69,7 +69,7 @@ type RuleValue struct {
 	AllowedExtensions []string    `json:"allowedExtensions"`
 	AllowedMimeTypes  []string    `json:"allowedMimeTypes"`
 	AccessMode        string      `json:"accessMode"`
-	IsEnabled         yesno.Value `json:"isEnabled"`
+	Status         yesno.Value `json:"status"`
 	Remark            string      `json:"remark"`
 	CreatedAt         time.Time   `json:"createdAt"`
 	UpdatedAt         time.Time   `json:"updatedAt"`

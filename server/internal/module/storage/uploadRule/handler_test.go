@@ -127,8 +127,8 @@ func TestObjectURLHandlerRejectsMissingIdentity(t *testing.T) {
 func TestHandlerRejectsInvalidQueriesAndJSON(t *testing.T) {
 	service, router := ruleRouter()
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/uploadrule?page=1&pageSize=20&platformId=2&cosConfigId=3&keyword=avatar&isEnabled=1", nil))
-	if rec.Code != http.StatusOK || service.query.PlatformID == nil || *service.query.PlatformID != 2 || service.query.CosConfigID == nil || *service.query.CosConfigID != 3 || service.query.IsEnabled == nil || *service.query.IsEnabled != yesno.Yes {
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/uploadrule?page=1&pageSize=20&platformId=2&cosConfigId=3&keyword=avatar&status=1", nil))
+	if rec.Code != http.StatusOK || service.query.PlatformID == nil || *service.query.PlatformID != 2 || service.query.CosConfigID == nil || *service.query.CosConfigID != 3 || service.query.Status == nil || *service.query.Status != yesno.Yes {
 		t.Fatalf("status=%d query=%+v body=%s", rec.Code, service.query, rec.Body)
 	}
 	for _, path := range []string{"/api/admin/v1/storage/uploadrule?page=1&pageSize=20&unknown=1", "/api/admin/v1/storage/uploadrule?page=1&page=2&pageSize=20", "/api/admin/v1/storage/uploadrule?page=1&pageSize=20&platformId=0"} {
@@ -138,7 +138,7 @@ func TestHandlerRejectsInvalidQueriesAndJSON(t *testing.T) {
 			t.Fatalf("path=%s status=%d body=%s", path, rec.Code, rec.Body)
 		}
 	}
-	valid := `{"platformId":1,"codes":["avatar","article-cover"],"name":"Avatar","cosConfigId":1,"maxFileSizeBytes":1024,"allowedExtensions":["png"],"allowedMimeTypes":["image/png"],"accessMode":"private","isEnabled":1,"remark":""}`
+	valid := `{"platformId":1,"codes":["avatar","article-cover"],"name":"Avatar","cosConfigId":1,"maxFileSizeBytes":1024,"allowedExtensions":["png"],"allowedMimeTypes":["image/png"],"accessMode":"private","status":1,"remark":""}`
 	for _, body := range []string{valid + `{}`, valid[:len(valid)-1] + `,"unknown":1}`, `{"platformId":1}`} {
 		rec = ruleJSON(router, http.MethodPost, "/api/admin/v1/storage/uploadrule", body)
 		if rec.Code != http.StatusBadRequest {

@@ -16,12 +16,12 @@ func TestBuildSnapshotKeepsSMSPageActionsAndIdentityActionsIndependent(t *testin
 	source := Source{
 		Version: 1,
 		Menus: []SourceMenu{
-			{ID: messageID, MenuType: MenuDirectory, Code: "message", I18nKey: accessStringPointer("navigation.message"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: smsPageID, ParentID: &messageID, MenuType: MenuPage, Code: "message:sms:view", I18nKey: accessStringPointer("navigation.sms"), Path: &smsPath, ComponentPath: &smsComponent, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: profilePageID, MenuType: MenuPage, Code: "user:profile:view", I18nKey: accessStringPointer("navigation.userProfile"), Path: &profilePath, ComponentPath: &profileComponent, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: smsActionID, ParentID: &smsPageID, MenuType: MenuAction, Code: "message:sms:list", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: emailActionID, ParentID: &profilePageID, MenuType: MenuAction, Code: "user:email:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: phoneActionID, ParentID: &profilePageID, MenuType: MenuAction, Code: "user:phone:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: messageID, MenuType: MenuDirectory, Code: "message", I18nKey: accessStringPointer("navigation.message"), Status: yesno.Yes, IsHidden: yesno.No},
+			{ID: smsPageID, ParentID: &messageID, MenuType: MenuPage, Code: "message:sms:view", I18nKey: accessStringPointer("navigation.sms"), Path: &smsPath, ComponentPath: &smsComponent, Status: yesno.Yes, IsHidden: yesno.No},
+			{ID: profilePageID, MenuType: MenuPage, Code: "user:profile:view", I18nKey: accessStringPointer("navigation.userProfile"), Path: &profilePath, ComponentPath: &profileComponent, Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: smsActionID, ParentID: &smsPageID, MenuType: MenuAction, Code: "message:sms:list", Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: emailActionID, ParentID: &profilePageID, MenuType: MenuAction, Code: "user:email:update", Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: phoneActionID, ParentID: &profilePageID, MenuType: MenuAction, Code: "user:phone:update", Status: yesno.Yes, IsHidden: yesno.Yes},
 		},
 	}
 

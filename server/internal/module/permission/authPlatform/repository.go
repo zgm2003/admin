@@ -120,8 +120,8 @@ func applyListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 		like := "%" + keyword + "%"
 		db = db.Where("code ILIKE ? OR name ILIKE ?", like, like)
 	}
-	if query.IsEnabled != nil {
-		db = db.Where("is_enabled = ?", *query.IsEnabled)
+	if query.Status != nil {
+		db = db.Where("status = ?", *query.Status)
 	}
 	return db
 }
@@ -309,7 +309,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Val
 	var version int64
 	result := r.db.WithContext(ctx).Raw(`
 		UPDATE permission_auth_platform
-		SET is_enabled = ?, policy_version = policy_version + 1, updated_at = ?
+		SET status = ?, policy_version = policy_version + 1, updated_at = ?
 		WHERE id = ? AND deleted_at IS NULL
 		RETURNING policy_version`, value, updatedAt.UTC(), id).Scan(&version)
 	if result.Error != nil {

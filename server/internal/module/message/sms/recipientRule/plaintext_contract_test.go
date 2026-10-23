@@ -13,7 +13,7 @@ func TestPlaintextRuleContractUsesNumericEnumsAndStoresPattern(t *testing.T) {
 	}
 	repository := &fakeRepository{}
 	service := newMutationService(repository)
-	result, err := service.Create(context.Background(), CreateInput{Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", IsEnabled: yesno.Yes})
+	result, err := service.Create(context.Background(), CreateInput{Scope: ScopePhone, Pattern: "15671628271", Action: ActionDeny, Name: "黑名单", Status: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -47,7 +47,7 @@ func TestSessionCachePublishesOnlyAgainstMatchingReadyStates(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
 	_ = client.DeleteMany(ctx, keys)
-	userFact := UserFact{UserID: 73001, Generation: "user-generation", IsEnabled: true}
+	userFact := UserFact{UserID: 73001, Generation: "user-generation", Status: true}
 	sessionsFact := SessionsFact{Platform: "admin", UserID: 73001, Generation: "sessions-generation"}
 	_, _, _ = states.InstallUserReadyIfMissing(ctx, userFact)
 	_, _, _ = states.InstallSessionsReadyIfMissing(ctx, sessionsFact)

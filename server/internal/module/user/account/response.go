@@ -8,7 +8,7 @@ type roleSummaryResponse struct {
 	ID        int64  `json:"id"`
 	Code      string `json:"code"`
 	Name      string `json:"name"`
-	IsEnabled int16  `json:"isEnabled"`
+	Status int16  `json:"status"`
 }
 
 type listItemResponse struct {
@@ -18,7 +18,7 @@ type listItemResponse struct {
 	Username     string                `json:"username"`
 	Email        string                `json:"email"`
 	Phone        *string               `json:"phone"`
-	IsEnabled    int16                 `json:"isEnabled"`
+	Status    int16                 `json:"status"`
 	Roles        []roleSummaryResponse `json:"roles"`
 	CreatedAt    string                `json:"createdAt"`
 	UpdatedAt    string                `json:"updatedAt"`
@@ -42,14 +42,14 @@ type updatedProfileResponse struct {
 }
 type statusResponse struct {
 	ID        int64 `json:"id"`
-	IsEnabled int16 `json:"isEnabled"`
+	Status int16 `json:"status"`
 }
 type summaryResponse struct {
 	ID        int64   `json:"id"`
 	Username  string  `json:"username"`
 	Email     string  `json:"email"`
 	Phone     *string `json:"phone"`
-	IsEnabled int16   `json:"isEnabled"`
+	Status int16   `json:"status"`
 }
 type rolesResponse struct {
 	User    summaryResponse          `json:"user"`
@@ -64,7 +64,7 @@ type roleResultResponse struct {
 func userListResponse(items []ListItem, total int64, page, pageSize int) listResponse {
 	rows := make([]listItemResponse, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, listItemResponse{Actions: item.Actions, ActionLabels: item.ActionLabels, ID: item.ID, Username: item.Username, Email: item.Email, Phone: item.Phone, IsEnabled: int16(item.IsEnabled), Roles: roleSummaryResponses(item.Roles), CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano)})
+		rows = append(rows, listItemResponse{Actions: item.Actions, ActionLabels: item.ActionLabels, ID: item.ID, Username: item.Username, Email: item.Email, Phone: item.Phone, Status: int16(item.Status), Roles: roleSummaryResponses(item.Roles), CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano)})
 	}
 	return listResponse{List: rows, Total: total, Page: page, PageSize: pageSize}
 }
@@ -72,13 +72,13 @@ func userListResponse(items []ListItem, total int64, page, pageSize int) listRes
 func roleSummaryResponses(values []RoleSummary) []roleSummaryResponse {
 	result := make([]roleSummaryResponse, 0, len(values))
 	for _, value := range values {
-		result = append(result, roleSummaryResponse{ID: value.ID, Code: value.Code, Name: value.Name, IsEnabled: int16(value.IsEnabled)})
+		result = append(result, roleSummaryResponse{ID: value.ID, Code: value.Code, Name: value.Name, Status: int16(value.Status)})
 	}
 	return result
 }
 
 func newRolesResponse(value Roles) rolesResponse {
-	return rolesResponse{User: summaryResponse{ID: value.User.ID, Username: value.User.Username, Email: value.User.Email, Phone: value.User.Phone, IsEnabled: int16(value.User.IsEnabled)}, Roles: assignmentRoleResponses(value.Roles), RoleIDs: append([]int64{}, value.RoleIDs...)}
+	return rolesResponse{User: summaryResponse{ID: value.User.ID, Username: value.User.Username, Email: value.User.Email, Phone: value.User.Phone, Status: int16(value.User.Status)}, Roles: assignmentRoleResponses(value.Roles), RoleIDs: append([]int64{}, value.RoleIDs...)}
 }
 
 type assignmentRoleResponse struct {
@@ -90,7 +90,7 @@ type assignmentRoleResponse struct {
 func assignmentRoleResponses(values []AssignmentRole) []assignmentRoleResponse {
 	result := make([]assignmentRoleResponse, 0, len(values))
 	for _, value := range values {
-		result = append(result, assignmentRoleResponse{roleSummaryResponse: roleSummaryResponse{ID: value.ID, Code: value.Code, Name: value.Name, IsEnabled: int16(value.IsEnabled)}, Selectable: value.Selectable, Locked: value.Locked})
+		result = append(result, assignmentRoleResponse{roleSummaryResponse: roleSummaryResponse{ID: value.ID, Code: value.Code, Name: value.Name, Status: int16(value.Status)}, Selectable: value.Selectable, Locked: value.Locked})
 	}
 	return result
 }

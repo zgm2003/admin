@@ -48,7 +48,7 @@ func paymentSeedFixture(t *testing.T) (*gorm.DB, context.Context, string) {
 
 func TestPaymentSeedReplaysWithoutChangingScheduleOrUnrelatedFacts(t *testing.T) {
 	db, ctx, sql := paymentSeedFixture(t)
-	if err := db.WithContext(ctx).Exec(`INSERT INTO system_scheduler_schedule(name,task_type,cron_expression,timezone,params,is_enabled) VALUES('Existing schedule','other.task','0 * * * *','UTC','{}',0)`).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO system_scheduler_schedule(name,task_type,cron_expression,timezone,params,status) VALUES('Existing schedule','other.task','0 * * * *','UTC','{}',0)`).Error; err != nil {
 		t.Fatal(err)
 	}
 	apply := func() error {
@@ -72,17 +72,17 @@ func TestPaymentSeedReplaysWithoutChangingScheduleOrUnrelatedFacts(t *testing.T)
 		t.Fatal("seed replay rewrote schedule facts")
 	}
 	var count int64
-	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_scheduler_schedule WHERE builtin_key='payment.order.reconcile' AND task_type='payment.order.reconcile' AND cron_expression='* * * * *' AND timezone='UTC' AND params='{}'::jsonb AND is_enabled=1 AND next_run_at IS NOT NULL AND deleted_at IS NULL`).Scan(&count).Error; err != nil || count != 1 {
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_scheduler_schedule WHERE builtin_key='payment.order.reconcile' AND task_type='payment.order.reconcile' AND cron_expression='* * * * *' AND timezone='UTC' AND params='{}'::jsonb AND status=1 AND next_run_at IS NOT NULL AND deleted_at IS NULL`).Scan(&count).Error; err != nil || count != 1 {
 		t.Fatalf("payment schedule count=%d err=%v", count, err)
 	}
 	// Administrator scheduling choices are durable, not migration defaults.
-	if err := db.WithContext(ctx).Exec(`UPDATE system_scheduler_schedule SET cron_expression='*/2 * * * *',is_enabled=0 WHERE builtin_key='payment.order.reconcile'`).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`UPDATE system_scheduler_schedule SET cron_expression='*/2 * * * *',status=0 WHERE builtin_key='payment.order.reconcile'`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := apply(); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_scheduler_schedule WHERE builtin_key='payment.order.reconcile' AND cron_expression='*/2 * * * *' AND is_enabled=0`).Scan(&count).Error; err != nil || count != 1 {
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_scheduler_schedule WHERE builtin_key='payment.order.reconcile' AND cron_expression='*/2 * * * *' AND status=0`).Scan(&count).Error; err != nil || count != 1 {
 		t.Fatal("replay overwrote administrator configuration")
 	}
 }

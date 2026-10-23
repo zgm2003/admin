@@ -39,8 +39,8 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Record, int64
 		pattern := "%" + strings.ReplaceAll(strings.ReplaceAll(query.Keyword, "%", `\%`), "_", `\_`) + "%"
 		db = db.Where("(setting_key LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')", pattern, pattern)
 	}
-	if query.IsEnabled != nil {
-		db = db.Where("is_enabled = ?", *query.IsEnabled)
+	if query.Status != nil {
+		db = db.Where("status = ?", *query.Status)
 	}
 	var total int64
 	if err := db.Count(&total).Error; err != nil {
@@ -73,7 +73,7 @@ func (r *Repository) Create(ctx context.Context, value *Record, expected int64) 
 	return r.mutate(ctx, expected, value.CreatedAt, func(tx *gorm.DB) (bool, error) {
 		row := Model{
 			Key: value.Key, Value: value.Value, ValueType: value.ValueType, Description: value.Description,
-			IsEnabled: value.IsEnabled, IsBuiltin: value.IsBuiltin, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+			Status: value.Status, IsBuiltin: value.IsBuiltin, CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 		}
 		if err := tx.WithContext(ctx).Create(&row).Error; err != nil {
 			var pgErr *pgconn.PgError
@@ -117,11 +117,11 @@ func (r *Repository) UpdateStatus(ctx context.Context, key string, status yesno.
 		if err != nil {
 			return false, err
 		}
-		if row.IsEnabled == status {
+		if row.Status == status {
 			return false, nil
 		}
 		result := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", row.ID).Updates(map[string]any{
-			"is_enabled": status, "updated_at": now,
+			"status": status, "updated_at": now,
 		})
 		if result.Error != nil {
 			return false, result.Error
@@ -159,7 +159,7 @@ func (r *Repository) FindBrand(ctx context.Context) (BrandSettings, error) {
 	}
 	values := make(map[string]string, len(rows))
 	for _, row := range rows {
-		if row.ValueType != brandValueType(row.Key) || row.IsEnabled != yesno.Yes {
+		if row.ValueType != brandValueType(row.Key) || row.Status != yesno.Yes {
 			return BrandSettings{}, fmt.Errorf("brand setting unavailable")
 		}
 		values[row.Key] = row.Value
@@ -193,7 +193,7 @@ func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expec
 		}
 		changed := false
 		for _, row := range rows {
-			if row.Value != values[row.Key] || row.ValueType != brandValueType(row.Key) || row.IsEnabled != yesno.Yes || row.IsBuiltin != yesno.Yes {
+			if row.Value != values[row.Key] || row.ValueType != brandValueType(row.Key) || row.Status != yesno.Yes || row.IsBuiltin != yesno.Yes {
 				changed = true
 				break
 			}
@@ -203,7 +203,7 @@ func (r *Repository) UpdateBrand(ctx context.Context, brand BrandSettings, expec
 		}
 		for _, row := range rows {
 			result := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", row.ID).Updates(map[string]any{
-				"value": values[row.Key], "value_type": brandValueType(row.Key), "is_enabled": yesno.Yes, "is_builtin": yesno.Yes, "updated_at": now,
+				"value": values[row.Key], "value_type": brandValueType(row.Key), "status": yesno.Yes, "is_builtin": yesno.Yes, "updated_at": now,
 			})
 			if result.Error != nil {
 				return false, result.Error

@@ -27,7 +27,7 @@ type UserState struct {
 	State         string  `json:"state"`
 	UserID        int64   `json:"userId"`
 	Generation    string  `json:"generation"`
-	IsEnabled     bool    `json:"isEnabled"`
+	Status     bool    `json:"status"`
 	Deleted       bool    `json:"deleted"`
 	MutationToken *string `json:"mutationToken"`
 }
@@ -44,7 +44,7 @@ type SessionsState struct {
 type UserFact struct {
 	UserID     int64
 	Generation string
-	IsEnabled  bool
+	Status  bool
 	Deleted    bool
 }
 
@@ -76,7 +76,7 @@ func NewGeneration() (string, error) {
 }
 
 func (s UserState) Fact() UserFact {
-	return UserFact{UserID: s.UserID, Generation: s.Generation, IsEnabled: s.IsEnabled, Deleted: s.Deleted}
+	return UserFact{UserID: s.UserID, Generation: s.Generation, Status: s.Status, Deleted: s.Deleted}
 }
 
 func (s SessionsState) Fact() SessionsFact {
@@ -84,7 +84,7 @@ func (s SessionsState) Fact() SessionsFact {
 }
 
 func validateUserFact(fact UserFact) error {
-	if fact.UserID < 1 || fact.Generation == "" || (fact.Deleted && fact.IsEnabled) {
+	if fact.UserID < 1 || fact.Generation == "" || (fact.Deleted && fact.Status) {
 		return fmt.Errorf("authentication user fact is invalid")
 	}
 	return nil

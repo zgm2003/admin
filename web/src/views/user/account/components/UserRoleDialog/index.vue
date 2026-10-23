@@ -47,7 +47,7 @@ const { t } = useI18n()
             :value="role.id"
             :disabled="!role.selectable || role.locked"
             ><span>{{ role.name }} ({{ role.code }})</span
-            ><el-tag v-if="role.isEnabled === YesNo.No" type="info" size="small">{{
+            ><el-tag v-if="role.status === YesNo.No" type="info" size="small">{{
               t('user.roleDisabled')
             }}</el-tag></el-checkbox
           ></el-checkbox-group

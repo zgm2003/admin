@@ -30,7 +30,7 @@ func openPhoneSchema(t *testing.T) (*gorm.DB, context.Context) {
 CREATE TABLE permission_auth_platform(id BIGSERIAL PRIMARY KEY, code VARCHAR(32) NOT NULL UNIQUE);
 CREATE TABLE user_account(
  id BIGSERIAL PRIMARY KEY, username VARCHAR(64) NOT NULL, email VARCHAR(254) NOT NULL DEFAULT '', phone VARCHAR(32),
- password_hash VARCHAR(255) NOT NULL DEFAULT '', is_enabled SMALLINT NOT NULL DEFAULT 1,
+ password_hash VARCHAR(255) NOT NULL DEFAULT '', status SMALLINT NOT NULL DEFAULT 1,
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  deleted_at TIMESTAMPTZ
 );
@@ -53,7 +53,7 @@ func TestRepositoryChangePhoneLocksCurrentValueAndAppendsAudit(t *testing.T) {
 	if err := db.WithContext(ctx).Exec(`INSERT INTO permission_auth_platform(id,code) VALUES (1,'admin')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	user := account.User{Username: "alice", Email: "alice@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}
+	user := account.User{Username: "alice", Email: "alice@example.com", PasswordHash: "hash", Status: yesno.Yes}
 	if err := db.WithContext(ctx).Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestRepositoryChangePhoneRollsBackWhenAuditInsertFails(t *testing.T) {
 	if err := db.WithContext(ctx).Exec(`INSERT INTO permission_auth_platform(id,code) VALUES (1,'admin')`).Error; err != nil {
 		t.Fatal(err)
 	}
-	user := account.User{Username: "bob", Email: "bob@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}
+	user := account.User{Username: "bob", Email: "bob@example.com", PasswordHash: "hash", Status: yesno.Yes}
 	if err := db.WithContext(ctx).Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -113,8 +113,8 @@ func TestRepositoryMapsActivePhoneUniqueConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	phone := "+8615671628271"
-	first := account.User{Username: "first", Email: "first@example.com", Phone: &phone, PasswordHash: "hash", IsEnabled: yesno.Yes}
-	second := account.User{Username: "second", Email: "second@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}
+	first := account.User{Username: "first", Email: "first@example.com", Phone: &phone, PasswordHash: "hash", Status: yesno.Yes}
+	second := account.User{Username: "second", Email: "second@example.com", PasswordHash: "hash", Status: yesno.Yes}
 	if err := db.WithContext(ctx).Create(&first).Error; err != nil {
 		t.Fatal(err)
 	}

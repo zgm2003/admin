@@ -90,12 +90,12 @@ func readyMailRepository(delay time.Duration) *countingReadinessRepository {
 		config: Config{
 			ID: 1, SecretIDCiphertext: "mail:v1:cipher-id", SecretKeyCiphertext: "mail:v1:cipher-key",
 			Region: "ap-guangzhou", FromEmail: "sender@example.com", FromName: "Sender",
-			TTLMinutes: 5, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now,
+			TTLMinutes: 5, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now,
 		},
 		templates: []Template{{
 			ID: 1, Scene: SceneLogin, Name: "Login", Subject: "Code", Content: "{{code}}",
 			TencentTemplateID: intPointer(47941), VariableKeys: []byte(`["code"]`),
-			ExampleVariables: []byte(`{"code":"123456"}`), IsEnabled: yesno.Yes,
+			ExampleVariables: []byte(`{"code":"123456"}`), Status: yesno.Yes,
 			CreatedAt: now, UpdatedAt: now,
 		}},
 		rules: []RecipientRule{},

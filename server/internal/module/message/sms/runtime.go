@@ -49,7 +49,7 @@ type ConfiguredConfig struct {
 	Region              string
 	Endpoint            string
 	TTLMinutes          int
-	IsEnabled           yesno.Value
+	Status           yesno.Value
 }
 
 type TemplateFact struct {
@@ -57,7 +57,7 @@ type TemplateFact struct {
 	TencentTemplateID string
 	VariableKeys      []string
 	ExampleVariables  map[string]string
-	IsEnabled         yesno.Value
+	Status         yesno.Value
 }
 
 type RuleFact struct {
@@ -65,7 +65,7 @@ type RuleFact struct {
 	Scope     recipientRule.Scope
 	Action    recipientRule.Action
 	Pattern   string
-	IsEnabled yesno.Value
+	Status yesno.Value
 }
 
 // RuntimeFacts is everything the sending path needs, loaded from PostgreSQL.
@@ -87,7 +87,7 @@ type runtimeSnapshot struct {
 	Region              string                 `json:"region"`
 	Endpoint            string                 `json:"endpoint"`
 	TTLMinutes          int                    `json:"ttlMinutes"`
-	IsEnabled           int16                  `json:"isEnabled"`
+	Status           int16                  `json:"status"`
 	Templates           map[string]templateRow `json:"templates"`
 	Rules               []ruleRow              `json:"rules"`
 }
@@ -97,7 +97,7 @@ type templateRow struct {
 	TencentTemplateID string            `json:"tencentTemplateId"`
 	VariableKeys      []string          `json:"variableKeys"`
 	ExampleVariables  map[string]string `json:"exampleVariables"`
-	IsEnabled         int16             `json:"isEnabled"`
+	Status         int16             `json:"status"`
 }
 
 type ruleRow struct {
@@ -105,7 +105,7 @@ type ruleRow struct {
 	Scope     int16  `json:"scope"`
 	Action    int16  `json:"action"`
 	Pattern   string `json:"pattern"`
-	IsEnabled int16  `json:"isEnabled"`
+	Status int16  `json:"status"`
 }
 
 type readinessPayload struct {
@@ -656,7 +656,7 @@ func snapshotOf(generation int64, facts RuntimeFacts) runtimeSnapshot {
 		SecretIDCiphertext: facts.Config.SecretIDCiphertext, SecretKeyCiphertext: facts.Config.SecretKeyCiphertext,
 		SDKAppID: facts.Config.SDKAppID, SignName: facts.Config.SignName,
 		Region: facts.Config.Region, Endpoint: facts.Config.Endpoint,
-		TTLMinutes: facts.Config.TTLMinutes, IsEnabled: int16(facts.Config.IsEnabled),
+		TTLMinutes: facts.Config.TTLMinutes, Status: int16(facts.Config.Status),
 		Templates: make(map[string]templateRow, len(facts.Templates)),
 		Rules:     make([]ruleRow, 0, len(facts.Rules)),
 	}
@@ -664,13 +664,13 @@ func snapshotOf(generation int64, facts RuntimeFacts) runtimeSnapshot {
 		snapshot.Templates[scene] = templateRow{
 			Name: value.Name, TencentTemplateID: value.TencentTemplateID,
 			VariableKeys: append([]string(nil), value.VariableKeys...), ExampleVariables: cloneStringMap(value.ExampleVariables),
-			IsEnabled: int16(value.IsEnabled),
+			Status: int16(value.Status),
 		}
 	}
 	for _, rule := range facts.Rules {
 		snapshot.Rules = append(snapshot.Rules, ruleRow{
 			ID: rule.ID, Scope: int16(rule.Scope), Action: int16(rule.Action), Pattern: rule.Pattern,
-			IsEnabled: int16(rule.IsEnabled),
+			Status: int16(rule.Status),
 		})
 	}
 	return snapshot
@@ -719,7 +719,7 @@ func validateRawRuleRows(raw string) error {
 		if err := json.Unmarshal(rowRaw, &fields); err != nil {
 			return fmt.Errorf("rule row is invalid")
 		}
-		for _, key := range []string{"id", "scope", "action", "pattern", "isEnabled"} {
+		for _, key := range []string{"id", "scope", "action", "pattern", "status"} {
 			value, exists := fields[key]
 			if !exists || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
 				return fmt.Errorf("rule field %q is missing or null", key)
@@ -740,12 +740,12 @@ func validateRuntimeSnapshot(snapshot runtimeSnapshot) error {
 		if snapshot.SecretIDCiphertext == "" || snapshot.SecretKeyCiphertext == "" ||
 			strings.TrimSpace(snapshot.SDKAppID) == "" || strings.TrimSpace(snapshot.SignName) == "" ||
 			strings.TrimSpace(snapshot.Region) == "" || snapshot.TTLMinutes < 1 || snapshot.TTLMinutes > 60 ||
-			!yesno.IsValid(yesno.Value(snapshot.IsEnabled)) {
+			!yesno.IsValid(yesno.Value(snapshot.Status)) {
 			return fmt.Errorf("sms runtime config is invalid")
 		}
 	} else if snapshot.SecretIDCiphertext != "" || snapshot.SecretKeyCiphertext != "" || snapshot.SDKAppID != "" ||
 		snapshot.SignName != "" || snapshot.Region != "" || snapshot.Endpoint != "" ||
-		snapshot.TTLMinutes != 0 || snapshot.IsEnabled != int16(yesno.No) {
+		snapshot.TTLMinutes != 0 || snapshot.Status != int16(yesno.No) {
 		return fmt.Errorf("sms runtime unconfigured state is invalid")
 	}
 
@@ -755,11 +755,11 @@ func validateRuntimeSnapshot(snapshot runtimeSnapshot) error {
 	}
 	for _, fixed := range catalog {
 		row, found := snapshot.Templates[fixed.Scene]
-		if !found || strings.TrimSpace(row.Name) == "" || !yesno.IsValid(yesno.Value(row.IsEnabled)) ||
+		if !found || strings.TrimSpace(row.Name) == "" || !yesno.IsValid(yesno.Value(row.Status)) ||
 			!sameStrings(row.VariableKeys, fixed.VariableKeys) || !validRuntimeVariables(row.ExampleVariables, fixed.VariableKeys) {
 			return fmt.Errorf("sms runtime template %q is invalid", fixed.Scene)
 		}
-		if yesno.Value(row.IsEnabled) == yesno.Yes && !isDecimal(row.TencentTemplateID) {
+		if yesno.Value(row.Status) == yesno.Yes && !isDecimal(row.TencentTemplateID) {
 			return fmt.Errorf("sms runtime template %q provider id is invalid", fixed.Scene)
 		}
 	}
@@ -769,7 +769,7 @@ func validateRuntimeSnapshot(snapshot runtimeSnapshot) error {
 		if row.ID < 1 || (row.Scope != int16(recipientRule.ScopePhone) && row.Scope != int16(recipientRule.ScopePrefix)) ||
 			(row.Action != int16(recipientRule.ActionAllow) && row.Action != int16(recipientRule.ActionDeny)) ||
 			recipientRule.ValidatePattern(recipientRule.Scope(row.Scope), row.Pattern) != nil ||
-			!yesno.IsValid(yesno.Value(row.IsEnabled)) {
+			!yesno.IsValid(yesno.Value(row.Status)) {
 			return fmt.Errorf("sms runtime recipient rule is invalid")
 		}
 		if _, exists := seenRules[row.ID]; exists {
@@ -876,7 +876,7 @@ func factsOf(snapshot runtimeSnapshot) RuntimeFacts {
 			SecretIDCiphertext: snapshot.SecretIDCiphertext, SecretKeyCiphertext: snapshot.SecretKeyCiphertext,
 			SDKAppID: snapshot.SDKAppID, SignName: snapshot.SignName,
 			Region: snapshot.Region, Endpoint: snapshot.Endpoint,
-			TTLMinutes: snapshot.TTLMinutes, IsEnabled: yesno.Value(snapshot.IsEnabled),
+			TTLMinutes: snapshot.TTLMinutes, Status: yesno.Value(snapshot.Status),
 		},
 		Templates: make(map[string]TemplateFact, len(snapshot.Templates)),
 		Rules:     make([]RuleFact, 0, len(snapshot.Rules)),
@@ -885,13 +885,13 @@ func factsOf(snapshot runtimeSnapshot) RuntimeFacts {
 		facts.Templates[scene] = TemplateFact{
 			Name: row.Name, TencentTemplateID: row.TencentTemplateID,
 			VariableKeys: append([]string(nil), row.VariableKeys...), ExampleVariables: cloneStringMap(row.ExampleVariables),
-			IsEnabled: yesno.Value(row.IsEnabled),
+			Status: yesno.Value(row.Status),
 		}
 	}
 	for _, row := range snapshot.Rules {
 		facts.Rules = append(facts.Rules, RuleFact{
 			ID: row.ID, Scope: recipientRule.Scope(row.Scope), Action: recipientRule.Action(row.Action), Pattern: row.Pattern,
-			IsEnabled: yesno.Value(row.IsEnabled),
+			Status: yesno.Value(row.Status),
 		})
 	}
 	return facts

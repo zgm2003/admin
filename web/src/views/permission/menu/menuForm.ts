@@ -25,7 +25,7 @@ export function createMenuForm(parent: ManagedMenuNode | null = null): MenuFormS
     icon: null,
     remark: '',
     sortOrder: 100,
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
     isHidden: menuType === 'action' ? YesNo.Yes : YesNo.No,
     isProtected: YesNo.No,
   }
@@ -43,7 +43,7 @@ export function editMenuForm(node: ManagedMenuNode): MenuFormState {
     icon: node.icon,
     remark: node.remark ?? '',
     sortOrder: node.sortOrder,
-    isEnabled: node.isEnabled,
+    status: node.status,
     isHidden: node.isHidden,
     isProtected: node.isProtected,
   }
@@ -136,7 +136,7 @@ export function createMenuInput(platformId: number, form: MenuFormState): Create
     icon: form.icon,
     remark: normalizedRemark(form),
     sortOrder: form.sortOrder,
-    isEnabled: form.isEnabled,
+    status: form.status,
     isHidden: form.isHidden,
   }
 }

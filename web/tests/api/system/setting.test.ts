@@ -157,22 +157,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateSettingStatus preserves the HTTP contract and backend data', async () => {
     const key: Parameters<typeof api.updateSettingStatus>[0] = 'sample'
-    const isEnabled: Parameters<typeof api.updateSettingStatus>[1] = 0
+    const status: Parameters<typeof api.updateSettingStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateSettingStatus(key, isEnabled)
+    const result = await api.updateSettingStatus(key, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/system/setting/${encodeURIComponent(key)}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateSettingStatus propagates request failures unchanged', async () => {
     const key: Parameters<typeof api.updateSettingStatus>[0] = 'sample'
-    const isEnabled: Parameters<typeof api.updateSettingStatus>[1] = 0
+    const status: Parameters<typeof api.updateSettingStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateSettingStatus(key, isEnabled)).rejects.toBe(error)
+    await expect(api.updateSettingStatus(key, status)).rejects.toBe(error)
   })
   it('deleteSetting preserves the HTTP contract and backend data', async () => {
     const key: Parameters<typeof api.deleteSetting>[0] = 'sample'

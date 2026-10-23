@@ -46,7 +46,7 @@ describe('thin API HTTP contract', () => {
       secretKey: 'sample',
       bucket: 'sample',
       region: 'sample',
-      isEnabled: 0,
+      status: 0,
       remark: 'sample',
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
@@ -63,7 +63,7 @@ describe('thin API HTTP contract', () => {
       secretKey: 'sample',
       bucket: 'sample',
       region: 'sample',
-      isEnabled: 0,
+      status: 0,
       remark: 'sample',
     }
     const error = new Error('request failed')
@@ -101,22 +101,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateCosConfigStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateCosConfigStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateCosConfigStatus>[1] = 0
+    const status: Parameters<typeof api.updateCosConfigStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateCosConfigStatus(id, isEnabled)
+    const result = await api.updateCosConfigStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/storage/cosconfig/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateCosConfigStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateCosConfigStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateCosConfigStatus>[1] = 0
+    const status: Parameters<typeof api.updateCosConfigStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateCosConfigStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateCosConfigStatus(id, status)).rejects.toBe(error)
   })
   it('testCosConfig preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.testCosConfig>[0] = 1

@@ -13,7 +13,7 @@ type scheduleRequest struct {
 	CronExpression string          `json:"cronExpression"`
 	Timezone       string          `json:"timezone"`
 	Params         json.RawMessage `json:"params"`
-	IsEnabled      bool            `json:"isEnabled"`
+	Status      bool            `json:"status"`
 }
 
 func (r scheduleRequest) input() (ScheduleInput, error) {
@@ -28,9 +28,9 @@ func (r scheduleRequest) input() (ScheduleInput, error) {
 	if r.Name == "" || len(r.Name) > 128 || len(r.Description) > 512 || r.TaskType == "" || r.CronExpression == "" || r.Timezone == "" {
 		return ScheduleInput{}, errors.New("scheduler schedule fields are invalid")
 	}
-	return ScheduleInput{Name: r.Name, Description: r.Description, TaskType: r.TaskType, CronExpression: r.CronExpression, Timezone: r.Timezone, Params: r.Params, Enabled: r.IsEnabled}, nil
+	return ScheduleInput{Name: r.Name, Description: r.Description, TaskType: r.TaskType, CronExpression: r.CronExpression, Timezone: r.Timezone, Params: r.Params, Enabled: r.Status}, nil
 }
 
 type statusRequest struct {
-	IsEnabled bool `json:"isEnabled"`
+	Status bool `json:"status"`
 }

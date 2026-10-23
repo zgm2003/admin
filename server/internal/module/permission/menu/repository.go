@@ -36,7 +36,7 @@ type PlatformOption struct {
 	ID        int64
 	Code      string
 	Name      string
-	IsEnabled yesno.Value
+	Status yesno.Value
 }
 
 type Repository struct {
@@ -116,11 +116,11 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 	}
 	result := r.db.WithContext(ctx).Raw(`
 		INSERT INTO permission_menu (
-			platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, remark, sort_order, is_enabled, is_hidden
+			platform_id, parent_id, menu_type, name, code, i18n_key, path, component_path, icon, remark, sort_order, status, is_hidden
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id, created_at, updated_at`,
 		value.PlatformID, value.ParentID, value.MenuType, value.Name, value.Code, value.I18nKey, value.Path,
-		value.ComponentPath, value.Icon, value.Remark, value.SortOrder, value.IsEnabled, value.IsHidden,
+		value.ComponentPath, value.Icon, value.Remark, value.SortOrder, value.Status, value.IsHidden,
 	).Scan(&created)
 	if result.Error != nil {
 		return mapMenuWriteError("create menu", result.Error)
@@ -137,7 +137,7 @@ func (r *Repository) Create(ctx context.Context, value *Menu) error {
 func (r *Repository) FindPlatformOptions(ctx context.Context) ([]PlatformOption, error) {
 	rows := make([]PlatformOption, 0)
 	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
-		Select("id, code, name, is_enabled").
+		Select("id, code, name, status").
 		Where("deleted_at IS NULL").
 		Order("is_builtin DESC, code ASC, id ASC").
 		Scan(&rows).Error; err != nil {
@@ -149,7 +149,7 @@ func (r *Repository) FindPlatformOptions(ctx context.Context) ([]PlatformOption,
 func (r *Repository) FindPlatform(ctx context.Context, id int64) (PlatformOption, error) {
 	var found PlatformOption
 	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
-		Select("id, code, name, is_enabled").
+		Select("id, code, name, status").
 		Where("id = ? AND deleted_at IS NULL", id).
 		Take(&found).Error; err != nil {
 		return PlatformOption{}, fmt.Errorf("find menu platform: %w", err)
@@ -160,7 +160,7 @@ func (r *Repository) FindPlatform(ctx context.Context, id int64) (PlatformOption
 func (r *Repository) LockPlatform(ctx context.Context, id int64) (PlatformOption, error) {
 	var found PlatformOption
 	if err := r.db.WithContext(ctx).Table("permission_auth_platform").
-		Select("id, code, name, is_enabled").
+		Select("id, code, name, status").
 		Clauses(clause.Locking{Strength: "SHARE"}).
 		Where("id = ? AND deleted_at IS NULL", id).
 		Take(&found).Error; err != nil {
@@ -206,7 +206,7 @@ func (r *Repository) LockMenusByCodesUnscoped(ctx context.Context, platformID in
 func (r *Repository) UpdateFoundationStructure(ctx context.Context, id int64, value Menu, updatedAt time.Time) error {
 	result := r.db.WithContext(ctx).Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
 		"parent_id": value.ParentID, "menu_type": value.MenuType, "path": value.Path,
-		"component_path": value.ComponentPath, "is_enabled": value.IsEnabled,
+		"component_path": value.ComponentPath, "status": value.Status,
 		"is_hidden": value.IsHidden, "remark": value.Remark, "updated_at": updatedAt.UTC(),
 	})
 	if result.Error != nil {
@@ -222,7 +222,7 @@ func (r *Repository) RestoreFoundationMenu(ctx context.Context, id int64, value 
 	result := r.db.WithContext(ctx).Unscoped().Model(&Menu{}).Where("id = ?", id).Updates(map[string]any{
 		"parent_id": value.ParentID, "menu_type": value.MenuType, "name": value.Name, "code": value.Code,
 		"i18n_key": value.I18nKey, "path": value.Path, "component_path": value.ComponentPath,
-		"icon": value.Icon, "remark": value.Remark, "sort_order": value.SortOrder, "is_enabled": value.IsEnabled,
+		"icon": value.Icon, "remark": value.Remark, "sort_order": value.SortOrder, "status": value.Status,
 		"is_hidden": value.IsHidden, "updated_at": updatedAt.UTC(), "deleted_at": nil,
 	})
 	if result.Error != nil {
@@ -262,7 +262,7 @@ func (r *Repository) UpdateMenuStatus(ctx context.Context, ids []int64, value ye
 		return fmt.Errorf("update menu status requires at least one id")
 	}
 	if err := r.db.WithContext(ctx).Model(&Menu{}).Where("id IN ?", ids).Updates(map[string]any{
-		"is_enabled": value,
+		"status": value,
 		"updated_at": updatedAt,
 	}).Error; err != nil {
 		return fmt.Errorf("update menu status: %w", err)

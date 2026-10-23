@@ -121,21 +121,21 @@ func (h *Handler) SetStatus(ctx *gin.Context) {
 		return
 	}
 	var request struct {
-		IsEnabled *yesno.Value `json:"isEnabled"`
+		Status *yesno.Value `json:"status"`
 	}
 	if err = validate.BindJSON(ctx, &request); err != nil {
 		response.Fail(ctx, err)
 		return
 	}
-	if request.IsEnabled == nil {
-		response.Fail(ctx, apperror.InvalidRequest(fmt.Errorf("isEnabled is required")))
+	if request.Status == nil {
+		response.Fail(ctx, apperror.InvalidRequest(fmt.Errorf("status is required")))
 		return
 	}
-	if err = h.service.SetStatus(ctx.Request.Context(), id, *request.IsEnabled); err != nil {
+	if err = h.service.SetStatus(ctx.Request.Context(), id, *request.Status); err != nil {
 		response.Fail(ctx, err)
 		return
 	}
-	response.OK(ctx, http.StatusOK, map[string]any{"id": id, "isEnabled": *request.IsEnabled})
+	response.OK(ctx, http.StatusOK, map[string]any{"id": id, "status": *request.Status})
 }
 
 func (h *Handler) Delete(ctx *gin.Context) {
@@ -158,13 +158,13 @@ func bindInput(ctx *gin.Context) (Input, error) {
 		Action    *Action      `json:"action" binding:"required"`
 		Name      string       `json:"name"`
 		Remark    string       `json:"remark"`
-		IsEnabled *yesno.Value `json:"isEnabled" binding:"required"`
+		Status *yesno.Value `json:"status" binding:"required"`
 	}
 	if err := validate.BindJSON(ctx, &request); err != nil {
 		return Input{}, err
 	}
-	if !request.Scope.IsValid() || !request.Action.IsValid() || !yesno.IsValid(*request.IsEnabled) {
+	if !request.Scope.IsValid() || !request.Action.IsValid() || !yesno.IsValid(*request.Status) {
 		return Input{}, apperror.InvalidRequest(fmt.Errorf("recipient rule enum is invalid"))
 	}
-	return Input{Scope: *request.Scope, Pattern: request.Pattern, Action: *request.Action, Name: request.Name, Remark: request.Remark, IsEnabled: *request.IsEnabled}, nil
+	return Input{Scope: *request.Scope, Pattern: request.Pattern, Action: *request.Action, Name: request.Name, Remark: request.Remark, Status: *request.Status}, nil
 }

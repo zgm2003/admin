@@ -65,7 +65,7 @@ function blankRule(): RuleForm {
     action: props.options?.ruleDefaults.action,
     name: '',
     remark: '',
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
   }
 }
 
@@ -84,7 +84,7 @@ function edit(row: smsApi.SmsRule): void {
     action: row.action,
     name: row.name,
     remark: row.remark,
-    isEnabled: row.isEnabled,
+    status: row.status,
   }
   dialogVisible.value = true
 }
@@ -100,11 +100,11 @@ async function save(): Promise<void> {
   const original = props.rules.find((row) => row.id === targetID)
   saving.value = true
   try {
-    if (original && payload.isEnabled !== original.isEnabled) {
+    if (original && payload.status !== original.status) {
       await ElMessageBox.confirm(
         t('confirm.status', {
           name: original.name,
-          status: t(payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable'),
+          status: t(payload.status === YesNo.Yes ? 'common.enable' : 'common.disable'),
         }),
         t('confirm.title'),
         { type: 'warning' },
@@ -118,7 +118,7 @@ async function save(): Promise<void> {
         action,
         name,
         remark: payload.remark.trim(),
-        isEnabled: payload.isEnabled,
+        status: payload.status,
         ...(pattern === '' ? {} : { pattern }),
       })
     }
@@ -192,7 +192,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
       </template>
       <template #cell-status="{ row }: { row: smsApi.SmsRule }">
         <el-switch
-          :model-value="row.isEnabled"
+          :model-value="row.status"
           inline-prompt
           :active-text="t('common.enable')"
           :inactive-text="t('common.disable')"
@@ -288,7 +288,7 @@ async function remove(row: smsApi.SmsRule): Promise<void> {
         </el-form-item>
         <el-form-item :label="t('common.status')">
           <el-switch
-            v-model="form.isEnabled"
+            v-model="form.status"
             :active-value="YesNo.Yes"
             :inactive-value="YesNo.No"
           />

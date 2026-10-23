@@ -13,7 +13,7 @@ type scheduleResponse struct {
 	CronExpression string          `json:"cronExpression"`
 	Timezone       string          `json:"timezone"`
 	Params         json.RawMessage `json:"params"`
-	IsEnabled      bool            `json:"isEnabled"`
+	Status      bool            `json:"status"`
 	NextRunAt      *time.Time      `json:"nextRunAt"`
 	BuiltinKey     string          `json:"builtinKey"`
 	CreatedAt      time.Time       `json:"createdAt"`
@@ -47,10 +47,10 @@ func scheduleDTO(row Schedule) scheduleResponse {
 		builtinKey = *row.BuiltinKey
 	}
 	status := ScheduleDisabled
-	if row.IsEnabled == 1 {
+	if row.Status == 1 {
 		status = ScheduleEnabled
 	}
-	return scheduleResponse{row.ID, row.Name, row.Description, row.TaskType, row.CronExpression, row.Timezone, row.Params, row.IsEnabled == 1, row.NextRunAt, builtinKey, row.CreatedAt, row.UpdatedAt, status, scheduleActions{Delete: row.BuiltinKey == nil}}
+	return scheduleResponse{row.ID, row.Name, row.Description, row.TaskType, row.CronExpression, row.Timezone, row.Params, row.Status == 1, row.NextRunAt, builtinKey, row.CreatedAt, row.UpdatedAt, status, scheduleActions{Delete: row.BuiltinKey == nil}}
 }
 
 type jobResponse struct {

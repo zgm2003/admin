@@ -19,7 +19,7 @@ type Model struct {
 	Content           string          `gorm:"column:content;type:text;not null" json:"content"`
 	VariableKeys      json.RawMessage `gorm:"column:variable_keys;type:jsonb;not null" json:"variableKeys"`
 	ExampleVariables  json.RawMessage `gorm:"column:example_variables;type:jsonb;not null" json:"exampleVariables"`
-	IsEnabled         yesno.Value     `gorm:"column:is_enabled;type:smallint;not null" json:"isEnabled"`
+	Status         yesno.Value     `gorm:"column:status;type:smallint;not null" json:"status"`
 	CreatedAt         time.Time       `gorm:"column:created_at;not null" json:"createdAt"`
 	UpdatedAt         time.Time       `gorm:"column:updated_at;not null" json:"updatedAt"`
 	DeletedAt         gorm.DeletedAt  `gorm:"column:deleted_at;type:timestamptz" json:"-"`

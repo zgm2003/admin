@@ -26,12 +26,12 @@ func TestRepositoryFindPlatformOptionsIncludesDisabledAndExcludesDeleted(t *test
 		t.Fatal(err)
 	}
 	if len(options) != 2 || options[0].ID != adminID || options[0].Code != authplatform.BuiltinAdminCode ||
-		options[1].ID != canvas.ID || options[1].Code != canvas.Code || options[1].IsEnabled != yesno.No {
+		options[1].ID != canvas.ID || options[1].Code != canvas.Code || options[1].Status != yesno.No {
 		t.Fatalf("platform options = %+v", options)
 	}
 
 	found, err := repository.FindPlatform(ctx, canvas.ID)
-	if err != nil || found.ID != canvas.ID || found.IsEnabled != yesno.No {
+	if err != nil || found.ID != canvas.ID || found.Status != yesno.No {
 		t.Fatalf("FindPlatform(disabled) = %+v,%v", found, err)
 	}
 	if _, err := repository.FindPlatform(ctx, deleted.ID); !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -45,10 +45,10 @@ func TestRepositoryFindActiveMenusIncludesDisabledExcludesDeletedAndSorts(t *tes
 	platformID := testAdminPlatformID(t, tx, ctx)
 	prefix := fmt.Sprintf("repository:%d", time.Now().UnixNano())
 	items := []Menu{
-		{PlatformID: platformID, MenuType: TypeDirectory, Name: "Z", Code: prefix + ":z", I18nKey: stringPointer("navigation.system"), SortOrder: 20, IsEnabled: yesno.Yes},
-		{PlatformID: platformID, MenuType: TypeDirectory, Name: "B", Code: prefix + ":b", I18nKey: stringPointer("navigation.system"), SortOrder: 10, IsEnabled: yesno.No},
-		{PlatformID: platformID, MenuType: TypeDirectory, Name: "A", Code: prefix + ":a", I18nKey: stringPointer("navigation.system"), SortOrder: 10, IsEnabled: yesno.Yes},
-		{PlatformID: platformID, MenuType: TypeDirectory, Name: "Deleted", Code: prefix + ":deleted", I18nKey: stringPointer("navigation.system"), SortOrder: 0, IsEnabled: yesno.Yes},
+		{PlatformID: platformID, MenuType: TypeDirectory, Name: "Z", Code: prefix + ":z", I18nKey: stringPointer("navigation.system"), SortOrder: 20, Status: yesno.Yes},
+		{PlatformID: platformID, MenuType: TypeDirectory, Name: "B", Code: prefix + ":b", I18nKey: stringPointer("navigation.system"), SortOrder: 10, Status: yesno.No},
+		{PlatformID: platformID, MenuType: TypeDirectory, Name: "A", Code: prefix + ":a", I18nKey: stringPointer("navigation.system"), SortOrder: 10, Status: yesno.Yes},
+		{PlatformID: platformID, MenuType: TypeDirectory, Name: "Deleted", Code: prefix + ":deleted", I18nKey: stringPointer("navigation.system"), SortOrder: 0, Status: yesno.Yes},
 	}
 	for index := range items {
 		if err := repository.Create(ctx, &items[index]); err != nil {
@@ -73,7 +73,7 @@ func TestRepositoryFindActiveMenusIncludesDisabledExcludesDeletedAndSorts(t *tes
 			t.Fatalf("sorted code[%d] = %q, want %q", index, filtered[index].Code, wantCode)
 		}
 	}
-	if filtered[1].IsEnabled != yesno.No {
+	if filtered[1].Status != yesno.No {
 		t.Fatal("disabled active menu was not returned")
 	}
 }
@@ -82,7 +82,7 @@ func TestRepositoryLockActiveMenusRunsInsideTransaction(t *testing.T) {
 	tx, ctx := openMenuTransaction(t)
 	repository := NewRepository(tx)
 	code := fmt.Sprintf("repository:lock:%d", time.Now().UnixNano())
-	created := Menu{PlatformID: testAdminPlatformID(t, tx, ctx), MenuType: TypeDirectory, Name: "Lock", Code: code, I18nKey: stringPointer("navigation.system"), SortOrder: 1, IsEnabled: yesno.Yes}
+	created := Menu{PlatformID: testAdminPlatformID(t, tx, ctx), MenuType: TypeDirectory, Name: "Lock", Code: code, I18nKey: stringPointer("navigation.system"), SortOrder: 1, Status: yesno.Yes}
 	if err := repository.Create(ctx, &created); err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestRepositoryCreateWritesNullableFieldsAndTimestamps(t *testing.T) {
 	repository := NewRepository(tx)
 	platformID := testAdminPlatformID(t, tx, ctx)
 	unique := time.Now().UnixNano()
-	root := Menu{PlatformID: platformID, MenuType: TypeDirectory, Name: "Root", Code: fmt.Sprintf("repository:create:%d", unique), I18nKey: stringPointer("navigation.system"), SortOrder: 1, IsEnabled: yesno.Yes}
+	root := Menu{PlatformID: platformID, MenuType: TypeDirectory, Name: "Root", Code: fmt.Sprintf("repository:create:%d", unique), I18nKey: stringPointer("navigation.system"), SortOrder: 1, Status: yesno.Yes}
 	if err := repository.Create(ctx, &root); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestRepositoryCreateWritesNullableFieldsAndTimestamps(t *testing.T) {
 	page := Menu{
 		PlatformID: platformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:create:%d:view", unique),
 		Name: "List", I18nKey: stringPointer("reports.list"), Path: &path, ComponentPath: &componentPath, Icon: &icon,
-		SortOrder: 2, IsEnabled: yesno.No, IsHidden: yesno.No,
+		SortOrder: 2, Status: yesno.No, IsHidden: yesno.No,
 	}
 	if err := repository.Create(ctx, &page); err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestRepositoryCreateWritesNullableFieldsAndTimestamps(t *testing.T) {
 		t.Fatal(err)
 	}
 	if stored.PlatformID != platformID || stored.ParentID == nil || *stored.ParentID != root.ID || value(stored.Path) != path ||
-		value(stored.ComponentPath) != componentPath || value(stored.Icon) != icon || stored.IsEnabled != yesno.No ||
+		value(stored.ComponentPath) != componentPath || value(stored.Icon) != icon || stored.Status != yesno.No ||
 		stored.CreatedAt.IsZero() || stored.UpdatedAt.IsZero() || stored.DeletedAt.Valid {
 		t.Fatalf("stored page = %+v", stored)
 	}
@@ -149,7 +149,7 @@ func TestRepositoryUpdateMenuWritesExplicitSQLNulls(t *testing.T) {
 	page := Menu{
 		PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Code: fmt.Sprintf("repository:update:%d:view", unique),
 		Name: "List", I18nKey: stringPointer("reports.list"), Path: &path, ComponentPath: &componentPath, Icon: &icon,
-		SortOrder: 2, IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		SortOrder: 2, Status: yesno.Yes, IsHidden: yesno.No,
 	}
 	if err := repository.Create(ctx, &page); err != nil {
 		t.Fatal(err)
@@ -188,7 +188,7 @@ func TestRepositoryBulkStatusAndMenuSoftDeleteUseSuppliedTimestamps(t *testing.T
 		if err := tx.WithContext(ctx).First(&stored, id).Error; err != nil {
 			t.Fatal(err)
 		}
-		if stored.IsEnabled != yesno.No || !stored.UpdatedAt.Equal(statusAt) {
+		if stored.Status != yesno.No || !stored.UpdatedAt.Equal(statusAt) {
 			t.Fatalf("status row %d = %+v", id, stored)
 		}
 	}
@@ -214,7 +214,7 @@ func TestRepositoryRoleMenuSoftDeleteTouchesOnlyActiveTargetLinks(t *testing.T) 
 	unique := time.Now().UnixNano()
 	createdRole := testRole{
 		Code: fmt.Sprintf("repository_role_%d", unique), Name: "Repository Role",
-		IsDefault: yesno.No, IsEnabled: yesno.Yes,
+		IsDefault: yesno.No, Status: yesno.Yes,
 	}
 	if err := tx.WithContext(ctx).Create(&createdRole).Error; err != nil {
 		t.Fatal(err)
@@ -281,7 +281,7 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		tx, ctx := openMenuTransaction(t)
 		repository := NewRepository(tx)
 		code := fmt.Sprintf("repository:conflict:%d", time.Now().UnixNano())
-		first := Menu{PlatformID: testAdminPlatformID(t, tx, ctx), MenuType: TypeDirectory, Name: "First", Code: code, I18nKey: stringPointer("navigation.system"), IsEnabled: yesno.Yes}
+		first := Menu{PlatformID: testAdminPlatformID(t, tx, ctx), MenuType: TypeDirectory, Name: "First", Code: code, I18nKey: stringPointer("navigation.system"), Status: yesno.Yes}
 		second := first
 		if err := repository.Create(ctx, &first); err != nil {
 			t.Fatal(err)
@@ -298,7 +298,7 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		root := createRepositoryDirectory(t, repository, ctx, fmt.Sprintf("repository:path:%d", unique), 1)
 		componentPath := fmt.Sprintf("reports/repository-path-%d", unique)
 		path := "/" + componentPath
-		first := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "First", Code: fmt.Sprintf("repository:path:%d:a", unique), I18nKey: stringPointer("reports.list"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes}
+		first := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "First", Code: fmt.Sprintf("repository:path:%d:a", unique), I18nKey: stringPointer("reports.list"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes}
 		second := first
 		second.Code = fmt.Sprintf("repository:path:%d:b", unique)
 		if err := repository.Create(ctx, &first); err != nil {
@@ -318,8 +318,8 @@ func TestRepositoryConvertsActiveUniqueViolations(t *testing.T) {
 		secondComponentPath := fmt.Sprintf("reports/repository-update-path-%d-b", unique)
 		firstPath := "/" + firstComponentPath
 		secondPath := "/" + secondComponentPath
-		first := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "First", Code: fmt.Sprintf("repository:update-path:%d:a", unique), I18nKey: stringPointer("reports.list"), Path: &firstPath, ComponentPath: &firstComponentPath, IsEnabled: yesno.Yes}
-		second := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "Second", Code: fmt.Sprintf("repository:update-path:%d:b", unique), I18nKey: stringPointer("reports.list"), Path: &secondPath, ComponentPath: &secondComponentPath, IsEnabled: yesno.Yes}
+		first := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "First", Code: fmt.Sprintf("repository:update-path:%d:a", unique), I18nKey: stringPointer("reports.list"), Path: &firstPath, ComponentPath: &firstComponentPath, Status: yesno.Yes}
+		second := Menu{PlatformID: root.PlatformID, ParentID: &root.ID, MenuType: TypePage, Name: "Second", Code: fmt.Sprintf("repository:update-path:%d:b", unique), I18nKey: stringPointer("reports.list"), Path: &secondPath, ComponentPath: &secondComponentPath, Status: yesno.Yes}
 		if err := repository.Create(ctx, &first); err != nil {
 			t.Fatal(err)
 		}
@@ -341,13 +341,13 @@ func createMenuAccessUser(t *testing.T, tx *gorm.DB, ctx context.Context, enable
 	unique := time.Now().UnixNano()
 	created := testUser{
 		Username: fmt.Sprintf("menu_access_%d", unique), Email: fmt.Sprintf("menu_access_%d@example.com", unique),
-		IsEnabled: enabled,
+		Status: enabled,
 	}
 	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
 		t.Fatal(err)
 	}
 	if enabled == yesno.No {
-		if err := tx.WithContext(ctx).Model(&testUser{}).Where("id = ?", created.ID).Update("is_enabled", yesno.No).Error; err != nil {
+		if err := tx.WithContext(ctx).Model(&testUser{}).Where("id = ?", created.ID).Update("status", yesno.No).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -365,7 +365,7 @@ func createMenuAccessUser(t *testing.T, tx *gorm.DB, ctx context.Context, enable
 func createRepositoryDirectory(t *testing.T, repository *Repository, ctx context.Context, code string, sortOrder int) Menu {
 	t.Helper()
 	platformID := testAdminPlatformID(t, repository.db, ctx)
-	item := Menu{PlatformID: platformID, MenuType: TypeDirectory, Name: code, Code: code, I18nKey: stringPointer("navigation.system"), SortOrder: sortOrder, IsEnabled: yesno.Yes}
+	item := Menu{PlatformID: platformID, MenuType: TypeDirectory, Name: code, Code: code, I18nKey: stringPointer("navigation.system"), SortOrder: sortOrder, Status: yesno.Yes}
 	if err := repository.Create(ctx, &item); err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func createRepositoryPlatform(t *testing.T, tx *gorm.DB, ctx context.Context, co
 	created.ID = 0
 	created.Code = code
 	created.Name = name
-	created.IsEnabled = enabled
+	created.Status = enabled
 	created.IsBuiltin = yesno.No
 	created.CreatedAt = time.Time{}
 	created.UpdatedAt = time.Time{}

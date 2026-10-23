@@ -27,14 +27,14 @@ func (r *Repository) CreateWithinLimit(ctx context.Context, input CreateInput, p
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var lockedUser struct {
 			ID        int64
-			IsEnabled yesno.Value
+			Status yesno.Value
 			DeletedAt *time.Time
 		}
-		if err := tx.Unscoped().Table("user_account").Select("id, is_enabled, deleted_at").
+		if err := tx.Unscoped().Table("user_account").Select("id, status, deleted_at").
 			Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ?", input.UserID).Take(&lockedUser).Error; err != nil {
 			return fmt.Errorf("lock session user: %w", err)
 		}
-		if lockedUser.IsEnabled != yesno.Yes || lockedUser.DeletedAt != nil {
+		if lockedUser.Status != yesno.Yes || lockedUser.DeletedAt != nil {
 			return fmt.Errorf("lock session user: %w", gorm.ErrRecordNotFound)
 		}
 
@@ -42,7 +42,7 @@ func (r *Repository) CreateWithinLimit(ctx context.Context, input CreateInput, p
 		if err := tx.Unscoped().Clauses(clause.Locking{Strength: "UPDATE"}).Where("code = ?", input.Platform).Take(&lockedPlatform).Error; err != nil {
 			return fmt.Errorf("lock authentication platform for session: %w", err)
 		}
-		if lockedPlatform.DeletedAt.Valid || lockedPlatform.IsEnabled != yesno.Yes || lockedPlatform.ID != policy.ID || lockedPlatform.PolicyVersion != policy.PolicyVersion {
+		if lockedPlatform.DeletedAt.Valid || lockedPlatform.Status != yesno.Yes || lockedPlatform.ID != policy.ID || lockedPlatform.PolicyVersion != policy.PolicyVersion {
 			return fmt.Errorf("authentication platform changed before session creation: %w", gorm.ErrRecordNotFound)
 		}
 
@@ -92,7 +92,7 @@ func (r *Repository) CreateWithinLimit(ctx context.Context, input CreateInput, p
 type authorityRow struct {
 	Session
 	Platform            string
-	UserIsEnabled       yesno.Value
+	UserStatus       yesno.Value
 	UserDeleted         bool
 	PasswordSetRequired bool
 }
@@ -101,7 +101,7 @@ func (r *Repository) FindAuthoritative(ctx context.Context, userID, sessionID in
 	var row authorityRow
 	result := r.db.WithContext(ctx).Unscoped().Raw(`
 		SELECT session.*, platform.code AS platform,
-			app_user.is_enabled AS user_is_enabled,
+			app_user.status AS user_status,
 			(app_user.deleted_at IS NOT NULL) AS user_deleted
 		FROM user_session AS session
 		JOIN permission_auth_platform AS platform ON platform.id = session.platform_id
@@ -123,7 +123,7 @@ func (r *Repository) FindByRefreshHash(ctx context.Context, platform, hash strin
 	result := r.db.WithContext(ctx).Unscoped().Raw(`
 		SELECT session.*, platform.code AS platform,
 			(app_user.password_hash = '') AS password_set_required,
-			app_user.is_enabled AS user_is_enabled,
+			app_user.status AS user_status,
 			(app_user.deleted_at IS NOT NULL) AS user_deleted
 		FROM user_session AS session
 		JOIN permission_auth_platform AS platform ON platform.id = session.platform_id
@@ -143,7 +143,7 @@ func authorityFromRow(row authorityRow) Authority {
 	row.Session.Platform = row.Platform
 	return Authority{
 		Session: row.Session,
-		UserID:  row.UserID, UserIsEnabled: row.UserIsEnabled,
+		UserID:  row.UserID, UserStatus: row.UserStatus,
 		UserDeleted: row.UserDeleted, PasswordSetRequired: row.PasswordSetRequired,
 	}
 }
@@ -160,7 +160,7 @@ func (r *Repository) RotateByRefreshHash(ctx context.Context, sessionID int64, p
 		  AND session.refresh_expires_at > ?
 		  AND EXISTS (
 			SELECT 1 FROM user_account AS app_user
-			WHERE app_user.id = session.user_id AND app_user.deleted_at IS NULL AND app_user.is_enabled = ?
+			WHERE app_user.id = session.user_id AND app_user.deleted_at IS NULL AND app_user.status = ?
 		  )
 		RETURNING session.*, platform.code AS platform`, newHash, client.ClientIP, client.UserAgent, now.UTC(), sessionID, platform, oldHash, now.UTC(), yesno.Yes).Scan(&row)
 	if result.Error != nil {

@@ -10,7 +10,7 @@ export interface CosConfig {
   region: string
   endpoint: string | null
   bucketDomain: string | null
-  isEnabled: YesNo
+  status: YesNo
   hasCredentials: boolean
   remark: string
   createdAt: string
@@ -19,7 +19,7 @@ export interface CosConfig {
 
 export interface CosConfigQuery extends PageRequest {
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
 }
 
 export interface CreateCosConfigInput {
@@ -31,13 +31,13 @@ export interface CreateCosConfigInput {
   region: string
   endpoint?: string | null
   bucketDomain?: string | null
-  isEnabled: YesNo
+  status: YesNo
   remark: string
 }
 
 export type UpdateCosConfigInput = Omit<
   CreateCosConfigInput,
-  'appId' | 'secretId' | 'secretKey' | 'isEnabled'
+  'appId' | 'secretId' | 'secretKey' | 'status'
 > & { secretId?: string; secretKey?: string }
 
 export async function listCosConfigs(query: CosConfigQuery): Promise<PageResult<CosConfig>> {
@@ -61,11 +61,11 @@ export async function updateCosConfig(
 
 export async function updateCosConfigStatus(
   id: number,
-  isEnabled: YesNo,
-): Promise<{ id: number; isEnabled: YesNo }> {
-  return request.patch<{ id: number; isEnabled: YesNo }>(
+  status: YesNo,
+): Promise<{ id: number; status: YesNo }> {
+  return request.patch<{ id: number; status: YesNo }>(
     `/api/admin/v1/storage/cosconfig/${id}/status`,
-    { isEnabled },
+    { status },
   )
 }
 

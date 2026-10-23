@@ -64,7 +64,7 @@ func TestSetDefaultSerializesConcurrentWriters(t *testing.T) {
 		t.Fatalf("enabled default role count = %d, want 1", count)
 	}
 	var enabled int64
-	if err := db.WithContext(ctx).Raw("SELECT COUNT(*) FROM permission_role WHERE is_default = ? AND is_enabled = ? AND deleted_at IS NULL", yesno.Yes, yesno.Yes).Scan(&enabled).Error; err != nil {
+	if err := db.WithContext(ctx).Raw("SELECT COUNT(*) FROM permission_role WHERE is_default = ? AND status = ? AND deleted_at IS NULL", yesno.Yes, yesno.Yes).Scan(&enabled).Error; err != nil {
 		t.Fatal(err)
 	}
 	if enabled != 1 {

@@ -31,7 +31,7 @@ type ListQuery struct {
 	Page        int
 	PageSize    int
 	Keyword     string
-	IsEnabled   *yesno.Value
+	Status   *yesno.Value
 	RoleID      *int64
 }
 
@@ -39,7 +39,7 @@ type RoleSummary struct {
 	ID        int64
 	Code      string
 	Name      string
-	IsEnabled yesno.Value
+	Status yesno.Value
 }
 
 type ListItem struct {
@@ -49,7 +49,7 @@ type ListItem struct {
 	Username     string
 	Email        string
 	Phone        *string
-	IsEnabled    yesno.Value
+	Status    yesno.Value
 	Roles        []RoleSummary
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -60,7 +60,7 @@ type Summary struct {
 	Username  string
 	Email     string
 	Phone     *string
-	IsEnabled yesno.Value
+	Status yesno.Value
 }
 
 type Roles struct {
@@ -99,7 +99,7 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 	}
 	query.Keyword = strings.TrimSpace(query.Keyword)
 	if query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 ||
-		(query.IsEnabled != nil && !yesno.IsValid(*query.IsEnabled)) ||
+		(query.Status != nil && !yesno.IsValid(*query.Status)) ||
 		(query.RoleID != nil && *query.RoleID <= 0) || utf8.RuneCountInString(query.Keyword) > 254 {
 		return pagination.Result[ListItem]{}, apperror.InvalidRequest(fmt.Errorf("user list query is invalid"))
 	}
@@ -250,7 +250,7 @@ func (s *Service) Roles(ctx context.Context, actorUserID, targetUserID int64) (R
 	if !facts.ActorActive {
 		return Roles{}, apperror.Unauthorized(fmt.Errorf("actor identity is not active"))
 	}
-	summary := Summary{ID: target.ID, Username: target.Username, Email: target.Email, Phone: target.Phone, IsEnabled: target.IsEnabled}
+	summary := Summary{ID: target.ID, Username: target.Username, Email: target.Email, Phone: target.Phone, Status: target.Status}
 	return Roles{
 		User:  summary,
 		Roles: assignmentOptions(actorUserID, facts, summary, options, roleIDs), RoleIDs: roleIDs,
@@ -317,7 +317,7 @@ func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int
 		}
 		rolesByID := make(map[int64]role.Role, len(availableRoles))
 		for _, available := range availableRoles {
-			if available.ID <= 0 || available.Code == "" || available.Name == "" || !yesno.IsValid(available.IsEnabled) {
+			if available.ID <= 0 || available.Code == "" || available.Name == "" || !yesno.IsValid(available.Status) {
 				return userDataInvalid(fmt.Errorf("role %d has invalid fields", available.ID))
 			}
 			if _, exists := rolesByID[available.ID]; exists {
@@ -332,7 +332,7 @@ func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int
 			if !exists {
 				return userRoleNotFound(fmt.Errorf("requested role %d is missing", roleID))
 			}
-			if available.IsEnabled == yesno.Yes {
+			if available.Status == yesno.Yes {
 				hasEnabledRole = true
 			}
 			if roleID == superAdminRole.ID {
@@ -357,7 +357,7 @@ func (s *Service) UpdateRoles(ctx context.Context, actorUserID, targetUserID int
 		if !actorIsSuperAdmin && (targetHasSuperAdmin || requestedHasSuperAdmin) {
 			return userSuperAdminProtected(fmt.Errorf("ordinary actor cannot change super administrator assignments"))
 		}
-		if currentHasSuperAdmin && !requestedHasSuperAdmin && target.IsEnabled == yesno.Yes {
+		if currentHasSuperAdmin && !requestedHasSuperAdmin && target.Status == yesno.Yes {
 			count, err := repository.CountEffectiveSuperAdmins(ctx, superAdminRole.ID)
 			if err != nil {
 				return err
@@ -496,7 +496,7 @@ func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID in
 			if _, err := validateStoredRoleRelations(rolesByID, relations); err != nil {
 				return userDataInvalid(err)
 			}
-			if target.IsEnabled == yesno.Yes {
+			if target.Status == yesno.Yes {
 				return nil
 			}
 			operationTime := time.Now().UTC().Truncate(time.Microsecond)
@@ -511,7 +511,7 @@ func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID in
 			newVersion, err = repository.IncrementAccessVersion(ctx, target.ID, operationTime)
 			return err
 		}
-		if targetHasSuperAdmin && target.IsEnabled == yesno.Yes {
+		if targetHasSuperAdmin && target.Status == yesno.Yes {
 			count, err := repository.CountEffectiveSuperAdmins(ctx, superAdminRole.ID)
 			if err != nil {
 				return err
@@ -521,10 +521,10 @@ func (s *Service) UpdateStatus(ctx context.Context, actorUserID, targetUserID in
 			}
 		}
 		operationTime := time.Now().UTC().Truncate(time.Microsecond)
-		if target.IsEnabled == yesno.No && len(candidate.platforms) == 0 {
+		if target.Status == yesno.No && len(candidate.platforms) == 0 {
 			return nil
 		}
-		if target.IsEnabled != yesno.No {
+		if target.Status != yesno.No {
 			if err := repository.UpdateStatus(ctx, target.ID, yesno.No, operationTime); err != nil {
 				return err
 			}
@@ -602,7 +602,7 @@ func (s *Service) Delete(ctx context.Context, actorUserID, targetUserID int64) e
 		if targetHasSuperAdmin && !actorIsSuperAdmin {
 			return userSuperAdminProtected(fmt.Errorf("ordinary actor cannot delete a super administrator"))
 		}
-		if targetHasSuperAdmin && target.IsEnabled == yesno.Yes {
+		if targetHasSuperAdmin && target.Status == yesno.Yes {
 			count, err := repository.CountEffectiveSuperAdmins(ctx, superAdminRole.ID)
 			if err != nil {
 				return err
@@ -734,7 +734,7 @@ func (s *Service) finishFullMutation(
 		return apperror.Internal(err)
 	}
 	next := authstate.MutationFacts{Users: []authstate.UserFact{{
-		UserID: candidate.user.ID, Generation: userGeneration, IsEnabled: enabled, Deleted: deleted,
+		UserID: candidate.user.ID, Generation: userGeneration, Status: enabled, Deleted: deleted,
 	}}, Sessions: make([]authstate.SessionsFact, 0, len(prior.Sessions))}
 	for _, session := range prior.Sessions {
 		generation, generationErr := authstate.NewGeneration()
@@ -767,7 +767,7 @@ func (s *Service) ensureUserReady(ctx context.Context, target User) (authstate.U
 		return authstate.UserFact{}, generationErr
 	}
 	fact := authstate.UserFact{
-		UserID: target.ID, Generation: generation, IsEnabled: target.IsEnabled == yesno.Yes, Deleted: target.DeletedAt.Valid,
+		UserID: target.ID, Generation: generation, Status: target.Status == yesno.Yes, Deleted: target.DeletedAt.Valid,
 	}
 	actual, _, installErr := s.authStates.InstallUserReadyIfMissing(ctx, fact)
 	if installErr != nil {
@@ -838,7 +838,7 @@ func normalizeRequestedRoleIDs(values []int64) ([]int64, error) {
 func validateUserRoleRelations(options []RoleSummary, relations []role.UserRole) ([]int64, error) {
 	rolesByID := make(map[int64]struct{}, len(options))
 	for _, option := range options {
-		if option.ID <= 0 || option.Code == "" || option.Name == "" || !yesno.IsValid(option.IsEnabled) {
+		if option.ID <= 0 || option.Code == "" || option.Name == "" || !yesno.IsValid(option.Status) {
 			return nil, fmt.Errorf("role option %d has invalid fields", option.ID)
 		}
 		if _, exists := rolesByID[option.ID]; exists {
@@ -871,7 +871,7 @@ func validateUserRoleRelations(options []RoleSummary, relations []role.UserRole)
 func validateStoredRoleRelations(rolesByID map[int64]role.Role, relations []role.UserRole) ([]int64, error) {
 	options := make([]RoleSummary, 0, len(rolesByID))
 	for _, available := range rolesByID {
-		options = append(options, RoleSummary{ID: available.ID, Code: available.Code, Name: available.Name, IsEnabled: available.IsEnabled})
+		options = append(options, RoleSummary{ID: available.ID, Code: available.Code, Name: available.Name, Status: available.Status})
 	}
 	return validateUserRoleRelations(options, relations)
 }

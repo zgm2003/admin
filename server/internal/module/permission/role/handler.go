@@ -107,7 +107,7 @@ func (h *Handler) UpdateStatus(context *gin.Context) {
 		response.Fail(context, err)
 		return
 	}
-	response.OK(context, http.StatusOK, statusResponse{ID: id, IsEnabled: int16(value)})
+	response.OK(context, http.StatusOK, statusResponse{ID: id, Status: int16(value)})
 }
 
 func (h *Handler) SetDefault(context *gin.Context) {

@@ -45,8 +45,8 @@ func filter(db *gorm.DB, q ListQuery) *gorm.DB {
 	if q.Keyword != "" {
 		db = db.Where("name ILIKE ? OR app_id ILIKE ? OR seller_id ILIKE ?", "%"+q.Keyword+"%", "%"+q.Keyword+"%", "%"+q.Keyword+"%")
 	}
-	if q.IsEnabled != nil {
-		db = db.Where("is_enabled=?", *q.IsEnabled)
+	if q.Status != nil {
+		db = db.Where("status=?", *q.Status)
 	}
 	return db
 }
@@ -95,7 +95,7 @@ func (r *Repository) CatalogFacts(ctx context.Context) ([]CatalogItem, error) {
 }
 func catalogFacts(ctx context.Context, db *gorm.DB) ([]CatalogItem, error) {
 	rows := []CatalogItem{}
-	err := db.WithContext(ctx).Table("payment_config").Select("id,name,provider,environment,app_id,seller_id,current_version,sort_order,is_enabled").Where("deleted_at IS NULL").Order("sort_order,id").Limit(MaxSnapshotBytes/128 + 1).Scan(&rows).Error
+	err := db.WithContext(ctx).Table("payment_config").Select("id,name,provider,environment,app_id,seller_id,current_version,sort_order,status").Where("deleted_at IS NULL").Order("sort_order,id").Limit(MaxSnapshotBytes/128 + 1).Scan(&rows).Error
 	if len(rows) > MaxSnapshotBytes/128 {
 		return nil, fmt.Errorf("payment catalog size limit exceeded")
 	}
@@ -219,10 +219,10 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Val
 		if err != nil {
 			return false, err
 		}
-		if current.Config.IsEnabled == value {
+		if current.Config.Status == value {
 			return false, nil
 		}
-		return true, tx.Model(&Model{}).Where("id=?", id).Updates(map[string]any{"is_enabled": value, "updated_at": now}).Error
+		return true, tx.Model(&Model{}).Where("id=?", id).Updates(map[string]any{"status": value, "updated_at": now}).Error
 	})
 }
 func (r *Repository) MarkDeleted(ctx context.Context, id, base int64, now time.Time) (cache.MutationResult, error) {
@@ -230,7 +230,7 @@ func (r *Repository) MarkDeleted(ctx context.Context, id, base int64, now time.T
 		if _, err := findCurrent(ctx, tx, id, true); err != nil {
 			return false, err
 		}
-		return true, tx.Model(&Model{}).Where("id=?", id).Updates(map[string]any{"is_enabled": yesno.No, "deleted_at": now, "updated_at": now}).Error
+		return true, tx.Model(&Model{}).Where("id=?", id).Updates(map[string]any{"status": yesno.No, "deleted_at": now, "updated_at": now}).Error
 	})
 }
 func checkCatalogSize(ctx context.Context, db *gorm.DB) error {

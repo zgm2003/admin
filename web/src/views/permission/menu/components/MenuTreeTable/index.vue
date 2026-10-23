@@ -235,7 +235,7 @@ function updateKeyword(value: string): void {
 
       <el-table-column :label="t('common.status')" width="104" align="center" header-align="center">
         <template #default="{ row }: { row: ManagedMenuNode }">
-          <span :data-menu-enabled="row.isEnabled">
+          <span :data-menu-enabled="row.status">
             <el-tag :type="row.presentation.statusTone" size="small" effect="plain">
               {{ row.presentation.statusLabel }}
             </el-tag>
@@ -274,7 +274,7 @@ function updateKeyword(value: string): void {
             v-if="canUpdate"
             :data-testid="`status-${row.id}`"
             text
-            :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
+            :type="row.status === YesNo.Yes ? 'warning' : 'success'"
             :disabled="!row.actions.status"
             :title="row.presentation.statusReason || undefined"
             @click="emit('status', row)"

@@ -23,7 +23,7 @@ type Platform struct {
 	BindIP                 yesno.Value     `gorm:"column:bind_ip;type:smallint;not null"`
 	MaxSessions            int16           `gorm:"column:max_sessions;type:smallint;not null"`
 	AllowRegister          yesno.Value     `gorm:"column:allow_register;type:smallint;not null"`
-	IsEnabled              yesno.Value     `gorm:"column:is_enabled;type:smallint;not null"`
+	Status              yesno.Value     `gorm:"column:status;type:smallint;not null"`
 	IsBuiltin              yesno.Value     `gorm:"column:is_builtin;type:smallint;not null"`
 	CreatedAt              time.Time       `gorm:"column:created_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`
 	UpdatedAt              time.Time       `gorm:"column:updated_at;type:timestamptz;not null;default:CURRENT_TIMESTAMP"`

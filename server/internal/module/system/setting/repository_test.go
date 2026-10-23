@@ -26,7 +26,7 @@ func TestRepositoryMutationAdvancesGenerationWithOutbox(t *testing.T) {
 	now := time.Now().UTC()
 
 	result, err := repository.Update(ctx, "auth.captcha.ttl_minutes", Record{
-		Key: "auth.captcha.ttl_minutes", Value: "5", ValueType: ValueTypeNumber, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.No, UpdatedAt: now,
+		Key: "auth.captcha.ttl_minutes", Value: "5", ValueType: ValueTypeNumber, Description: "", Status: yesno.Yes, IsBuiltin: yesno.No, UpdatedAt: now,
 	}, 1)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
@@ -71,7 +71,7 @@ func TestRepositoryMutationRollsBackGenerationOnConflict(t *testing.T) {
 	now := time.Now().UTC()
 
 	_, err := repository.Create(ctx, &Record{
-		Key: "auth.captcha.ttl_minutes", Value: "5", ValueType: ValueTypeNumber, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now,
+		Key: "auth.captcha.ttl_minutes", Value: "5", ValueType: ValueTypeNumber, Description: "", Status: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now,
 	}, 1)
 	if !errors.Is(err, ErrConflict) {
 		t.Fatalf("Create() error = %v want ErrConflict", err)
@@ -87,7 +87,7 @@ func TestRepositoryMutationRejectsStaleLeaseBaseGeneration(t *testing.T) {
 	repository.SetGenerations(configcache.NewRepository(db))
 
 	_, err := repository.Update(ctx, "auth.captcha.ttl_minutes", Record{
-		Key: "auth.captcha.ttl_minutes", Value: "5", ValueType: ValueTypeNumber, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.No, UpdatedAt: time.Now().UTC(),
+		Key: "auth.captcha.ttl_minutes", Value: "5", ValueType: ValueTypeNumber, Description: "", Status: yesno.Yes, IsBuiltin: yesno.No, UpdatedAt: time.Now().UTC(),
 	}, 2)
 	if !errors.Is(err, configcache.ErrGenerationChanged) {
 		t.Fatalf("Update() error = %v want ErrGenerationChanged", err)
@@ -100,9 +100,9 @@ func TestRepositoryBrandMutationAdvancesGenerationOnce(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	now := time.Now().UTC()
 	for _, row := range []Model{
-		{Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, Description: "", Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, Description: "", Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, Description: "", Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	} {
 		seedSettingRow(t, db, ctx, row)
 	}
@@ -133,7 +133,7 @@ func TestRepositoryListExcludesSettingsManagedByDedicatedPanels(t *testing.T) {
 	} {
 		seedSettingRow(t, db, ctx, Model{
 			Key: key, Value: "value", ValueType: ValueTypeString, Description: "",
-			IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now,
+			Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now,
 		})
 	}
 
@@ -233,7 +233,7 @@ CREATE TABLE system_setting (
 	value TEXT NOT NULL,
 	value_type SMALLINT NOT NULL,
 	description VARCHAR(512) NOT NULL,
-	is_enabled SMALLINT NOT NULL,
+	status SMALLINT NOT NULL,
 	is_builtin SMALLINT NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL,
 	updated_at TIMESTAMPTZ NOT NULL,
@@ -289,7 +289,7 @@ func seedSettingRow(t *testing.T, db *gorm.DB, ctx context.Context, row Model) {
 func numericSettingRow(key, value string, builtin yesno.Value) Model {
 	now := time.Now().UTC()
 	return Model{
-		Key: key, Value: value, ValueType: ValueTypeNumber, Description: "", IsEnabled: yesno.Yes, IsBuiltin: builtin, CreatedAt: now, UpdatedAt: now,
+		Key: key, Value: value, ValueType: ValueTypeNumber, Description: "", Status: yesno.Yes, IsBuiltin: builtin, CreatedAt: now, UpdatedAt: now,
 	}
 }
 

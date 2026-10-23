@@ -30,7 +30,7 @@ describe('thin API HTTP contract', () => {
       fromName: 'sample',
       replyTo: 'sample',
       ttlMinutes: 1,
-      isEnabled: 0,
+      status: 0,
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.put).mockResolvedValue(dataFromServer)
@@ -48,7 +48,7 @@ describe('thin API HTTP contract', () => {
       fromName: 'sample',
       replyTo: 'sample',
       ttlMinutes: 1,
-      isEnabled: 0,
+      status: 0,
     }
     const error = new Error('request failed')
     vi.mocked(request.put).mockRejectedValue(error)
@@ -137,22 +137,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateMailTemplateStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateMailTemplateStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateMailTemplateStatus>[1] = 0
+    const status: Parameters<typeof api.updateMailTemplateStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateMailTemplateStatus(id, isEnabled)
+    const result = await api.updateMailTemplateStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/message/mail/template/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateMailTemplateStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateMailTemplateStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateMailTemplateStatus>[1] = 0
+    const status: Parameters<typeof api.updateMailTemplateStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateMailTemplateStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateMailTemplateStatus(id, status)).rejects.toBe(error)
   })
   it('listMailLogs preserves the HTTP contract and backend data', async () => {
     const params: Parameters<typeof api.listMailLogs>[0] = { page: 1, pageSize: 1 }
@@ -203,7 +203,7 @@ describe('thin API HTTP contract', () => {
       action: 0,
       name: 'sample',
       remark: 'sample',
-      isEnabled: 0,
+      status: 0,
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
@@ -221,7 +221,7 @@ describe('thin API HTTP contract', () => {
       action: 0,
       name: 'sample',
       remark: 'sample',
-      isEnabled: 0,
+      status: 0,
     }
     const error = new Error('request failed')
     vi.mocked(request.post).mockRejectedValue(error)
@@ -235,7 +235,7 @@ describe('thin API HTTP contract', () => {
       action: 0,
       name: 'sample',
       remark: 'sample',
-      isEnabled: 0,
+      status: 0,
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.put).mockResolvedValue(dataFromServer)
@@ -254,7 +254,7 @@ describe('thin API HTTP contract', () => {
       action: 0,
       name: 'sample',
       remark: 'sample',
-      isEnabled: 0,
+      status: 0,
     }
     const error = new Error('request failed')
     vi.mocked(request.put).mockRejectedValue(error)
@@ -262,22 +262,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateMailRuleStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateMailRuleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateMailRuleStatus>[1] = 0
+    const status: Parameters<typeof api.updateMailRuleStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateMailRuleStatus(id, isEnabled)
+    const result = await api.updateMailRuleStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/message/mail/recipient-rule/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateMailRuleStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateMailRuleStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateMailRuleStatus>[1] = 0
+    const status: Parameters<typeof api.updateMailRuleStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateMailRuleStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateMailRuleStatus(id, status)).rejects.toBe(error)
   })
   it('deleteMailRule preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.deleteMailRule>[0] = 1

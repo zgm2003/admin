@@ -41,7 +41,7 @@ func accountActions(ctx context.Context, actorID int64, facts actorFacts, target
 	}
 	actions := Actions{Update: true, Status: true, Delete: true, Authorize: true}
 	labels := ActionLabels{Update: label("编辑", "Edit"), Status: label("启用", "Enable"), Delete: label("删除用户", "Delete user"), Authorize: label("分配角色", "Assign roles")}
-	if target.IsEnabled == yesno.Yes {
+	if target.Status == yesno.Yes {
 		labels.Status = label("禁用", "Disable")
 	}
 	targetSuper := false
@@ -60,7 +60,7 @@ func accountActions(ctx context.Context, actorID int64, facts actorFacts, target
 		labels.Status = label("不能停用自己的账号", "You cannot disable your own account")
 		labels.Delete = label("不能删除自己的账号", "You cannot delete your own account")
 		labels.Authorize = label("不能修改自己的角色", "You cannot change your own roles")
-	} else if targetSuper && target.IsEnabled == yesno.Yes && facts.EffectiveSuperAdmins < 2 {
+	} else if targetSuper && target.Status == yesno.Yes && facts.EffectiveSuperAdmins < 2 {
 		actions.Status, actions.Delete = false, false
 		reason := label("必须保留至少一个有效超级管理员", "At least one effective super administrator must remain")
 		labels.Status, labels.Delete = reason, reason
@@ -83,7 +83,7 @@ func assignmentOptions(actorID int64, facts actorFacts, target Summary, options 
 	result := make([]AssignmentRole, 0, len(options))
 	for _, item := range options {
 		selectable := canAuthorize && (item.Code != role.CodeSuperAdmin || facts.ActorSuper)
-		if item.Code == role.CodeSuperAdmin && selected[item.ID] && target.IsEnabled == yesno.Yes && facts.EffectiveSuperAdmins < 2 {
+		if item.Code == role.CodeSuperAdmin && selected[item.ID] && target.Status == yesno.Yes && facts.EffectiveSuperAdmins < 2 {
 			selectable = false
 		}
 		result = append(result, AssignmentRole{RoleSummary: item, Selectable: selectable, Locked: !selectable && selected[item.ID]})

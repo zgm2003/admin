@@ -32,7 +32,7 @@ func TestAccessVersionSchemaBackfillsUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	createdUser := account.User{Username: fmt.Sprintf("version-%d", now.UnixNano()), Email: fmt.Sprintf("version-%d@example.com", now.UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	createdUser := account.User{Username: fmt.Sprintf("version-%d", now.UnixNano()), Email: fmt.Sprintf("version-%d@example.com", now.UnixNano()), PasswordHash: "hash", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := connection.GORM.WithContext(ctx).Create(&createdUser).Error; err != nil {
 		t.Fatal(err)
 	}

@@ -39,7 +39,7 @@ type Policy struct {
 	BindIP          bool          `json:"bindIP"`
 	MaxSessions     int16         `json:"maxSessions"`
 	AllowRegister   bool          `json:"allowRegister"`
-	IsEnabled       bool          `json:"isEnabled"`
+	Status       bool          `json:"status"`
 	IsBuiltin       bool          `json:"isBuiltin"`
 	Deleted         bool          `json:"deleted"`
 }
@@ -48,7 +48,7 @@ type ListQuery struct {
 	Page      int
 	PageSize  int
 	Keyword   string
-	IsEnabled *yesno.Value
+	Status *yesno.Value
 }
 
 type ListItem struct {
@@ -75,7 +75,7 @@ type CreateInput struct {
 	BindIP                 yesno.Value
 	MaxSessions            int16
 	AllowRegister          yesno.Value
-	IsEnabled              yesno.Value
+	Status              yesno.Value
 }
 
 type UpdateInput struct {
@@ -276,7 +276,7 @@ func requireAvailablePolicy(policy Policy) (Policy, error) {
 	if policy.Deleted {
 		return Policy{}, notFound(fmt.Errorf("authentication platform is deleted"))
 	}
-	if !policy.IsEnabled {
+	if !policy.Status {
 		return Policy{}, disabled(fmt.Errorf("authentication platform is disabled"))
 	}
 	return policy, nil
@@ -298,13 +298,13 @@ func policyFromModel(value Platform) (Policy, error) {
 		AccessCacheTTL:  time.Duration(value.AccessCacheTTLSeconds) * time.Second,
 		BindDevice:      value.BindDevice == yesno.Yes, BindIP: value.BindIP == yesno.Yes,
 		MaxSessions: value.MaxSessions, AllowRegister: value.AllowRegister == yesno.Yes,
-		IsEnabled: value.IsEnabled == yesno.Yes, IsBuiltin: value.IsBuiltin == yesno.Yes,
+		Status: value.Status == yesno.Yes, IsBuiltin: value.IsBuiltin == yesno.Yes,
 		Deleted: value.DeletedAt.Valid,
 	}, nil
 }
 
 func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[ListItem], error) {
-	if query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 || (query.IsEnabled != nil && !yesno.IsValid(*query.IsEnabled)) {
+	if query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 || (query.Status != nil && !yesno.IsValid(*query.Status)) {
 		return pagination.Result[ListItem]{}, apperror.InvalidRequest(fmt.Errorf("authentication platform list query is invalid"))
 	}
 	query.Keyword = strings.TrimSpace(query.Keyword)
@@ -343,7 +343,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		AccessTTLSeconds: input.AccessTTLSeconds, RefreshTTLSeconds: input.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: input.SessionCacheTTLSeconds, AccessCacheTTLSeconds: input.AccessCacheTTLSeconds,
 		BindDevice: input.BindDevice, BindIP: input.BindIP, MaxSessions: input.MaxSessions,
-		AllowRegister: input.AllowRegister, IsEnabled: input.IsEnabled, IsBuiltin: yesno.No,
+		AllowRegister: input.AllowRegister, Status: input.Status, IsBuiltin: yesno.No,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := ValidatePlatform(value); err != nil {
@@ -427,10 +427,10 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 
 func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value) error {
 	if !yesno.IsValid(value) {
-		return invalidPolicy(fmt.Errorf("isEnabled is invalid"))
+		return invalidPolicy(fmt.Errorf("status is invalid"))
 	}
 	return s.mutate(ctx, id, func(_ Platform, current Policy) (mutationPlan, error) {
-		if current.IsEnabled == (value == yesno.Yes) {
+		if current.Status == (value == yesno.Yes) {
 			return mutationPlan{}, nil
 		}
 		return mutationPlan{candidate: current, revokeAll: value == yesno.No, status: &value}, nil
@@ -876,7 +876,7 @@ func samePlatformRuntimeValues(left, right Policy) bool {
 	return left.Name == right.Name && sameLoginTypes(left.LoginTypes, right.LoginTypes) &&
 		left.AccessTTL == right.AccessTTL && left.RefreshTTL == right.RefreshTTL &&
 		left.SessionCacheTTL == right.SessionCacheTTL && left.AccessCacheTTL == right.AccessCacheTTL &&
-		left.BindDevice == right.BindDevice && left.BindIP == right.BindIP && left.MaxSessions == right.MaxSessions && left.AllowRegister == right.AllowRegister && left.IsEnabled == right.IsEnabled
+		left.BindDevice == right.BindDevice && left.BindIP == right.BindIP && left.MaxSessions == right.MaxSessions && left.AllowRegister == right.AllowRegister && left.Status == right.Status
 }
 
 func sameLoginTypes(left, right []LoginType) bool {
@@ -898,7 +898,7 @@ func platformModelFromPolicy(policy Policy) Platform {
 		AccessTTLSeconds: int(policy.AccessTTL / time.Second), RefreshTTLSeconds: int(policy.RefreshTTL / time.Second),
 		SessionCacheTTLSeconds: int(policy.SessionCacheTTL / time.Second), AccessCacheTTLSeconds: int(policy.AccessCacheTTL / time.Second),
 		BindDevice: boolToYesNo(policy.BindDevice), BindIP: boolToYesNo(policy.BindIP), MaxSessions: policy.MaxSessions,
-		AllowRegister: boolToYesNo(policy.AllowRegister), IsEnabled: boolToYesNo(policy.IsEnabled), IsBuiltin: boolToYesNo(policy.IsBuiltin),
+		AllowRegister: boolToYesNo(policy.AllowRegister), Status: boolToYesNo(policy.Status), IsBuiltin: boolToYesNo(policy.IsBuiltin),
 	}
 }
 

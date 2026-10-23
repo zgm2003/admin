@@ -26,7 +26,7 @@ func (runtimeConfigSourceTest) Credentials(context.Context) (config.Credentials,
 func (runtimeConfigSourceTest) FindActive(context.Context) (config.Model, error) {
 	return config.Model{
 		ID: 1, SecretIDCiphertext: "sms:v1:cipher-id", SecretKeyCiphertext: "sms:v1:cipher-key",
-		SDKAppID: "sdk-app", SignName: "sign", Region: "ap-guangzhou", TTLMinutes: 5, IsEnabled: yesno.Yes,
+		SDKAppID: "sdk-app", SignName: "sign", Region: "ap-guangzhou", TTLMinutes: 5, Status: yesno.Yes,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	}, nil
 }
@@ -40,7 +40,7 @@ func (runtimeTemplateSourceTest) List(context.Context) ([]template.Model, error)
 			ID: int64(index + 1), Scene: fixed.Scene, Name: fixed.Name, TencentTemplateID: "123456",
 			VariableKeys:     json.RawMessage(`["code","ttl_minutes"]`),
 			ExampleVariables: json.RawMessage(`{"code":"123456","ttl_minutes":"5"}`),
-			IsEnabled:        yesno.Yes, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+			Status:        yesno.Yes, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 		})
 	}
 	return rows, nil
@@ -58,7 +58,7 @@ func validRuntimeSnapshotForTest() runtimeSnapshot {
 			TencentTemplateID: "123456",
 			VariableKeys:      append([]string(nil), fixed.VariableKeys...),
 			ExampleVariables:  map[string]string{"code": "123456", "ttl_minutes": "5"},
-			IsEnabled:         int16(yesno.Yes),
+			Status:         int16(yesno.Yes),
 		}
 	}
 	return runtimeSnapshot{
@@ -71,11 +71,11 @@ func validRuntimeSnapshotForTest() runtimeSnapshot {
 		SignName:            "sign",
 		Region:              "ap-guangzhou",
 		TTLMinutes:          5,
-		IsEnabled:           int16(yesno.Yes),
+		Status:           int16(yesno.Yes),
 		Templates:           templates,
 		Rules: []ruleRow{{
 			ID: 1, Scope: int16(recipientRule.ScopePhone), Action: int16(recipientRule.ActionDeny),
-			Pattern: "+8615671628271", IsEnabled: int16(yesno.Yes),
+			Pattern: "+8615671628271", Status: int16(yesno.Yes),
 		}},
 	}
 }
@@ -87,7 +87,7 @@ func TestDecodeRuntimeSnapshotRejectsInvalidSceneSet(t *testing.T) {
 		Name: "test", TencentTemplateID: "123456",
 		VariableKeys:     []string{"code", "ttl_minutes"},
 		ExampleVariables: map[string]string{"code": "123456", "ttl_minutes": "5"},
-		IsEnabled:        int16(yesno.Yes),
+		Status:        int16(yesno.Yes),
 	}
 	raw, err := json.Marshal(snapshot)
 	if err != nil {
@@ -100,7 +100,7 @@ func TestDecodeRuntimeSnapshotRejectsInvalidSceneSet(t *testing.T) {
 
 func TestDecodeRuntimeSnapshotRejectsInvalidNestedFacts(t *testing.T) {
 	for _, mutate := range []func(*runtimeSnapshot){
-		func(value *runtimeSnapshot) { value.IsEnabled = 2 },
+		func(value *runtimeSnapshot) { value.Status = 2 },
 		func(value *runtimeSnapshot) { value.TTLMinutes = 0 },
 		func(value *runtimeSnapshot) { value.Templates[template.SceneLogin] = templateRow{} },
 		func(value *runtimeSnapshot) { value.Rules[0].Scope = 9 },
@@ -173,7 +173,7 @@ func TestRuntimePlaintextRulesRejectMissingNullAndLegacyProtocolValues(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"id", "scope", "action", "pattern", "isEnabled"} {
+	for _, field := range []string{"id", "scope", "action", "pattern", "status"} {
 		for _, mode := range []string{"missing", "null"} {
 			t.Run(field+"-"+mode, func(t *testing.T) {
 				var fields map[string]json.RawMessage

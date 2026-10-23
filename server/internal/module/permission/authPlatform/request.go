@@ -23,16 +23,16 @@ type createRequest struct {
 	BindIP                 *yesno.Value `json:"bindIP"`
 	MaxSessions            *int16       `json:"maxSessions"`
 	AllowRegister          *yesno.Value `json:"allowRegister"`
-	IsEnabled              *yesno.Value `json:"isEnabled"`
+	Status              *yesno.Value `json:"status"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
 	if r.Code == nil || r.Name == nil || r.LoginTypes == nil || r.AccessTTLSeconds == nil || r.RefreshTTLSeconds == nil ||
 		r.SessionCacheTTLSeconds == nil || r.AccessCacheTTLSeconds == nil || r.BindDevice == nil ||
-		r.BindIP == nil || r.MaxSessions == nil || r.AllowRegister == nil || r.IsEnabled == nil {
+		r.BindIP == nil || r.MaxSessions == nil || r.AllowRegister == nil || r.Status == nil {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("every authentication platform field is required"))
 	}
-	if !yesno.IsValid(*r.BindDevice) || !yesno.IsValid(*r.BindIP) || !yesno.IsValid(*r.AllowRegister) || !yesno.IsValid(*r.IsEnabled) {
+	if !yesno.IsValid(*r.BindDevice) || !yesno.IsValid(*r.BindIP) || !yesno.IsValid(*r.AllowRegister) || !yesno.IsValid(*r.Status) {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("authentication platform Yes/No value is invalid"))
 	}
 	return CreateInput{
@@ -40,7 +40,7 @@ func (r createRequest) input() (CreateInput, error) {
 		AccessTTLSeconds: *r.AccessTTLSeconds, RefreshTTLSeconds: *r.RefreshTTLSeconds,
 		SessionCacheTTLSeconds: *r.SessionCacheTTLSeconds, AccessCacheTTLSeconds: *r.AccessCacheTTLSeconds,
 		BindDevice: *r.BindDevice, BindIP: *r.BindIP, MaxSessions: *r.MaxSessions,
-		AllowRegister: *r.AllowRegister, IsEnabled: *r.IsEnabled,
+		AllowRegister: *r.AllowRegister, Status: *r.Status,
 	}, nil
 }
 
@@ -73,14 +73,14 @@ func (r updateRequest) input() (UpdateInput, error) {
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func (r statusRequest) value() (yesno.Value, error) {
-	if r.IsEnabled == nil || !yesno.IsValid(*r.IsEnabled) {
-		return 0, apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+	if r.Status == nil || !yesno.IsValid(*r.Status) {
+		return 0, apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 	}
-	return *r.IsEnabled, nil
+	return *r.Status, nil
 }
 
 func parsePlatformID(value string) (int64, error) {
@@ -92,7 +92,7 @@ func parsePlatformID(value string) (int64, error) {
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {
-	allowed := map[string]struct{}{"page": {}, "pageSize": {}, "keyword": {}, "isEnabled": {}}
+	allowed := map[string]struct{}{"page": {}, "pageSize": {}, "keyword": {}, "status": {}}
 	for key, entries := range values {
 		if _, ok := allowed[key]; !ok || len(entries) != 1 {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("invalid or repeated query parameter"))
@@ -116,13 +116,13 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("keyword is too long"))
 		}
 	}
-	if entries, ok := values["isEnabled"]; ok {
+	if entries, ok := values["status"]; ok {
 		parsed, parseErr := strconv.ParseInt(entries[0], 10, 16)
 		value := yesno.Value(parsed)
 		if parseErr != nil || !yesno.IsValid(value) {
-			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 		}
-		query.IsEnabled = &value
+		query.Status = &value
 	}
 	return query, nil
 }

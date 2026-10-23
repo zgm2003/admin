@@ -18,7 +18,7 @@ function blankConfig(): ConfigForm {
     region: '',
     endpoint: null,
     bucketDomain: null,
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
     remark: '',
   }
 }
@@ -33,7 +33,7 @@ function blankRule(): RuleForm {
     allowedExtensions: [],
     allowedMimeTypes: [],
     accessMode: 'private',
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
     remark: '',
   }
 }

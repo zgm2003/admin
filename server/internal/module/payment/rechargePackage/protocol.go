@@ -63,7 +63,7 @@ func validateAmountCents(value int64) error {
 
 func validateFlags(value yesno.Value) error {
 	if !yesno.IsValid(value) {
-		return fmt.Errorf("isEnabled is invalid")
+		return fmt.Errorf("status is invalid")
 	}
 	return nil
 }

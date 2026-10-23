@@ -199,7 +199,7 @@ func TestRuntimeCacheCrossInstanceAndFailureClosed(t *testing.T) {
 	s.SetCache(c)
 	s2.SetCache(NewCache(r2, s2.states))
 	in := validInput(t)
-	in.IsEnabled = yesno.Yes
+	in.Status = yesno.Yes
 	id, err := s.Create(ctx, in)
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +229,7 @@ func TestRuntimeCacheCrossInstanceAndFailureClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err = s2.Catalog(ctx)
-	if err != nil || len(items) != 1 || items[0].IsEnabled != 0 {
+	if err != nil || len(items) != 1 || items[0].Status != 0 {
 		t.Fatal("stale catalog")
 	}
 	r2.Close()

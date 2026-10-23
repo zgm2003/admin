@@ -28,7 +28,7 @@ func TestRepositoryCreateWritesVersionAndGeneration(t *testing.T) {
 	endpoint := "https://cos-internal.example.com"
 	domain := "https://cdn.example.com"
 
-	model := &Model{Name: "Main", AppID: "1250000000", SecretIDCiphertext: "v1:cipher-id", SecretKeyCiphertext: "v1:cipher-key", IsEnabled: yesno.Yes, Remark: "", CreatedAt: now, UpdatedAt: now}
+	model := &Model{Name: "Main", AppID: "1250000000", SecretIDCiphertext: "v1:cipher-id", SecretKeyCiphertext: "v1:cipher-key", Status: yesno.Yes, Remark: "", CreatedAt: now, UpdatedAt: now}
 	version := Version{Bucket: "assets", Region: "ap-guangzhou", Endpoint: &endpoint, BucketDomain: &domain, CreatedAt: now, UpdatedAt: now}
 	result, err := repository.Create(ctx, model, version)
 	if err != nil {
@@ -66,7 +66,7 @@ func TestRepositoryListAndGetUseCurrentVersion(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := newTestRepository(t, db)
 	now := time.Now().UTC()
-	if _, err := repository.Create(ctx, &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}, Version{Bucket: "assets", Region: "ap-guangzhou", CreatedAt: now, UpdatedAt: now}); err != nil {
+	if _, err := repository.Create(ctx, &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}, Version{Bucket: "assets", Region: "ap-guangzhou", CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -108,7 +108,7 @@ func TestRepositoryUpdateAdvancesGenerationOnlyForRealChanges(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := newTestRepository(t, db)
 	now := time.Now().UTC()
-	model := &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	model := &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if _, err := repository.Create(ctx, model, Version{Bucket: "assets", Region: "ap-guangzhou", CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestRepositoryStatusDeleteAndRuleReferences(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := newTestRepository(t, db)
 	now := time.Now().UTC()
-	model := &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	model := &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if _, err := repository.Create(ctx, model, Version{Bucket: "assets", Region: "ap-guangzhou", CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -169,8 +169,8 @@ func TestRepositoryStatusDeleteAndRuleReferences(t *testing.T) {
 
 	// 引用统计包含已禁用与已软删规则：只要曾经被引用过就不能删除。
 	for _, statement := range []string{
-		`INSERT INTO storage_upload_rule (cos_config_id, is_enabled, deleted_at) VALUES (?, 0, NULL)`,
-		`INSERT INTO storage_upload_rule (cos_config_id, is_enabled, deleted_at) VALUES (?, 0, CURRENT_TIMESTAMP)`,
+		`INSERT INTO storage_upload_rule (cos_config_id, status, deleted_at) VALUES (?, 0, NULL)`,
+		`INSERT INTO storage_upload_rule (cos_config_id, status, deleted_at) VALUES (?, 0, CURRENT_TIMESTAMP)`,
 	} {
 		if err := db.WithContext(ctx).Exec(statement, model.ID).Error; err != nil {
 			t.Fatal(err)
@@ -187,13 +187,13 @@ func TestRepositoryStatusDeleteAndRuleReferences(t *testing.T) {
 		t.Fatalf("find after delete error = %v", err)
 	}
 	var deleted struct {
-		IsEnabled int16
+		Status int16
 		DeletedAt *time.Time
 	}
-	if err := db.WithContext(ctx).Raw(`SELECT is_enabled, deleted_at FROM storage_cos_config WHERE id = ?`, model.ID).Scan(&deleted).Error; err != nil {
+	if err := db.WithContext(ctx).Raw(`SELECT status, deleted_at FROM storage_cos_config WHERE id = ?`, model.ID).Scan(&deleted).Error; err != nil {
 		t.Fatal(err)
 	}
-	if deleted.IsEnabled != 0 || deleted.DeletedAt == nil {
+	if deleted.Status != 0 || deleted.DeletedAt == nil {
 		t.Fatalf("deleted row = %+v", deleted)
 	}
 }
@@ -204,7 +204,7 @@ func TestRepositoryConcurrentUpdateRollsBackOnGenerationConflict(t *testing.T) {
 	second := openSecondInstance(t, db)
 	secondRepository := newTestRepository(t, second)
 	now := time.Now().UTC()
-	model := &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	model := &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if _, err := repository.Create(ctx, model, Version{Bucket: "assets", Region: "ap-guangzhou", CreatedAt: now, UpdatedAt: now}); err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestRepositoryRequiresGenerationRepository(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := NewRepository(db)
 	now := time.Now().UTC()
-	if _, err := repository.Create(ctx, &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}, Version{Bucket: "assets", Region: "ap-guangzhou"}); err == nil {
+	if _, err := repository.Create(ctx, &Model{Name: "Main", AppID: "1", SecretIDCiphertext: "v1:id", SecretKeyCiphertext: "v1:key", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}, Version{Bucket: "assets", Region: "ap-guangzhou"}); err == nil {
 		t.Fatal("create succeeded without generation repository")
 	}
 	if _, err := repository.Update(ctx, 1, UpdateValues{Name: "x", Bucket: "assets", Region: "ap-guangzhou"}, 1, now); err == nil {
@@ -351,7 +351,7 @@ func openConfigDatabase(t *testing.T) (*gorm.DB, context.Context) {
 			secret_id_ciphertext TEXT NOT NULL,
 			secret_key_ciphertext TEXT NOT NULL,
 			current_version BIGINT NOT NULL,
-			is_enabled SMALLINT NOT NULL DEFAULT 1 CHECK (is_enabled IN (0, 1)),
+			status SMALLINT NOT NULL DEFAULT 1 CHECK (status IN (0, 1)),
 			remark VARCHAR(512) NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -372,7 +372,7 @@ func openConfigDatabase(t *testing.T) (*gorm.DB, context.Context) {
 		CREATE TABLE storage_upload_rule (
 			id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
 			cos_config_id BIGINT NOT NULL,
-			is_enabled SMALLINT NOT NULL DEFAULT 1,
+			status SMALLINT NOT NULL DEFAULT 1,
 			deleted_at TIMESTAMPTZ
 		);
 		CREATE TABLE system_config_cache_state (

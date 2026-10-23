@@ -29,7 +29,7 @@ type Safe struct {
 	Region        string      `json:"region"`
 	Endpoint      string      `json:"endpoint"`
 	TTLMinutes    int         `json:"ttlMinutes"`
-	IsEnabled     yesno.Value `json:"isEnabled"`
+	Status     yesno.Value `json:"status"`
 	LastTestAt    *string     `json:"lastTestAt"`
 	LastTestError string      `json:"lastTestError"`
 }
@@ -42,7 +42,7 @@ type Input struct {
 	Region     string
 	Endpoint   string
 	TTLMinutes int
-	IsEnabled  yesno.Value
+	Status  yesno.Value
 }
 
 type Credentials struct {

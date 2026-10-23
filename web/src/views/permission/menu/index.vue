@@ -191,7 +191,7 @@ function notifyMutation(messageKey: string): void {
 
 async function changeStatus(node: ManagedMenuNode): Promise<void> {
   if (!canUpdate.value || !node.actions.status) return
-  const nextValue = node.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+  const nextValue = node.status === YesNo.Yes ? YesNo.No : YesNo.Yes
   try {
     await ElMessageBox.confirm(
       t('confirm.status', {
@@ -345,7 +345,7 @@ watch(
           <span class="menu-platform-tab">
             <span>{{ platform.name }}</span>
             <code>{{ platform.code }}</code>
-            <el-tag v-if="platform.isEnabled === YesNo.No" size="small" type="info" effect="plain">
+            <el-tag v-if="platform.status === YesNo.No" size="small" type="info" effect="plain">
               {{ t('common.disable') }}
             </el-tag>
           </span>

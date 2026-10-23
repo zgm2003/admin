@@ -126,7 +126,7 @@ func TestListChangeLogsValidatesPagingAndReturnsEmptyList(t *testing.T) {
 }
 
 func TestBindOrChangeFirstBindConsumesOnlyNextProof(t *testing.T) {
-	accounts := &fakeAccountStore{current: Current{UserID: 7, IsEnabled: true}}
+	accounts := &fakeAccountStore{current: Current{UserID: 7, Status: true}}
 	verification := &fakeVerificationStore{valid: true}
 	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	result, err := service.BindOrChange(context.Background(), actor(), BindOrChangeInput{NextEmail: " USER@Example.COM ", NextChallengeID: "next", NextCode: "123456"})
@@ -140,7 +140,7 @@ func TestBindOrChangeFirstBindConsumesOnlyNextProof(t *testing.T) {
 
 func TestBindOrChangeExistingEmailRequiresBothProofsAndDoesNotConsumeOnInvalidProof(t *testing.T) {
 	old := "old@example.com"
-	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
+	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, Status: true}}
 	verification := &fakeVerificationStore{valid: false}
 	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	_, err := service.BindOrChange(context.Background(), actor(), BindOrChangeInput{CurrentChallengeID: "current", CurrentCode: "111111", NextEmail: "new@example.com", NextChallengeID: "next", NextCode: "222222"})
@@ -154,7 +154,7 @@ func TestBindOrChangeExistingEmailRequiresBothProofsAndDoesNotConsumeOnInvalidPr
 
 func TestBindOrChangeLimitsInvalidProofAttemptsBeforeAtomicConsumption(t *testing.T) {
 	old := "old@example.com"
-	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
+	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, Status: true}}
 	verification := &fakeVerificationStore{valid: true, checkInvalid: true}
 	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	inputActor := actor()
@@ -178,7 +178,7 @@ func TestBindOrChangeLimitsInvalidProofAttemptsBeforeAtomicConsumption(t *testin
 
 func TestSendCodeRejectsDisabledAccount(t *testing.T) {
 	current := "old@example.com"
-	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, IsEnabled: false}}
+	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, Status: false}}
 	service := NewService(accounts, &fakeEmailSender{}, &fakeVerificationStore{}, &fakeAuthority{})
 	_, err := service.SendCode(context.Background(), actor(), SendCodeInput{Target: TargetCurrent})
 	if appCode(err) != apperror.CodeForbidden {
@@ -188,7 +188,7 @@ func TestSendCodeRejectsDisabledAccount(t *testing.T) {
 
 func TestBindOrChangeRejectsSameOrOccupiedEmailBeforeProofConsumption(t *testing.T) {
 	old := "user@example.com"
-	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
+	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, Status: true}}
 	verification := &fakeVerificationStore{valid: true}
 	service := NewService(accounts, nil, verification, &fakeAuthority{})
 	_, err := service.BindOrChange(context.Background(), actor(), BindOrChangeInput{CurrentChallengeID: "current", CurrentCode: "111111", NextEmail: old, NextChallengeID: "next", NextCode: "222222"})
@@ -205,7 +205,7 @@ func TestBindOrChangeRejectsSameOrOccupiedEmailBeforeProofConsumption(t *testing
 
 func TestBindOrChangeMapsAuthorityGenerationConflictToConflict(t *testing.T) {
 	old := "old@example.com"
-	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, IsEnabled: true}}
+	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &old, Status: true}}
 	verification := &fakeVerificationStore{valid: true}
 	authority := &fakeAuthority{err: authstate.ErrGenerationChanged}
 	service := NewService(accounts, nil, verification, authority)
@@ -220,7 +220,7 @@ func TestBindOrChangeMapsAuthorityGenerationConflictToConflict(t *testing.T) {
 
 func TestSendCodePassesAuthenticatedClientIPToMail(t *testing.T) {
 	current := "old@example.com"
-	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, IsEnabled: true}}
+	accounts := &fakeAccountStore{current: Current{UserID: 7, Email: &current, Status: true}}
 	verification := &fakeVerificationStore{}
 	sender := &fakeEmailSender{}
 	service := NewService(accounts, sender, verification, &fakeAuthority{})

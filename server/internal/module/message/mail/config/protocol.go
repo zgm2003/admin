@@ -22,7 +22,7 @@ type Input struct {
 	ReplyTo    string      `json:"replyTo"`
 	Endpoint   string      `json:"endpoint"`
 	TTLMinutes int         `json:"ttlMinutes"`
-	IsEnabled  yesno.Value `json:"isEnabled"`
+	Status  yesno.Value `json:"status"`
 }
 
 type Safe struct {
@@ -33,7 +33,7 @@ type Safe struct {
 	FromName      string      `json:"fromName"`
 	ReplyTo       string      `json:"replyTo"`
 	TTLMinutes    int         `json:"ttlMinutes"`
-	IsEnabled     yesno.Value `json:"isEnabled"`
+	Status     yesno.Value `json:"status"`
 	LastTestAt    *time.Time  `json:"lastTestAt"`
 	LastTestError string      `json:"lastTestError"`
 }

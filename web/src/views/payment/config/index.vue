@@ -90,7 +90,7 @@ function emptyForm(): ConfigForm {
     appId: '',
     sellerId: '',
     sortOrder: 0,
-    isEnabled: YesNo.No,
+    status: YesNo.No,
     notifyUrl: '',
     payMethods: [],
     privateKey: '',
@@ -128,7 +128,7 @@ function search(): void {
     pageSize: query.value.pageSize,
     ...(filters.value.keyword.trim() === '' ? {} : { keyword: filters.value.keyword.trim() }),
     ...(filters.value.status === YesNo.No || filters.value.status === YesNo.Yes
-      ? { isEnabled: filters.value.status }
+      ? { status: filters.value.status }
       : {}),
   }
   void load()
@@ -164,7 +164,7 @@ function openEdit(row: PaymentConfig, mode: 'edit' | 'version'): void {
     appId: row.appId,
     sellerId: row.sellerId,
     sortOrder: row.sortOrder,
-    isEnabled: row.isEnabled,
+    status: row.status,
     notifyUrl: row.notifyUrlTemplate,
     payMethods: [...row.payMethods],
   }
@@ -250,7 +250,7 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
     )
   )
     return
-  const nextStatus = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+  const nextStatus = row.status === YesNo.Yes ? YesNo.No : YesNo.Yes
   busyID.value = row.id
   try {
     if (action !== 'test') {
@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
         </div></template
       >
       <template #cell-status="{ row }: { row: PaymentConfig }"
-        ><el-tag :type="row.isEnabled === YesNo.Yes ? 'success' : 'info'">{{
+        ><el-tag :type="row.status === YesNo.Yes ? 'success' : 'info'">{{
           row.presentation.status
         }}</el-tag></template
       >
@@ -424,12 +424,12 @@ onBeforeUnmount(() => {
         <el-button
           v-if="canStatus && row.actions.status"
           link
-          :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
+          :type="row.status === YesNo.Yes ? 'warning' : 'success'"
           :disabled="busyID !== null"
           data-testid="payment-config-status"
           @click="act(row, 'status')"
           >{{
-            row.isEnabled === YesNo.Yes ? t('common.disable') : t('common.enable')
+            row.status === YesNo.Yes ? t('common.disable') : t('common.enable')
           }}</el-button
         >
         <el-button

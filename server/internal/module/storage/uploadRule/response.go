@@ -21,14 +21,14 @@ type PlatformOption struct {
 	ID        int64       `json:"id"`
 	Code      string      `json:"code"`
 	Name      string      `json:"name"`
-	IsEnabled yesno.Value `json:"isEnabled"`
+	Status yesno.Value `json:"status"`
 }
 type ConfigSummary struct {
 	ID        int64       `json:"id"`
 	Name      string      `json:"name"`
 	Bucket    string      `json:"bucket"`
 	Region    string      `json:"region"`
-	IsEnabled yesno.Value `json:"isEnabled"`
+	Status yesno.Value `json:"status"`
 }
 type PageInit struct {
 	Platforms []PlatformOption `json:"platforms"`
@@ -39,7 +39,7 @@ type idResponse struct {
 }
 type statusResponse struct {
 	ID        int64 `json:"id"`
-	IsEnabled int16 `json:"isEnabled"`
+	Status int16 `json:"status"`
 }
 type emptyResponse struct{}
 type CredentialItem struct {

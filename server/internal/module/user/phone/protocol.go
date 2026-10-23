@@ -35,7 +35,7 @@ type Actor struct {
 type Current struct {
 	UserID    int64
 	Phone     *string
-	IsEnabled bool
+	Status bool
 	Deleted   bool
 }
 

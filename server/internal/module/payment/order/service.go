@@ -90,7 +90,7 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 	methods := make(map[payment.PayMethod]struct{})
 	available := false
 	for _, item := range catalog {
-		if item.IsEnabled != yesno.Yes || item.Provider != payment.ProviderAlipay || !checkoutEnvironment(item.Environment) || item.CurrentVersion < 1 {
+		if item.Status != yesno.Yes || item.Provider != payment.ProviderAlipay || !checkoutEnvironment(item.Environment) || item.CurrentVersion < 1 {
 			continue
 		}
 		available = true
@@ -318,7 +318,7 @@ func (s *Service) Create(ctx context.Context, actor auth.Identity, input CreateI
 	var selected paymentconfig.CatalogItem
 	channelAvailable := false
 	for _, candidate := range catalog {
-		if candidate.IsEnabled == yesno.Yes && candidate.Provider == payment.ProviderAlipay && checkoutEnvironment(candidate.Environment) && candidate.CurrentVersion > 0 {
+		if candidate.Status == yesno.Yes && candidate.Provider == payment.ProviderAlipay && checkoutEnvironment(candidate.Environment) && candidate.CurrentVersion > 0 {
 			channelAvailable = true
 			bound, err := s.runtime.Credential(ctx, candidate.ID, candidate.CurrentVersion)
 			if err != nil {

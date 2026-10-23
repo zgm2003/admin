@@ -139,7 +139,7 @@ func (s *Service) settingNumber(ctx context.Context, key string, min, max int) (
 	if err != nil {
 		return 0, fmt.Errorf("read captcha policy: %w", err)
 	}
-	if row.IsEnabled != yesno.Yes || row.ValueType != sharedsetting.ValueTypeNumber {
+	if row.Status != yesno.Yes || row.ValueType != sharedsetting.ValueTypeNumber {
 		return 0, fmt.Errorf("captcha policy is invalid")
 	}
 	value, err := strconv.Atoi(strings.TrimSpace(row.Value))

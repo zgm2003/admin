@@ -9,7 +9,7 @@ export interface ConfigForm {
   region: string
   endpoint: string | null
   bucketDomain: string | null
-  isEnabled: YesNo
+  status: YesNo
   remark: string
 }
 
@@ -22,6 +22,6 @@ export interface RuleForm {
   allowedExtensions: string[]
   allowedMimeTypes: string[]
   accessMode: 'private' | 'public'
-  isEnabled: YesNo
+  status: YesNo
   remark: string
 }

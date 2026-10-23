@@ -21,7 +21,7 @@ type Defaults struct {
 	Provider    payment.Provider    `json:"provider"`
 	Environment payment.Environment `json:"environment"`
 	PayMethods  []payment.PayMethod `json:"payMethods"`
-	IsEnabled   yesno.Value         `json:"isEnabled"`
+	Status   yesno.Value         `json:"status"`
 	SortOrder   int32               `json:"sortOrder"`
 	NotifyURL   string              `json:"notifyUrl"`
 }

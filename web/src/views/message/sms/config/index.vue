@@ -72,7 +72,7 @@ watch(
       region: value.region,
       endpoint: value.endpoint,
       ttlMinutes: value.ttlMinutes,
-      isEnabled: value.isEnabled,
+      status: value.status,
     }
   },
   { immediate: true },
@@ -87,7 +87,7 @@ function blankForm(): smsApi.SmsConfigInput {
     region: '',
     endpoint: '',
     ttlMinutes: 0,
-    isEnabled: YesNo.No,
+    status: YesNo.No,
   }
 }
 
@@ -116,11 +116,11 @@ async function save(): Promise<void> {
   const payload = { ...form.value }
   saving.value = true
   try {
-    if (props.config.configured && payload.isEnabled !== props.config.isEnabled) {
+    if (props.config.configured && payload.status !== props.config.status) {
       await ElMessageBox.confirm(
         t('confirm.status', {
           name: t('navigation.sms'),
-          status: t(payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable'),
+          status: t(payload.status === YesNo.Yes ? 'common.enable' : 'common.disable'),
         }),
         t('confirm.title'),
         { type: 'warning' },
@@ -257,7 +257,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('common.status')">
             <el-switch
-              v-model="form.isEnabled"
+              v-model="form.status"
               :active-value="YesNo.Yes"
               :inactive-value="YesNo.No"
             />

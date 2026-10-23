@@ -41,7 +41,7 @@ func (h *HistoryCleaner) Cleanup(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read scheduler history retention setting: %w", err)
 	}
-	if record.Key != sharedsetting.SchedulerHistoryRetentionDaysKey || record.IsEnabled != yesno.Yes || record.IsBuiltin != yesno.Yes {
+	if record.Key != sharedsetting.SchedulerHistoryRetentionDaysKey || record.Status != yesno.Yes || record.IsBuiltin != yesno.Yes {
 		return errors.New("scheduler history retention setting must be enabled and builtin")
 	}
 	days, err := record.Number()

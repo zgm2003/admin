@@ -43,7 +43,7 @@ func TestServiceSavesOneGlobalConfigAndPreservesOmittedCredentials(t *testing.T)
 	service.SetRuntimeCoordinator(&passthroughRuntime{generation: 1})
 	input := Input{
 		SecretID: "secret-id", SecretKey: "secret-key", Region: "ap-guangzhou",
-		FromEmail: " Sender@Example.COM ", FromName: "Sender", TTLMinutes: 5, IsEnabled: yesno.Yes,
+		FromEmail: " Sender@Example.COM ", FromName: "Sender", TTLMinutes: 5, Status: yesno.Yes,
 	}
 
 	created, err := service.Save(ctx, input)
@@ -94,7 +94,7 @@ func TestServiceDoesNotWriteWhenRuntimeInvalidationFails(t *testing.T) {
 	}))
 	_, err = service.Save(ctx, Input{
 		SecretID: "secret-id", SecretKey: "secret-key", Region: "ap-guangzhou",
-		FromEmail: "sender@example.com", FromName: "Sender", TTLMinutes: 5, IsEnabled: yesno.Yes,
+		FromEmail: "sender@example.com", FromName: "Sender", TTLMinutes: 5, Status: yesno.Yes,
 	})
 	if err == nil {
 		t.Fatal("save succeeded while runtime invalidation failed")
@@ -123,7 +123,7 @@ CREATE TABLE message_mail_config(
  secret_id_hint varchar(32) NOT NULL,secret_key_hint varchar(32) NOT NULL,
  region varchar(64) NOT NULL,endpoint varchar(255),from_email varchar(254) NOT NULL,
  from_name varchar(128) NOT NULL,reply_to varchar(254),ttl_minutes smallint NOT NULL,
- is_enabled smallint NOT NULL,last_test_at timestamptz,last_test_error varchar(512) NOT NULL DEFAULT '',
+ status smallint NOT NULL,last_test_at timestamptz,last_test_error varchar(512) NOT NULL DEFAULT '',
  created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL,deleted_at timestamptz);
 CREATE UNIQUE INDEX ux_message_mail_config_active_singleton ON message_mail_config((true)) WHERE deleted_at IS NULL;
 CREATE TABLE system_config_cache_state(namespace varchar(128) NOT NULL,scope_key varchar(128) NOT NULL,generation bigint NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),PRIMARY KEY(namespace,scope_key));

@@ -18,7 +18,7 @@ type Model struct {
 	Action    Action         `gorm:"column:action;type:smallint;not null"`
 	Name      string         `gorm:"column:name;type:varchar(128);not null"`
 	Remark    string         `gorm:"column:remark;type:varchar(512);not null"`
-	IsEnabled yesno.Value    `gorm:"column:is_enabled;type:smallint;not null"`
+	Status yesno.Value    `gorm:"column:status;type:smallint;not null"`
 	CreatedAt time.Time      `gorm:"column:created_at;not null"`
 	UpdatedAt time.Time      `gorm:"column:updated_at;not null"`
 	DeletedAt gorm.DeletedAt `gorm:"column:deleted_at"`

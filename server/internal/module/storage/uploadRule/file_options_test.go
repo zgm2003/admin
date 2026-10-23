@@ -56,7 +56,7 @@ func TestFileUploadOptionsDoNotFallbackToUnrelatedCode(t *testing.T) {
 	if err != nil || rows == nil || len(rows) != 0 {
 		t.Fatalf("missing file code options = %+v, %v; must not fall back to avatar or setting", rows, err)
 	}
-	if err := db.WithContext(ctx).Exec("UPDATE storage_cos_config SET is_enabled=0 WHERE id=?", configID).Error; err != nil {
+	if err := db.WithContext(ctx).Exec("UPDATE storage_cos_config SET status=0 WHERE id=?", configID).Error; err != nil {
 		t.Fatal(err)
 	}
 	rows, err = service.FileUploadOptions(ctx, platformID, "avatar")

@@ -43,7 +43,7 @@ func TestMenuSchema(t *testing.T) {
 			"component_path": {dataType: "character varying", nullable: "YES", length: 255},
 			"icon":           {dataType: "character varying", nullable: "YES", length: 128},
 			"sort_order":     {dataType: "integer", nullable: "NO"},
-			"is_enabled":     {dataType: "smallint", nullable: "NO"},
+			"status":     {dataType: "smallint", nullable: "NO"},
 			"is_hidden":      {dataType: "smallint", nullable: "NO"},
 			"created_at":     {dataType: "timestamp with time zone", nullable: "NO"},
 			"updated_at":     {dataType: "timestamp with time zone", nullable: "NO"},
@@ -72,7 +72,7 @@ func TestMenuSchema(t *testing.T) {
 		"ck_permission_menu_type":       {"CHECK", "menu_type", "directory", "page", "action"},
 		"ck_permission_menu_shape":      {"CHECK", "name", "i18n_key", "path", "component_path", "||", "is_hidden", "action", "icon"},
 		"ck_permission_menu_sort_order": {"CHECK", "sort_order", "0"},
-		"ck_permission_menu_is_enabled": {"CHECK", "is_enabled", "0", "1"},
+		"ck_permission_menu_status": {"CHECK", "status", "0", "1"},
 		"ck_permission_menu_is_hidden":  {"CHECK", "is_hidden", "0", "1"},
 	}
 	for name, fragments := range checks {

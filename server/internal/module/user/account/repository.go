@@ -47,7 +47,7 @@ type Credential struct {
 	Email        string
 	Phone        *string
 	PasswordHash string
-	IsEnabled    yesno.Value
+	Status    yesno.Value
 }
 
 type Current struct {
@@ -151,7 +151,7 @@ func (r *Repository) FindActiveSessionPlatforms(ctx context.Context, userID int6
 func (r *Repository) LockSuperAdminRole(ctx context.Context) (role.Role, error) {
 	roles := make([]role.Role, 0, 2)
 	if err := r.db.WithContext(ctx).Clauses(clause.Locking{Strength: "UPDATE"}).
-		Where("code = ? AND is_enabled = ?", role.CodeSuperAdmin, yesno.Yes).
+		Where("code = ? AND status = ?", role.CodeSuperAdmin, yesno.Yes).
 		Limit(2).Find(&roles).Error; err != nil {
 		return role.Role{}, fmt.Errorf("lock super administrator role: %w", err)
 	}
@@ -189,10 +189,10 @@ func (r *Repository) IsEffectiveSuperAdmin(ctx context.Context, userID, superAdm
 			JOIN permission_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
-			 AND app_role.is_enabled = ?
+			 AND app_role.status = ?
 			WHERE app_user.id = ?
 			  AND app_user.deleted_at IS NULL
-			  AND app_user.is_enabled = ?
+			  AND app_user.status = ?
 			  AND app_role.id = ?
 		)`, yesno.Yes, userID, yesno.Yes, superAdminRoleID).Scan(&exists).Error; err != nil {
 		return false, fmt.Errorf("check effective super administrator: %w", err)
@@ -257,8 +257,8 @@ func (r *Repository) CountEffectiveSuperAdmins(ctx context.Context, superAdminRo
 	var count int64
 	if err := r.db.WithContext(ctx).Table("user_account AS app_user").
 		Joins("JOIN permission_user_role AS user_role ON user_role.user_id = app_user.id AND user_role.deleted_at IS NULL").
-		Joins("JOIN permission_role AS app_role ON app_role.id = user_role.role_id AND app_role.deleted_at IS NULL AND app_role.is_enabled = ?", yesno.Yes).
-		Where("app_user.deleted_at IS NULL AND app_user.is_enabled = ? AND app_role.id = ?", yesno.Yes, superAdminRoleID).
+		Joins("JOIN permission_role AS app_role ON app_role.id = user_role.role_id AND app_role.deleted_at IS NULL AND app_role.status = ?", yesno.Yes).
+		Where("app_user.deleted_at IS NULL AND app_user.status = ? AND app_role.id = ?", yesno.Yes, superAdminRoleID).
 		Distinct("app_user.id").Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("count effective super administrators: %w", err)
 	}
@@ -280,7 +280,7 @@ func (r *Repository) UpdateProfile(ctx context.Context, userID int64, username s
 
 func (r *Repository) UpdateStatus(ctx context.Context, userID int64, value yesno.Value, updatedAt time.Time) error {
 	result := r.db.WithContext(ctx).Model(&User{}).Where("id = ?", userID).Updates(map[string]any{
-		"is_enabled": value, "updated_at": updatedAt.UTC(),
+		"status": value, "updated_at": updatedAt.UTC(),
 	})
 	if result.Error != nil {
 		return fmt.Errorf("update user status: %w", result.Error)
@@ -355,7 +355,7 @@ func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (Use
 		}
 		var effectiveRole role.Role
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("id = ? AND is_enabled = ?", input.RoleID, yesno.Yes).
+			Where("id = ? AND status = ?", input.RoleID, yesno.Yes).
 			Take(&effectiveRole).Error; err != nil {
 			return fmt.Errorf("lock enabled role: %w", err)
 		}
@@ -365,7 +365,7 @@ func (r *Repository) CreateWithRole(ctx context.Context, input CreateInput) (Use
 			Username:     input.Username,
 			Email:        input.Email,
 			PasswordHash: input.PasswordHash,
-			IsEnabled:    yesno.Yes,
+			Status:    yesno.Yes,
 			CreatedAt:    now,
 			UpdatedAt:    now,
 		}
@@ -393,7 +393,7 @@ func (r *Repository) FindCredentialByEmail(ctx context.Context, email string) (C
 	var credential Credential
 	if err := r.db.WithContext(ctx).
 		Model(&User{}).
-		Select("id", "username", "email", "password_hash", "is_enabled").
+		Select("id", "username", "email", "password_hash", "status").
 		Where("email = ? AND email <> ''", email).
 		Take(&credential).Error; err != nil {
 		return Credential{}, fmt.Errorf("find user credential: %w", err)
@@ -405,7 +405,7 @@ func (r *Repository) FindCredentialByPhone(ctx context.Context, phone string) (C
 	var credential Credential
 	if err := r.db.WithContext(ctx).
 		Model(&User{}).
-		Select("id", "username", "email", "password_hash", "is_enabled").
+		Select("id", "username", "email", "password_hash", "status").
 		Where("phone = ?", phone).
 		Take(&credential).Error; err != nil {
 		return Credential{}, fmt.Errorf("find user credential by phone: %w", err)
@@ -494,7 +494,7 @@ func (r *Repository) CreateVerifiedIdentity(ctx context.Context, input VerifiedI
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		roles := make([]role.Role, 0, 2)
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("is_default = ? AND is_enabled = ?", yesno.Yes, yesno.Yes).
+			Where("is_default = ? AND status = ?", yesno.Yes, yesno.Yes).
 			Limit(2).Find(&roles).Error; err != nil {
 			return fmt.Errorf("lock default role: %w", err)
 		}
@@ -506,7 +506,7 @@ func (r *Repository) CreateVerifiedIdentity(ctx context.Context, input VerifiedI
 		now := time.Now().UTC().Truncate(time.Microsecond)
 		created = User{
 			Username: input.Username, Email: email, Phone: phone,
-			PasswordHash: input.PasswordHash, IsEnabled: yesno.Yes,
+			PasswordHash: input.PasswordHash, Status: yesno.Yes,
 			CreatedAt: now, UpdatedAt: now,
 		}
 		if err := tx.Create(&created).Error; err != nil {
@@ -537,7 +537,7 @@ func (r *Repository) CreateVerifiedIdentity(ctx context.Context, input VerifiedI
 func (r *Repository) FindCredentialByID(ctx context.Context, userID int64) (Credential, error) {
 	var credential Credential
 	result := r.db.WithContext(ctx).Table("user_account").
-		Select("id, username, email, phone, password_hash, is_enabled").
+		Select("id, username, email, phone, password_hash, status").
 		Where("id = ? AND deleted_at IS NULL", userID).Take(&credential)
 	if result.Error != nil {
 		return Credential{}, fmt.Errorf("find credential by id: %w", result.Error)
@@ -620,14 +620,14 @@ func (r *Repository) FindCurrent(ctx context.Context, userID int64) (Current, er
 		LEFT JOIN user_profile AS profile ON profile.user_id = app_user.id
 		WHERE app_user.id = ?
 		  AND app_user.deleted_at IS NULL
-		  AND app_user.is_enabled = ?
+		  AND app_user.status = ?
 		  AND EXISTS (
 			SELECT 1
 			FROM permission_user_role AS user_role
 			JOIN permission_role AS app_role
 			  ON app_role.id = user_role.role_id
 			 AND app_role.deleted_at IS NULL
-			 AND app_role.is_enabled = ?
+			 AND app_role.status = ?
 			WHERE user_role.user_id = app_user.id
 			  AND user_role.deleted_at IS NULL
 		  )`, userID, yesno.Yes, yesno.Yes).Scan(&current)
@@ -654,13 +654,13 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 		Username  string
 		Email     string
 		Phone     *string
-		IsEnabled yesno.Value
+		Status yesno.Value
 		CreatedAt time.Time
 		UpdatedAt time.Time
 	}
 	userRows := make([]userRow, 0)
 	result := applyUserListFilter(r.db.WithContext(ctx), query).
-		Select("app_user.id, app_user.username, app_user.email, app_user.phone, app_user.is_enabled, app_user.created_at, app_user.updated_at").
+		Select("app_user.id, app_user.username, app_user.email, app_user.phone, app_user.status, app_user.created_at, app_user.updated_at").
 		Order("app_user.created_at ASC, app_user.id ASC").
 		Offset((query.Page - 1) * query.PageSize).
 		Limit(query.PageSize).
@@ -677,7 +677,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 	itemByUserID := make(map[int64]*ListItem, len(userRows))
 	for index, row := range userRows {
 		items[index] = ListItem{
-			ID: row.ID, Username: row.Username, Email: row.Email, Phone: row.Phone, IsEnabled: row.IsEnabled,
+			ID: row.ID, Username: row.Username, Email: row.Email, Phone: row.Phone, Status: row.Status,
 			Roles: make([]RoleSummary, 0), CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		}
 		userIDs[index] = items[index].ID
@@ -689,14 +689,14 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 		RoleID         sql.NullInt64
 		Code           sql.NullString
 		Name           sql.NullString
-		IsEnabled      sql.NullInt16
+		Status      sql.NullInt16
 		RoleDeletedAt  sql.NullTime
 	}
 	rows := make([]relationshipRow, 0)
 	if err := r.db.WithContext(ctx).Table("permission_user_role AS user_role").
 		Select(`user_role.user_id, user_role.id AS relationship_id,
 			app_role.id AS role_id, app_role.code, app_role.name,
-			app_role.is_enabled, app_role.deleted_at AS role_deleted_at`).
+			app_role.status, app_role.deleted_at AS role_deleted_at`).
 		Joins("LEFT JOIN permission_role AS app_role ON app_role.id = user_role.role_id").
 		Where("user_role.user_id IN ? AND user_role.deleted_at IS NULL", userIDs).
 		Order("user_role.user_id ASC, app_role.code ASC, app_role.id ASC, user_role.id ASC").
@@ -706,10 +706,10 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 	seen := make(map[int64]map[int64]struct{}, len(items))
 	for _, row := range rows {
 		item := itemByUserID[row.UserID]
-		if item == nil || !row.RoleID.Valid || !row.Code.Valid || !row.Name.Valid || !row.IsEnabled.Valid || row.RoleDeletedAt.Valid {
+		if item == nil || !row.RoleID.Valid || !row.Code.Valid || !row.Name.Valid || !row.Status.Valid || row.RoleDeletedAt.Valid {
 			return nil, fmt.Errorf("invalid relationship %d: %w", row.RelationshipID, ErrUserDataInvalid)
 		}
-		value := yesno.Value(row.IsEnabled.Int16)
+		value := yesno.Value(row.Status.Int16)
 		if row.RoleID.Int64 <= 0 || !yesno.IsValid(value) {
 			return nil, fmt.Errorf("invalid role for relationship %d: %w", row.RelationshipID, ErrUserDataInvalid)
 		}
@@ -720,7 +720,7 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 			return nil, fmt.Errorf("duplicate role relationship for user %d: %w", row.UserID, ErrUserDataInvalid)
 		}
 		seen[row.UserID][row.RoleID.Int64] = struct{}{}
-		item.Roles = append(item.Roles, RoleSummary{ID: row.RoleID.Int64, Code: row.Code.String, Name: row.Name.String, IsEnabled: value})
+		item.Roles = append(item.Roles, RoleSummary{ID: row.RoleID.Int64, Code: row.Code.String, Name: row.Name.String, Status: value})
 	}
 	for index := range items {
 		if len(items[index].Roles) == 0 {
@@ -733,14 +733,14 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]ListItem, err
 func (r *Repository) FindRoleOptions(ctx context.Context) ([]RoleSummary, error) {
 	options := make([]RoleSummary, 0)
 	if err := r.db.WithContext(ctx).Table("permission_role AS app_role").
-		Select("app_role.id, app_role.code, app_role.name, app_role.is_enabled").
+		Select("app_role.id, app_role.code, app_role.name, app_role.status").
 		Where("app_role.deleted_at IS NULL").
 		Order("app_role.code ASC, app_role.id ASC").
 		Scan(&options).Error; err != nil {
 		return nil, fmt.Errorf("find user role options: %w", err)
 	}
 	for _, option := range options {
-		if option.ID <= 0 || option.Code == "" || option.Name == "" || !yesno.IsValid(option.IsEnabled) {
+		if option.ID <= 0 || option.Code == "" || option.Name == "" || !yesno.IsValid(option.Status) {
 			return nil, fmt.Errorf("invalid role option %d: %w", option.ID, ErrUserDataInvalid)
 		}
 	}
@@ -757,8 +757,8 @@ func applyUserListFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 			OR app_user.phone ILIKE ? ESCAPE E'\\'
 		)`, pattern, pattern, pattern)
 	}
-	if query.IsEnabled != nil {
-		db = db.Where("app_user.is_enabled = ?", *query.IsEnabled)
+	if query.Status != nil {
+		db = db.Where("app_user.status = ?", *query.Status)
 	}
 	if query.RoleID != nil {
 		db = db.Where(`EXISTS (
@@ -807,14 +807,14 @@ func mapUserWriteError(operation string, err error) error {
 func (r *Repository) FindActorFacts(ctx context.Context, actorID int64) (actorFacts, error) {
 	var facts actorFacts
 	err := r.db.WithContext(ctx).Raw(`
-  SELECT EXISTS (SELECT 1 FROM user_account WHERE id = ? AND deleted_at IS NULL AND is_enabled = 1) AS actor_active,
+  SELECT EXISTS (SELECT 1 FROM user_account WHERE id = ? AND deleted_at IS NULL AND status = 1) AS actor_active,
    EXISTS (SELECT 1 FROM permission_user_role ur
-    JOIN permission_role role ON role.id = ur.role_id AND role.deleted_at IS NULL AND role.is_enabled = 1
-    JOIN user_account account ON account.id = ur.user_id AND account.deleted_at IS NULL AND account.is_enabled = 1
+    JOIN permission_role role ON role.id = ur.role_id AND role.deleted_at IS NULL AND role.status = 1
+    JOIN user_account account ON account.id = ur.user_id AND account.deleted_at IS NULL AND account.status = 1
     WHERE ur.user_id = ? AND ur.deleted_at IS NULL AND role.code = ?) AS actor_super,
    (SELECT count(*) FROM (SELECT ur.user_id FROM permission_user_role ur
-    JOIN permission_role role ON role.id = ur.role_id AND role.deleted_at IS NULL AND role.is_enabled = 1
-    JOIN user_account account ON account.id = ur.user_id AND account.deleted_at IS NULL AND account.is_enabled = 1
+    JOIN permission_role role ON role.id = ur.role_id AND role.deleted_at IS NULL AND role.status = 1
+    JOIN user_account account ON account.id = ur.user_id AND account.deleted_at IS NULL AND account.status = 1
     WHERE ur.deleted_at IS NULL AND role.code = ? LIMIT 2) effective_admins) AS effective_super_admins
  `, actorID, actorID, role.CodeSuperAdmin, role.CodeSuperAdmin).Scan(&facts).Error
 	if err != nil {

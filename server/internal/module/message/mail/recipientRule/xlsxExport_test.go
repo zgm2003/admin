@@ -56,9 +56,9 @@ func TestXlsxExportUsesStableSixColumnFormatAndExcludesDeletedRows(t *testing.T)
 	db, _, router := exportRouter(t)
 	now := time.Date(2026, time.September, 30, 1, 2, 3, 0, time.UTC)
 	rows := []Model{
-		{Scope: ScopeEmail, Pattern: "first@example.com", Action: ActionAllow, Name: "first", Remark: "备注,\"含引号\"\n第二行", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{Scope: ScopeDomain, Pattern: "example.org", Action: ActionDeny, Name: "second", Remark: "disabled", IsEnabled: yesno.No, CreatedAt: now, UpdatedAt: now},
-		{Scope: ScopeEmail, Pattern: "deleted@example.com", Action: ActionDeny, Name: "deleted", Remark: "", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now, DeletedAt: gorm.DeletedAt{Time: now, Valid: true}},
+		{Scope: ScopeEmail, Pattern: "first@example.com", Action: ActionAllow, Name: "first", Remark: "备注,\"含引号\"\n第二行", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Scope: ScopeDomain, Pattern: "example.org", Action: ActionDeny, Name: "second", Remark: "disabled", Status: yesno.No, CreatedAt: now, UpdatedAt: now},
+		{Scope: ScopeEmail, Pattern: "deleted@example.com", Action: ActionDeny, Name: "deleted", Remark: "", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now, DeletedAt: gorm.DeletedAt{Time: now, Valid: true}},
 	}
 	if err := db.Create(&rows).Error; err != nil {
 		t.Fatal(err)
@@ -81,7 +81,7 @@ func TestXlsxExportUsesStableSixColumnFormatAndExcludesDeletedRows(t *testing.T)
 func TestXlsxExportEscapesSpreadsheetFormulaCells(t *testing.T) {
 	db, _, router := exportRouter(t)
 	now := time.Now().UTC()
-	row := Model{Scope: ScopeEmail, Pattern: "safe@example.com", Action: ActionAllow, Name: "=1+1", Remark: "  @formula", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+	row := Model{Scope: ScopeEmail, Pattern: "safe@example.com", Action: ActionAllow, Name: "=1+1", Remark: "  @formula", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	if err := db.Create(&row).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestXlsxExportRejectsRowsBeyondExplicitLimit(t *testing.T) {
 	now := time.Now().UTC()
 	rows := make([]Model, XlsxMaxRows+1)
 	for index := range rows {
-		rows[index] = Model{Scope: ScopeEmail, Pattern: "u" + time.Unix(int64(index), 0).Format("150405") + "@example.com", Action: ActionDeny, Name: "name", IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now}
+		rows[index] = Model{Scope: ScopeEmail, Pattern: "u" + time.Unix(int64(index), 0).Format("150405") + "@example.com", Action: ActionDeny, Name: "name", Status: yesno.Yes, CreatedAt: now, UpdatedAt: now}
 	}
 	if err := db.CreateInBatches(rows, 200).Error; err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestXlsxExportDoesNotMutateMailGeneration(t *testing.T) {
 		_, err := change(ctx, 1)
 		return err
 	}))
-	if _, err := service.Create(context.Background(), Input{Scope: ScopeEmail, Pattern: "before@example.com", Action: ActionDeny, Name: "before", IsEnabled: yesno.Yes}); err != nil {
+	if _, err := service.Create(context.Background(), Input{Scope: ScopeEmail, Pattern: "before@example.com", Action: ActionDeny, Name: "before", Status: yesno.Yes}); err != nil {
 		t.Fatal(err)
 	}
 	var before int64
@@ -162,17 +162,17 @@ func TestXlsxExportDoesNotMutateMailGeneration(t *testing.T) {
 }
 
 func TestXlsxExportRejectsLossyStoredTextWithoutPartialFile(t *testing.T) {
-	valid := Model{Scope: ScopeEmail, Pattern: "valid@example.com", Action: ActionDeny, Name: "valid", IsEnabled: yesno.Yes}
+	valid := Model{Scope: ScopeEmail, Pattern: "valid@example.com", Action: ActionDeny, Name: "valid", Status: yesno.Yes}
 	for _, tc := range []struct {
 		name    string
 		invalid Model
 	}{
-		{"name length", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: strings.Repeat("名", 129), IsEnabled: yesno.Yes}},
-		{"remark length", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: "bad", Remark: strings.Repeat("注", 513), IsEnabled: yesno.Yes}},
-		{"XML control", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: "bad\x01name", IsEnabled: yesno.Yes}},
-		{"invalid pattern", Model{Scope: ScopeEmail, Pattern: "bad-address", Action: ActionDeny, Name: "bad", IsEnabled: yesno.Yes}},
-		{"invalid scope", Model{Scope: 2, Pattern: "a@example.com", Action: ActionDeny, Name: "bad", IsEnabled: yesno.Yes}},
-		{"invalid UTF8", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: string([]byte{0xff}), IsEnabled: yesno.Yes}},
+		{"name length", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: strings.Repeat("名", 129), Status: yesno.Yes}},
+		{"remark length", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: "bad", Remark: strings.Repeat("注", 513), Status: yesno.Yes}},
+		{"XML control", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: "bad\x01name", Status: yesno.Yes}},
+		{"invalid pattern", Model{Scope: ScopeEmail, Pattern: "bad-address", Action: ActionDeny, Name: "bad", Status: yesno.Yes}},
+		{"invalid scope", Model{Scope: 2, Pattern: "a@example.com", Action: ActionDeny, Name: "bad", Status: yesno.Yes}},
+		{"invalid UTF8", Model{Scope: ScopeEmail, Pattern: "a@example.com", Action: ActionDeny, Name: string([]byte{0xff}), Status: yesno.Yes}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			file, err := encodeXlsx(context.Background(), []Model{valid, tc.invalid})

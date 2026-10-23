@@ -14,7 +14,7 @@ type Summary struct {
 	Code      string
 	Name      string
 	IsDefault yesno.Value
-	IsEnabled yesno.Value
+	Status yesno.Value
 }
 
 type PermissionTreeNode struct {
@@ -23,7 +23,7 @@ type PermissionTreeNode struct {
 	MenuType  menu.Type
 	Code      string
 	Name      string
-	IsEnabled yesno.Value
+	Status yesno.Value
 	Children  []PermissionTreeNode
 }
 
@@ -31,7 +31,7 @@ type PermissionPlatform struct {
 	ID        int64
 	Code      string
 	Name      string
-	IsEnabled yesno.Value
+	Status yesno.Value
 	MenuTree  []PermissionTreeNode
 }
 
@@ -59,7 +59,7 @@ func buildPermissionIndex(rows []menu.Menu) (permissionIndex, error) {
 	}
 	codes := make(map[platformCodeKey]struct{}, len(rows))
 	for _, row := range rows {
-		if row.ID < 1 || row.PlatformID < 1 || row.DeletedAt.Valid || strings.TrimSpace(row.Code) == "" || strings.TrimSpace(row.Name) == "" || !yesno.IsValid(row.IsEnabled) {
+		if row.ID < 1 || row.PlatformID < 1 || row.DeletedAt.Valid || strings.TrimSpace(row.Code) == "" || strings.TrimSpace(row.Name) == "" || !yesno.IsValid(row.Status) {
 			return permissionIndex{}, fmt.Errorf("menu %d has invalid stored values", row.ID)
 		}
 		if _, exists := index.byID[row.ID]; exists {
@@ -144,7 +144,7 @@ func (index permissionIndex) tree(platformID int64) ([]PermissionTreeNode, error
 			}
 			children = append(children, child)
 		}
-		return PermissionTreeNode{ID: row.ID, ParentID: row.ParentID, MenuType: row.MenuType, Code: row.Code, Name: row.Name, IsEnabled: row.IsEnabled, Children: children}, nil
+		return PermissionTreeNode{ID: row.ID, ParentID: row.ParentID, MenuType: row.MenuType, Code: row.Code, Name: row.Name, Status: row.Status, Children: children}, nil
 	}
 	result := make([]PermissionTreeNode, 0, len(index.roots))
 	for _, rootID := range index.roots {

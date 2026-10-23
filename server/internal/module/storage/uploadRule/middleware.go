@@ -33,7 +33,7 @@ func requireStatusOnUpdate(requireStatus gin.HandlerFunc) gin.HandlerFunc {
 		}
 		for key := range fields {
 			// encoding/json accepts case-insensitive field names; authorization must too.
-			if strings.EqualFold(key, "isEnabled") {
+			if strings.EqualFold(key, "status") {
 				requireStatus(c)
 				return
 			}

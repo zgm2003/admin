@@ -154,7 +154,7 @@ func TestExpiredAlipayCredentialLifecycle(t *testing.T) {
 		t.Fatalf("sandbox credential publication: %v", err)
 	}
 	got, err = s.Get(ctx, id)
-	if err != nil || got.CurrentVersion != 2 || got.IsEnabled != yesno.Yes || !got.Certificates.Alipay.NotAfter.Equal(now.Add(-time.Hour)) {
+	if err != nil || got.CurrentVersion != 2 || got.Status != yesno.Yes || !got.Certificates.Alipay.NotAfter.Equal(now.Add(-time.Hour)) {
 		t.Fatalf("sandbox version lifecycle: %v", err)
 	}
 	if err := s.ValidateLocal(ctx, id); err != nil {

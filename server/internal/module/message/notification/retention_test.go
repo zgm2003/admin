@@ -12,7 +12,7 @@ import (
 func TestRetentionUsesSettingAndTenBatchLimit(t *testing.T) {
 	now := time.Date(2026, 9, 19, 0, 0, 0, 0, time.UTC)
 	repo := &notificationRetentionRepositoryStub{values: []int{1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000}}
-	settings := mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes}}
+	settings := mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.Yes}}
 	service := NewRetentionService(repo, settings)
 	service.now = func() time.Time { return now }
 	result, err := service.Cleanup(context.Background())
@@ -25,7 +25,7 @@ func TestRetentionUsesSettingAndTenBatchLimit(t *testing.T) {
 }
 func TestRetentionRejectsInvalidSettingWithoutDelete(t *testing.T) {
 	repo := &notificationRetentionRepositoryStub{}
-	settings := mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "29", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes}}
+	settings := mailboxSettingStub{record: sharedsetting.Record{Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "29", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.Yes}}
 	if _, err := NewRetentionService(repo, settings).Cleanup(context.Background()); err == nil {
 		t.Fatal("Cleanup error=nil")
 	}

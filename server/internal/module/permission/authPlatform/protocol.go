@@ -58,7 +58,7 @@ func ValidatePlatform(value Platform) error {
 	if value.AccessCacheTTLSeconds < MinimumAccessCacheTTLSeconds || value.AccessCacheTTLSeconds > MaximumAccessCacheTTLSeconds {
 		return fmt.Errorf("access cache TTL is outside the allowed range")
 	}
-	if !yesno.IsValid(value.BindDevice) || !yesno.IsValid(value.BindIP) || !yesno.IsValid(value.AllowRegister) || !yesno.IsValid(value.IsEnabled) || !yesno.IsValid(value.IsBuiltin) {
+	if !yesno.IsValid(value.BindDevice) || !yesno.IsValid(value.BindIP) || !yesno.IsValid(value.AllowRegister) || !yesno.IsValid(value.Status) || !yesno.IsValid(value.IsBuiltin) {
 		return fmt.Errorf("platform Yes/No value is invalid")
 	}
 	if value.MaxSessions < 0 || value.MaxSessions > MaximumSessions {

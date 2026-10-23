@@ -33,7 +33,7 @@ type Safe struct {
 	Content           string            `json:"content"`
 	VariableKeys      []string          `json:"variableKeys"`
 	ExampleVariables  map[string]string `json:"exampleVariables"`
-	IsEnabled         yesno.Value       `json:"isEnabled"`
+	Status         yesno.Value       `json:"status"`
 	CreatedAt         string            `json:"createdAt"`
 	UpdatedAt         string            `json:"updatedAt"`
 }
@@ -92,7 +92,7 @@ func safeOf(value Model) (Safe, error) {
 		Content:           value.Content,
 		VariableKeys:      keys,
 		ExampleVariables:  variables,
-		IsEnabled:         value.IsEnabled,
+		Status:         value.Status,
 		CreatedAt:         value.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt:         value.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}, nil

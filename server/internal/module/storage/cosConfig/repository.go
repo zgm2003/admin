@@ -77,8 +77,8 @@ func filterList(db *gorm.DB, q ListQuery) *gorm.DB {
 		pattern := "%" + q.Keyword + "%"
 		db = db.Where("storage_cos_config.name ILIKE ? OR current_version.bucket ILIKE ?", pattern, pattern)
 	}
-	if q.IsEnabled != nil {
-		db = db.Where("storage_cos_config.is_enabled = ?", *q.IsEnabled)
+	if q.Status != nil {
+		db = db.Where("storage_cos_config.status = ?", *q.Status)
 	}
 	return db
 }
@@ -170,11 +170,11 @@ func (r *Repository) RuntimeFacts(ctx context.Context, id int64) (RuntimeConfig,
 		SecretIDCiphertext  string
 		SecretKeyCiphertext string
 		CurrentVersion      int64
-		IsEnabled           yesno.Value
+		Status           yesno.Value
 		Deleted             bool
 	}
 	if err := r.db.WithContext(ctx).Raw(
-		`SELECT id, app_id, secret_id_ciphertext, secret_key_ciphertext, current_version, is_enabled, deleted_at IS NOT NULL AS deleted
+		`SELECT id, app_id, secret_id_ciphertext, secret_key_ciphertext, current_version, status, deleted_at IS NOT NULL AS deleted
 		 FROM storage_cos_config WHERE id = ?`, id).Scan(&logical).Error; err != nil {
 		return RuntimeConfig{}, fmt.Errorf("read COS config runtime facts: %w", err)
 	}
@@ -198,7 +198,7 @@ func (r *Repository) RuntimeFacts(ctx context.Context, id int64) (RuntimeConfig,
 	}
 	return RuntimeConfig{
 		ID: logical.ID, AppID: logical.AppID, SecretIDCiphertext: logical.SecretIDCiphertext, SecretKeyCiphertext: logical.SecretKeyCiphertext,
-		CurrentVersion: logical.CurrentVersion, IsEnabled: logical.IsEnabled, Deleted: logical.Deleted, Versions: versions,
+		CurrentVersion: logical.CurrentVersion, Status: logical.Status, Deleted: logical.Deleted, Versions: versions,
 	}, nil
 }
 
@@ -290,11 +290,11 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Val
 		if err != nil {
 			return err
 		}
-		if current.IsEnabled == value {
+		if current.Status == value {
 			return nil
 		}
 		updateResult := quietDB(tx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).
-			Updates(map[string]any{"is_enabled": value, "updated_at": now})
+			Updates(map[string]any{"status": value, "updated_at": now})
 		if updateResult.Error != nil {
 			return updateResult.Error
 		}
@@ -328,7 +328,7 @@ func (r *Repository) MarkDeleted(ctx context.Context, id int64, baseGeneration i
 			return err
 		}
 		updateResult := tx.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).
-			Updates(map[string]any{"is_enabled": yesno.No, "deleted_at": now, "updated_at": now})
+			Updates(map[string]any{"status": yesno.No, "deleted_at": now, "updated_at": now})
 		if updateResult.Error != nil {
 			return updateResult.Error
 		}

@@ -134,7 +134,7 @@ func (h *Handler) Status(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if err = h.service.SetStatus(c.Request.Context(), id, req.IsEnabled, actor); err != nil {
+	if err = h.service.SetStatus(c.Request.Context(), id, req.Status, actor); err != nil {
 		response.Fail(c, err)
 		return
 	}

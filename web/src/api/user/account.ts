@@ -4,7 +4,7 @@ import { request } from '@/utils/request'
 
 export interface UserListQuery extends PageRequest {
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
   roleId?: number
 }
 
@@ -12,7 +12,7 @@ export interface UserRoleSummary {
   id: number
   code: string
   name: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface UserActions {
@@ -38,7 +38,7 @@ export interface UserListItem {
   username: string
   email: string
   phone: string | null
-  isEnabled: YesNo
+  status: YesNo
   roles: UserRoleSummary[]
   createdAt: string
   updatedAt: string
@@ -47,7 +47,7 @@ export interface UserListItem {
 export type UserPage = PageResult<UserListItem>
 
 export interface UserRolesResponse {
-  user: { id: number; username: string; email: string; phone: string | null; isEnabled: YesNo }
+  user: { id: number; username: string; email: string; phone: string | null; status: YesNo }
   roles: UserAssignmentRole[]
   roleIds: number[]
 }
@@ -69,7 +69,7 @@ export interface UpdatedProfile {
 
 export interface UserStatusResult {
   id: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface UserRoleOptions {
@@ -93,8 +93,8 @@ export async function updateUser(id: number, input: UpdateUserInput): Promise<Up
   return request.put<UpdatedProfile>(`/api/admin/v1/user/account/${id}`, input)
 }
 
-export async function updateUserStatus(id: number, isEnabled: YesNo): Promise<UserStatusResult> {
-  return request.patch<UserStatusResult>(`/api/admin/v1/user/account/${id}/status`, { isEnabled })
+export async function updateUserStatus(id: number, status: YesNo): Promise<UserStatusResult> {
+  return request.patch<UserStatusResult>(`/api/admin/v1/user/account/${id}/status`, { status })
 }
 
 export async function deleteUser(id: number): Promise<Record<string, never>> {

@@ -19,7 +19,7 @@ func TestStoreInstallsAndReadsClosedReadyStates(t *testing.T) {
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), []string{userKey, sessionsKey}) })
 	_ = client.DeleteMany(ctx, []string{userKey, sessionsKey})
 
-	userFact := UserFact{UserID: 71001, Generation: "user-generation", IsEnabled: true}
+	userFact := UserFact{UserID: 71001, Generation: "user-generation", Status: true}
 	state, installed, err := store.InstallUserReadyIfMissing(ctx, userFact)
 	if err != nil || !installed || state.State != StateReady || state.UserID != userFact.UserID || state.Generation != userFact.Generation {
 		t.Fatalf("InstallUserReadyIfMissing() = %+v,%v,%v", state, installed, err)
@@ -48,9 +48,9 @@ func TestStoreRejectsUnknownAndMismatchedStateFields(t *testing.T) {
 	t.Cleanup(func() { _ = client.Delete(context.Background(), key) })
 
 	invalidPayloads := []string{
-		`{"schemaVersion":1,"state":"ready","userId":71002,"generation":"g","isEnabled":true,"deleted":false,"mutationToken":null,"unknown":true}`,
-		`{"schemaVersion":1,"state":"ready","userId":999,"generation":"g","isEnabled":true,"deleted":false,"mutationToken":null}`,
-		`{"schemaVersion":1,"state":"ready","userId":71002,"generation":"","isEnabled":true,"deleted":false,"mutationToken":null}`,
+		`{"schemaVersion":1,"state":"ready","userId":71002,"generation":"g","status":true,"deleted":false,"mutationToken":null,"unknown":true}`,
+		`{"schemaVersion":1,"state":"ready","userId":999,"generation":"g","status":true,"deleted":false,"mutationToken":null}`,
+		`{"schemaVersion":1,"state":"ready","userId":71002,"generation":"","status":true,"deleted":false,"mutationToken":null}`,
 	}
 	for _, payload := range invalidPayloads {
 		if err := client.SetString(ctx, key, payload, 0); err != nil {

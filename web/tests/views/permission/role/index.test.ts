@@ -68,7 +68,7 @@ describe('RoleManagement', () => {
           code: 'tester',
           name: '测试员',
           isDefault: YesNo.No,
-          isEnabled: YesNo.Yes,
+          status: YesNo.Yes,
           userCount: 2,
           permissionCount: 1,
           createdAt: '2026-08-19T00:00:00Z',
@@ -81,7 +81,7 @@ describe('RoleManagement', () => {
     })
     createRoleMock.mockResolvedValue({ id: 7 })
     updateRoleMock.mockResolvedValue({})
-    updateRoleStatusMock.mockResolvedValue({ id: 3, isEnabled: YesNo.No })
+    updateRoleStatusMock.mockResolvedValue({ id: 3, status: YesNo.No })
     setDefaultRoleMock.mockResolvedValue({ id: 3, isDefault: YesNo.Yes })
     deleteRoleMock.mockResolvedValue({})
     getRolePermissionsMock.mockResolvedValue(permissionResponse())
@@ -206,7 +206,7 @@ describe('RoleManagement', () => {
       page: 1,
       pageSize: 20,
       keyword: 'tester',
-      isEnabled: YesNo.No,
+      status: YesNo.No,
     })
 
     wrapper.getComponent(ElPagination).vm.$emit('current-change', 3)
@@ -215,7 +215,7 @@ describe('RoleManagement', () => {
       page: 3,
       pageSize: 20,
       keyword: 'tester',
-      isEnabled: YesNo.No,
+      status: YesNo.No,
     })
 
     await findButton(wrapper, '重置').trigger('click')
@@ -606,7 +606,7 @@ describe('RoleManagement', () => {
           id: 4,
           code: 'disabled_role',
           name: '禁用角色',
-          isEnabled: YesNo.No,
+          status: YesNo.No,
           actions: { update: true, status: true, setDefault: false, delete: true, authorize: true },
           actionLabels: {
             update: '编辑',
@@ -691,7 +691,7 @@ function baseRoleItem(): RoleListItem {
     code: 'tester',
     name: '测试员',
     isDefault: YesNo.No,
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
     userCount: 0,
     permissionCount: 1,
     createdAt: '2026-08-19T00:00:00Z',
@@ -706,14 +706,14 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
       code: 'tester',
       name: '测试员',
       isDefault: YesNo.No,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
     },
     platforms: [
       {
         id: 1,
         code: 'admin',
         name: 'Admin',
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
         menuTree: [
           {
             id: 1,
@@ -721,7 +721,7 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
             menuType: 'directory' as const,
             code: 'system',
             name: '系统管理',
-            isEnabled: YesNo.Yes,
+            status: YesNo.Yes,
             children: [
               {
                 id: 2,
@@ -729,7 +729,7 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
                 menuType: 'page' as const,
                 code: 'permission:role:list',
                 name: '角色管理',
-                isEnabled: YesNo.Yes,
+                status: YesNo.Yes,
                 children: [
                   {
                     id: 3,
@@ -737,7 +737,7 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
                     menuType: 'action' as const,
                     code: 'permission:role:create',
                     name: '新增角色',
-                    isEnabled: YesNo.No,
+                    status: YesNo.No,
                     children: [],
                   },
                 ],
@@ -750,7 +750,7 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
         id: 2,
         code: 'canvas',
         name: 'Canvas',
-        isEnabled: YesNo.No,
+        status: YesNo.No,
         menuTree: [
           {
             id: 7,
@@ -758,7 +758,7 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
             menuType: 'page' as const,
             code: 'canvas:test:list',
             name: 'Test',
-            isEnabled: YesNo.Yes,
+            status: YesNo.Yes,
             children: [
               {
                 id: 8,
@@ -766,7 +766,7 @@ function permissionResponse(overrides: { menuIds?: number[] } = {}) {
                 menuType: 'action' as const,
                 code: 'canvas:test:button',
                 name: 'Test Button',
-                isEnabled: YesNo.Yes,
+                status: YesNo.Yes,
                 children: [],
               },
             ],

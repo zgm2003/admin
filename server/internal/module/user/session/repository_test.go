@@ -135,7 +135,7 @@ func TestFindAuthoritativeDoesNotRequireAnEnabledRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if authority.Session.ID != created.ID || authority.UserID != createdUser.ID || authority.UserIsEnabled != yesno.Yes || authority.UserDeleted {
+	if authority.Session.ID != created.ID || authority.UserID != createdUser.ID || authority.UserStatus != yesno.Yes || authority.UserDeleted {
 		t.Fatalf("authority = %+v", authority)
 	}
 }
@@ -373,7 +373,7 @@ func createAuthUserWithoutRole(t *testing.T, db *gorm.DB, ctx context.Context, p
 	unique := time.Now().UnixNano()
 	created := user.User{
 		Username: fmt.Sprintf("%s-%d", prefix, unique), Email: fmt.Sprintf("%s-%d@example.com", prefix, unique),
-		PasswordHash: "$2a$10$placeholder", IsEnabled: yesno.Yes,
+		PasswordHash: "$2a$10$placeholder", Status: yesno.Yes,
 		CreatedAt: time.Now().UTC().Truncate(time.Microsecond), UpdatedAt: time.Now().UTC().Truncate(time.Microsecond),
 	}
 	if err := db.WithContext(ctx).Create(&created).Error; err != nil {
@@ -402,7 +402,7 @@ func createTestPolicy(t *testing.T, db *gorm.DB, ctx context.Context, code strin
 	value := authplatform.Platform{
 		Code: code, Name: code, LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, MaxSessions: maxSessions,
-		BindDevice: yesno.No, BindIP: yesno.No, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No,
+		BindDevice: yesno.No, BindIP: yesno.No, AllowRegister: yesno.Yes, Status: yesno.Yes, IsBuiltin: yesno.No,
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := db.WithContext(ctx).Create(&value).Error; err != nil {
@@ -417,7 +417,7 @@ func testRuntimePolicy(value authplatform.Platform) authplatform.Policy {
 		AccessTTL: time.Duration(value.AccessTTLSeconds) * time.Second, RefreshTTL: time.Duration(value.RefreshTTLSeconds) * time.Second,
 		SessionCacheTTL: time.Duration(value.SessionCacheTTLSeconds) * time.Second, AccessCacheTTL: time.Duration(value.AccessCacheTTLSeconds) * time.Second,
 		BindDevice: value.BindDevice == yesno.Yes, BindIP: value.BindIP == yesno.Yes, MaxSessions: value.MaxSessions,
-		AllowRegister: value.AllowRegister == yesno.Yes, IsEnabled: value.IsEnabled == yesno.Yes, IsBuiltin: value.IsBuiltin == yesno.Yes,
+		AllowRegister: value.AllowRegister == yesno.Yes, Status: value.Status == yesno.Yes, IsBuiltin: value.IsBuiltin == yesno.Yes,
 	}
 }
 

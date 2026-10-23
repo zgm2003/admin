@@ -34,7 +34,7 @@ CREATE TABLE message_sms_template(
  content TEXT NOT NULL DEFAULT '',
  variable_keys JSONB NOT NULL,
  example_variables JSONB NOT NULL,
- is_enabled SMALLINT NOT NULL DEFAULT 0,
+ status SMALLINT NOT NULL DEFAULT 0,
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
  CONSTRAINT ck_fixture_sms_template_scene CHECK (scene IN ('login','forget','bind_phone','change_password'))
@@ -65,7 +65,7 @@ func seedTemplates(t *testing.T, db *gorm.DB, ctx context.Context) {
 	t.Helper()
 	for index, fixed := range FixedCatalog() {
 		if err := db.WithContext(ctx).Exec(`
-INSERT INTO message_sms_template(scene,name,tencent_template_id,content,variable_keys,example_variables,is_enabled,created_at,updated_at)
+INSERT INTO message_sms_template(scene,name,tencent_template_id,content,variable_keys,example_variables,status,created_at,updated_at)
 VALUES (?,?,'','{1} 有效期 {2} 分钟',?::jsonb,?::jsonb,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
 			fixed.Scene, fixed.Name, `["code","ttl_minutes"]`, `{"code":"123456","ttl_minutes":"5"}`, yesno.No).
 			Error; err != nil {
@@ -129,7 +129,7 @@ func TestRepositoryUpdatesContentAndStatusOnly(t *testing.T) {
 	if err := db.WithContext(ctx).First(&stored, target.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.IsEnabled != yesno.Yes || stored.Scene != target.Scene || stored.Name != "登录短信验证码" {
+	if stored.Status != yesno.Yes || stored.Scene != target.Scene || stored.Name != "登录短信验证码" {
 		t.Fatalf("stored = %+v", stored)
 	}
 	if !stored.UpdatedAt.After(time.Time{}) {
@@ -141,7 +141,7 @@ func TestRepositoryRejectsADuplicateScene(t *testing.T) {
 	db, ctx := openTemplateSchema(t)
 	seedTemplates(t, db, ctx)
 	err := db.WithContext(ctx).Exec(`
-INSERT INTO message_sms_template(scene,name,tencent_template_id,content,variable_keys,example_variables,is_enabled)
+INSERT INTO message_sms_template(scene,name,tencent_template_id,content,variable_keys,example_variables,status)
 VALUES ('login','重复','','{1} {2}','["code","ttl_minutes"]'::jsonb,'{}'::jsonb,0)`).Error
 	if err == nil {
 		t.Fatal("a duplicate scene was accepted")

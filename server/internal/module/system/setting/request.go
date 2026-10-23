@@ -21,7 +21,7 @@ type updateRequest struct {
 	Description *string `json:"description"`
 }
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 type brandRequest struct {
 	TitleZhCN     *string `json:"titleZhCN"`
@@ -66,7 +66,7 @@ func (r legalDocumentRequest) input() (string, error) {
 }
 func parseListQuery(values url.Values) (ListQuery, error) {
 	for key, entries := range values {
-		if key != "page" && key != "pageSize" && key != "keyword" && key != "isEnabled" || len(entries) != 1 {
+		if key != "page" && key != "pageSize" && key != "keyword" && key != "status" || len(entries) != 1 {
 			return ListQuery{}, fmt.Errorf("invalid query parameter")
 		}
 	}
@@ -85,13 +85,13 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		}
 	}
 	query := ListQuery{Page: page, PageSize: pageSize, Keyword: strings.TrimSpace(values.Get("keyword"))}
-	if raw := values.Get("isEnabled"); raw != "" {
+	if raw := values.Get("status"); raw != "" {
 		value, err := strconv.Atoi(raw)
 		parsed := yesno.Value(value)
 		if err != nil || !yesno.IsValid(parsed) {
-			return ListQuery{}, fmt.Errorf("isEnabled is invalid")
+			return ListQuery{}, fmt.Errorf("status is invalid")
 		}
-		query.IsEnabled = &parsed
+		query.Status = &parsed
 	}
 	return query, nil
 }

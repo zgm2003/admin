@@ -19,7 +19,7 @@ func TestBootstrapAdminCreatesUserWithSuperAdminRole(t *testing.T) {
 		stored = input
 		return user.User{ID: 10, Username: input.Username, Email: input.Email}, nil
 	}}
-	roles := &fakeBootstrapRoleStore{found: role.Role{ID: 8, Code: role.CodeSuperAdmin, IsEnabled: yesno.Yes}}
+	roles := &fakeBootstrapRoleStore{found: role.Role{ID: 8, Code: role.CodeSuperAdmin, Status: yesno.Yes}}
 	service := NewBootstrapService(users, roles)
 
 	created, err := service.Create(context.Background(), BootstrapAdminInput{Username: "admin", Email: "ADMIN@example.com", Password: "password"})

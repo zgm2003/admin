@@ -14,7 +14,7 @@ type ListQuery struct {
 	Page, PageSize          int
 	PlatformID, CosConfigID *int64
 	Keyword                 string
-	IsEnabled               *yesno.Value
+	Status               *yesno.Value
 }
 type CreateInput struct {
 	PlatformID                          int64
@@ -24,7 +24,7 @@ type CreateInput struct {
 	MaxFileSizeBytes                    int64
 	AllowedExtensions, AllowedMimeTypes []string
 	AccessMode                          string
-	IsEnabled                           yesno.Value
+	Status                           yesno.Value
 	Remark                              string
 }
 
@@ -34,7 +34,7 @@ type UpdateInput struct {
 	Name                                string
 	MaxFileSizeBytes                    int64
 	AllowedExtensions, AllowedMimeTypes []string
-	IsEnabled                           *yesno.Value
+	Status                           *yesno.Value
 	Remark                              string
 }
 type FileInput struct {
@@ -55,7 +55,7 @@ type createRequest struct {
 	AllowedExtensions []string    `json:"allowedExtensions"`
 	AllowedMimeTypes  []string    `json:"allowedMimeTypes"`
 	AccessMode        string      `json:"accessMode"`
-	IsEnabled         yesno.Value `json:"isEnabled"`
+	Status         yesno.Value `json:"status"`
 	Remark            string      `json:"remark"`
 }
 type updateRequest struct {
@@ -64,11 +64,11 @@ type updateRequest struct {
 	MaxFileSizeBytes  int64           `json:"maxFileSizeBytes"`
 	AllowedExtensions []string        `json:"allowedExtensions"`
 	AllowedMimeTypes  []string        `json:"allowedMimeTypes"`
-	IsEnabled         json.RawMessage `json:"isEnabled"`
+	Status         json.RawMessage `json:"status"`
 	Remark            string          `json:"remark"`
 }
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 type objectURLRequest struct {
 	ObjectKey string `json:"objectKey"`
@@ -124,10 +124,10 @@ func (r createRequest) input() (CreateInput, error) {
 	if err := validateFields(r.PlatformID, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Remark, true); err != nil {
 		return CreateInput{}, err
 	}
-	if !yesno.IsValid(r.IsEnabled) {
-		return CreateInput{}, fmt.Errorf("isEnabled invalid")
+	if !yesno.IsValid(r.Status) {
+		return CreateInput{}, fmt.Errorf("status invalid")
 	}
-	return CreateInput{r.PlatformID, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.IsEnabled, r.Remark}, nil
+	return CreateInput{r.PlatformID, r.Codes, r.Name, r.CosConfigID, r.MaxFileSizeBytes, r.AllowedExtensions, r.AllowedMimeTypes, r.AccessMode, r.Status, r.Remark}, nil
 }
 func (r updateRequest) input() (UpdateInput, error) {
 	r.Codes = normalize(r.Codes, false)
@@ -139,20 +139,20 @@ func (r updateRequest) input() (UpdateInput, error) {
 		return UpdateInput{}, err
 	}
 	var status *yesno.Value
-	if len(r.IsEnabled) > 0 {
+	if len(r.Status) > 0 {
 		var value yesno.Value
-		if strings.TrimSpace(string(r.IsEnabled)) == "null" {
-			return UpdateInput{}, fmt.Errorf("isEnabled must not be null")
+		if strings.TrimSpace(string(r.Status)) == "null" {
+			return UpdateInput{}, fmt.Errorf("status must not be null")
 		}
-		if err := json.Unmarshal(r.IsEnabled, &value); err != nil || !yesno.IsValid(value) {
-			return UpdateInput{}, fmt.Errorf("isEnabled invalid")
+		if err := json.Unmarshal(r.Status, &value); err != nil || !yesno.IsValid(value) {
+			return UpdateInput{}, fmt.Errorf("status invalid")
 		}
 		status = &value
 	}
-	return UpdateInput{Codes: r.Codes, Name: r.Name, MaxFileSizeBytes: r.MaxFileSizeBytes, AllowedExtensions: r.AllowedExtensions, AllowedMimeTypes: r.AllowedMimeTypes, Remark: r.Remark, IsEnabled: status}, nil
+	return UpdateInput{Codes: r.Codes, Name: r.Name, MaxFileSizeBytes: r.MaxFileSizeBytes, AllowedExtensions: r.AllowedExtensions, AllowedMimeTypes: r.AllowedMimeTypes, Remark: r.Remark, Status: status}, nil
 }
 func parseListQuery(v url.Values) (ListQuery, error) {
-	allowed := map[string]bool{"page": true, "pageSize": true, "platformId": true, "cosConfigId": true, "keyword": true, "isEnabled": true}
+	allowed := map[string]bool{"page": true, "pageSize": true, "platformId": true, "cosConfigId": true, "keyword": true, "status": true}
 	for key, values := range v {
 		if !allowed[key] || len(values) != 1 {
 			return ListQuery{}, fmt.Errorf("invalid list query")
@@ -178,13 +178,13 @@ func parseListQuery(v url.Values) (ListQuery, error) {
 			*target = &id
 		}
 	}
-	if raw := v.Get("isEnabled"); raw != "" {
+	if raw := v.Get("status"); raw != "" {
 		n, e := strconv.Atoi(raw)
 		val := yesno.Value(n)
 		if e != nil || !yesno.IsValid(val) {
-			return q, fmt.Errorf("isEnabled invalid")
+			return q, fmt.Errorf("status invalid")
 		}
-		q.IsEnabled = &val
+		q.Status = &val
 	}
 	return q, nil
 }

@@ -200,12 +200,12 @@ func validRuntimeSnapshot(generation int64) runtimeSnapshot {
 		Config: runtimeConfig{
 			ID: 1, SecretIDCiphertext: "mail:v1:cipher-id", SecretKeyCiphertext: "mail:v1:cipher-key",
 			Region: "ap-guangzhou", FromEmail: "sender@example.com", FromName: "Sender",
-			TTLMinutes: 5, IsEnabled: yesno.Yes, CreatedAt: now, UpdatedAt: now,
+			TTLMinutes: 5, Status: yesno.Yes, CreatedAt: now, UpdatedAt: now,
 		},
 		Templates: []Template{{
 			ID: 1, Scene: SceneLogin, Name: "Login", Subject: "Code", Content: "{{code}}",
 			TencentTemplateID: intPointer(47941), VariableKeys: []byte(`["code"]`),
-			ExampleVariables: []byte(`{"code":"123456"}`), IsEnabled: yesno.Yes,
+			ExampleVariables: []byte(`{"code":"123456"}`), Status: yesno.Yes,
 			CreatedAt: now, UpdatedAt: now,
 		}},
 		Rules: []RecipientRule{},
@@ -261,7 +261,7 @@ func TestRuntimeStoreValidateDependenciesRejectsIncompleteStartupWiring(t *testi
 
 func TestRuntimeSnapshotRequiresNumericRecipientRuleEnums(t *testing.T) {
 	snapshot := validRuntimeSnapshot(1)
-	snapshot.Rules = []RecipientRule{{ID: 1, Scope: RuleScopeEmail, Pattern: "user@example.com", Action: RuleActionDeny, Name: "deny", IsEnabled: yesno.Yes}}
+	snapshot.Rules = []RecipientRule{{ID: 1, Scope: RuleScopeEmail, Pattern: "user@example.com", Action: RuleActionDeny, Name: "deny", Status: yesno.Yes}}
 	raw, err := encodeRuntimeSnapshot(snapshot)
 	if err != nil {
 		t.Fatal(err)
@@ -271,18 +271,18 @@ func TestRuntimeSnapshotRequiresNumericRecipientRuleEnums(t *testing.T) {
 	}
 	// Build malformed rule payloads independently from the pre-migration enum representation.
 	for name, rule := range map[string]string{
-		"old strings":    `{"scope":"email","action":"deny","isEnabled":1}`,
-		"missing scope":  `{"action":0,"isEnabled":1}`,
-		"missing action": `{"scope":0,"isEnabled":1}`,
-		"null scope":     `{"scope":null,"action":0,"isEnabled":1}`,
-		"null action":    `{"scope":0,"action":null,"isEnabled":1}`,
-		"unknown scope":  `{"scope":2,"action":0,"isEnabled":1}`,
-		"unknown action": `{"scope":0,"action":2,"isEnabled":1}`,
-		"fraction":       `{"scope":0.5,"action":0,"isEnabled":1}`,
+		"old strings":    `{"scope":"email","action":"deny","status":1}`,
+		"missing scope":  `{"action":0,"status":1}`,
+		"missing action": `{"scope":0,"status":1}`,
+		"null scope":     `{"scope":null,"action":0,"status":1}`,
+		"null action":    `{"scope":0,"action":null,"status":1}`,
+		"unknown scope":  `{"scope":2,"action":0,"status":1}`,
+		"unknown action": `{"scope":0,"action":2,"status":1}`,
+		"fraction":       `{"scope":0.5,"action":0,"status":1}`,
 		"missing status": `{"scope":0,"action":0}`,
-		"null status":    `{"scope":0,"action":0,"isEnabled":null}`,
-		"unknown status": `{"scope":0,"action":0,"isEnabled":2}`,
-		"string status":  `{"scope":0,"action":0,"isEnabled":"1"}`,
+		"null status":    `{"scope":0,"action":0,"status":null}`,
+		"unknown status": `{"scope":0,"action":0,"status":2}`,
+		"string status":  `{"scope":0,"action":0,"status":"1"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			empty := validRuntimeSnapshot(1)

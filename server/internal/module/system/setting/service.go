@@ -146,7 +146,7 @@ func (s *Service) LegalDocument(ctx context.Context, kind LegalDocumentKind) (Le
 	if err != nil {
 		return LegalDocument{}, err
 	}
-	if row.ValueType != ValueTypeString || row.IsEnabled != yesno.Yes || row.IsBuiltin != yesno.Yes {
+	if row.ValueType != ValueTypeString || row.Status != yesno.Yes || row.IsBuiltin != yesno.Yes {
 		return LegalDocument{}, apperror.DependencyUnavailable(fmt.Errorf("legal document setting is unavailable"))
 	}
 	if strings.TrimSpace(row.Value) == "" {
@@ -175,7 +175,7 @@ func (s *Service) UpdateLegalDocument(ctx context.Context, kind LegalDocumentKin
 	if err != nil {
 		return apperror.DependencyUnavailable(err)
 	}
-	if current.ValueType != ValueTypeString || current.IsEnabled != yesno.Yes || current.IsBuiltin != yesno.Yes {
+	if current.ValueType != ValueTypeString || current.Status != yesno.Yes || current.IsBuiltin != yesno.Yes {
 		return apperror.DependencyUnavailable(fmt.Errorf("legal document setting is unavailable"))
 	}
 	current.Value = normalized
@@ -210,7 +210,7 @@ func (s *Service) FindByKey(ctx context.Context, key string) (sharedsetting.Reco
 	if err != nil {
 		return sharedsetting.Record{}, err
 	}
-	return sharedsetting.Record{Key: row.Key, Value: row.Value, ValueType: row.ValueType, Description: row.Description, IsEnabled: row.IsEnabled, IsBuiltin: row.IsBuiltin}, nil
+	return sharedsetting.Record{Key: row.Key, Value: row.Value, ValueType: row.ValueType, Description: row.Description, Status: row.Status, IsBuiltin: row.IsBuiltin}, nil
 }
 
 func (s *Service) List(ctx context.Context, query ListQuery) (ListResult, error) {
@@ -238,7 +238,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		return 0, apperror.DependencyUnavailable(err)
 	}
 	now := s.now().UTC()
-	row := Record{Key: input.Key, Value: input.Value, ValueType: input.ValueType, Description: input.Description, IsEnabled: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now}
+	row := Record{Key: input.Key, Value: input.Value, ValueType: input.ValueType, Description: input.Description, Status: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now}
 	if err := s.mutate(ctx, func(mutationCtx context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Create(mutationCtx, &row, expected)
 	}); err != nil {
@@ -278,7 +278,7 @@ func (s *Service) Update(ctx context.Context, key string, input UpdateInput) err
 
 func (s *Service) UpdateStatus(ctx context.Context, key string, status yesno.Value) error {
 	if !yesno.IsValid(status) {
-		return apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+		return apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 	}
 	key = strings.TrimSpace(key)
 	if isRequiredSetting(key) && status == yesno.No {

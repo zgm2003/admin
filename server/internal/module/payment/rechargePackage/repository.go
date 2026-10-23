@@ -18,8 +18,8 @@ func packageFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 		like := "%" + query.Keyword + "%"
 		db = db.Where("name ILIKE ?", like)
 	}
-	if query.IsEnabled != nil {
-		db = db.Where("is_enabled = ?", *query.IsEnabled)
+	if query.Status != nil {
+		db = db.Where("status = ?", *query.Status)
 	}
 	return db
 }
@@ -82,7 +82,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, value yesno.Val
 	if r == nil || r.db == nil {
 		return errors.New("recharge package database missing")
 	}
-	result := r.db.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{"is_enabled": value, "updated_at": now})
+	result := r.db.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{"status": value, "updated_at": now})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -111,7 +111,7 @@ func (r *Repository) Catalog(ctx context.Context) ([]CatalogItem, error) {
 		return nil, errors.New("recharge package database missing")
 	}
 	rows := make([]CatalogItem, 0)
-	err := r.db.WithContext(ctx).Model(&Model{}).Select("id,name,amount_cents,badge,sort_order").Where("deleted_at IS NULL AND is_enabled = 1").Order("sort_order ASC, id ASC").Limit(MaxCatalogItems + 1).Find(&rows).Error
+	err := r.db.WithContext(ctx).Model(&Model{}).Select("id,name,amount_cents,badge,sort_order").Where("deleted_at IS NULL AND status = 1").Order("sort_order ASC, id ASC").Limit(MaxCatalogItems + 1).Find(&rows).Error
 	if err != nil {
 		return nil, err
 	}

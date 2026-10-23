@@ -31,12 +31,12 @@ type updateRequest struct {
 	Region     *string      `json:"region"`
 	Endpoint   *string      `json:"endpoint"`
 	TTLMinutes *int         `json:"ttlMinutes"`
-	IsEnabled  *yesno.Value `json:"isEnabled"`
+	Status  *yesno.Value `json:"status"`
 }
 
 func (r updateRequest) input() (Input, error) {
 	if r.SecretID == nil || r.SecretKey == nil || r.SDKAppID == nil || r.SignName == nil ||
-		r.Region == nil || r.Endpoint == nil || r.TTLMinutes == nil || r.IsEnabled == nil {
+		r.Region == nil || r.Endpoint == nil || r.TTLMinutes == nil || r.Status == nil {
 		return Input{}, apperror.InvalidRequest(fmt.Errorf("sms config fields are required"))
 	}
 	return Input{
@@ -47,7 +47,7 @@ func (r updateRequest) input() (Input, error) {
 		Region:     *r.Region,
 		Endpoint:   *r.Endpoint,
 		TTLMinutes: *r.TTLMinutes,
-		IsEnabled:  *r.IsEnabled,
+		Status:  *r.Status,
 	}, nil
 }
 

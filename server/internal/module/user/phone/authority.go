@@ -19,7 +19,7 @@ func NewAuthorityCoordinator(states *authstate.Store, invalidator *authstate.Inv
 }
 
 func (c *AuthorityCoordinator) Mutate(ctx context.Context, current Current, mutation func(context.Context) error) error {
-	if c == nil || c.states == nil || c.invalidator == nil || current.UserID < 1 || !current.IsEnabled || current.Deleted {
+	if c == nil || c.states == nil || c.invalidator == nil || current.UserID < 1 || !current.Status || current.Deleted {
 		return fmt.Errorf("phone authority mutation dependencies are unavailable")
 	}
 	fact, err := c.ensureReady(ctx, current)
@@ -44,7 +44,7 @@ func (c *AuthorityCoordinator) Mutate(ctx context.Context, current Current, muta
 		return errors.Join(renewalErr, err)
 	}
 	if err := lease.Commit(cleanupCtx, authstate.MutationFacts{Users: []authstate.UserFact{{
-		UserID: current.UserID, Generation: nextGeneration, IsEnabled: current.IsEnabled, Deleted: current.Deleted,
+		UserID: current.UserID, Generation: nextGeneration, Status: current.Status, Deleted: current.Deleted,
 	}}}); err != nil {
 		return errors.Join(renewalErr, err)
 	}
@@ -57,7 +57,7 @@ func (c *AuthorityCoordinator) ensureReady(ctx context.Context, current Current)
 		if state.State == authstate.StateInvalidating {
 			return authstate.UserFact{}, authstate.ErrUpdating
 		}
-		if state.IsEnabled != current.IsEnabled || state.Deleted != current.Deleted {
+		if state.Status != current.Status || state.Deleted != current.Deleted {
 			return authstate.UserFact{}, authstate.ErrGenerationChanged
 		}
 		return state.Fact(), nil
@@ -66,7 +66,7 @@ func (c *AuthorityCoordinator) ensureReady(ctx context.Context, current Current)
 	if err != nil {
 		return authstate.UserFact{}, err
 	}
-	fact := authstate.UserFact{UserID: current.UserID, Generation: generation, IsEnabled: current.IsEnabled, Deleted: current.Deleted}
+	fact := authstate.UserFact{UserID: current.UserID, Generation: generation, Status: current.Status, Deleted: current.Deleted}
 	installed, _, installErr := c.states.InstallUserReadyIfMissing(ctx, fact)
 	if installErr != nil {
 		return authstate.UserFact{}, errors.Join(readErr, installErr)
@@ -74,7 +74,7 @@ func (c *AuthorityCoordinator) ensureReady(ctx context.Context, current Current)
 	if installed.State == authstate.StateInvalidating {
 		return authstate.UserFact{}, authstate.ErrUpdating
 	}
-	if installed.IsEnabled != current.IsEnabled || installed.Deleted != current.Deleted {
+	if installed.Status != current.Status || installed.Deleted != current.Deleted {
 		return authstate.UserFact{}, authstate.ErrGenerationChanged
 	}
 	return installed.Fact(), nil

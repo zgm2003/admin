@@ -34,7 +34,7 @@ type Safe struct {
 	Content           string            `json:"content"`
 	VariableKeys      []string          `json:"variableKeys"`
 	ExampleVariables  map[string]string `json:"exampleVariables"`
-	IsEnabled         yesno.Value       `json:"isEnabled"`
+	Status         yesno.Value       `json:"status"`
 	CreatedAt         string            `json:"createdAt"`
 	UpdatedAt         string            `json:"updatedAt"`
 }
@@ -48,7 +48,7 @@ func safeOf(value Model) (Safe, error) {
 	if err := json.Unmarshal(value.ExampleVariables, &examples); err != nil {
 		return Safe{}, fmt.Errorf("decode mail example variables: %w", err)
 	}
-	return Safe{ID: value.ID, Scene: value.Scene, Name: value.Name, Subject: value.Subject, TencentTemplateID: value.TencentTemplateID, Content: value.Content, VariableKeys: keys, ExampleVariables: examples, IsEnabled: value.IsEnabled, CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano)}, nil
+	return Safe{ID: value.ID, Scene: value.Scene, Name: value.Name, Subject: value.Subject, TencentTemplateID: value.TencentTemplateID, Content: value.Content, VariableKeys: keys, ExampleVariables: examples, Status: value.Status, CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano)}, nil
 }
 
 type RuntimeCoordinator interface {

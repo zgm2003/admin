@@ -55,7 +55,7 @@ func EvaluateRows(rows []Model, email string) (Decision, error) {
 	}
 	var exact, domain []Model
 	for _, row := range rows {
-		if row.IsEnabled != yesno.Yes {
+		if row.Status != yesno.Yes {
 			continue
 		}
 		if row.Scope == ScopeEmail && row.Pattern == email {
@@ -89,7 +89,7 @@ func (s *Service) Create(ctx context.Context, input Input) (int64, error) {
 	now := time.Now().UTC()
 	value := &Model{
 		Scope: input.Scope, Pattern: pattern, Action: input.Action, Name: input.Name,
-		Remark: input.Remark, IsEnabled: input.IsEnabled, CreatedAt: now, UpdatedAt: now,
+		Remark: input.Remark, Status: input.Status, CreatedAt: now, UpdatedAt: now,
 	}
 	if s.runtime == nil {
 		return 0, apperror.DependencyUnavailable(fmt.Errorf("mail runtime coordinator unavailable"))
@@ -116,7 +116,7 @@ func (s *Service) Update(ctx context.Context, id int64, input Input) error {
 	err = wrapRepository(s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.Update(writeContext, id, map[string]any{
 			"scope": input.Scope, "pattern": pattern, "action": input.Action, "name": input.Name,
-			"remark": input.Remark, "is_enabled": input.IsEnabled,
+			"remark": input.Remark, "status": input.Status,
 		}, expected, time.Now().UTC())
 	}))
 	return err
@@ -170,7 +170,7 @@ func NormalizeRule(scope Scope, pattern string) (string, error) {
 
 func validateInput(input Input) error {
 	if !input.Scope.IsValid() || !input.Action.IsValid() ||
-		!yesno.IsValid(input.IsEnabled) || strings.TrimSpace(input.Name) == "" {
+		!yesno.IsValid(input.Status) || strings.TrimSpace(input.Name) == "" {
 		return fmt.Errorf("invalid recipient rule")
 	}
 	return nil

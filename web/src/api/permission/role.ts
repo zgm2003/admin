@@ -4,7 +4,7 @@ import type { PageRequest, PageResult } from '@/types/pagination'
 
 export interface RoleListQuery extends PageRequest {
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
 }
 
 export interface RoleActions {
@@ -28,7 +28,7 @@ export interface RoleListItem {
   code: string
   name: string
   isDefault: YesNo
-  isEnabled: YesNo
+  status: YesNo
   userCount: number
   permissionCount: number
   createdAt: string
@@ -43,7 +43,7 @@ export interface RolePermissionTreeNode {
   menuType: RolePermissionMenuType
   code: string
   name: string
-  isEnabled: YesNo
+  status: YesNo
   children: RolePermissionTreeNode[]
 }
 
@@ -51,7 +51,7 @@ export interface RolePermissionPlatform {
   id: number
   code: string
   name: string
-  isEnabled: YesNo
+  status: YesNo
   menuTree: RolePermissionTreeNode[]
 }
 
@@ -66,7 +66,7 @@ export interface UpdateRoleInput {
 
 export interface RoleStatusResult {
   id: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface RoleDefaultResult {
@@ -75,7 +75,7 @@ export interface RoleDefaultResult {
 }
 
 export interface RolePermissionsResponse {
-  role: { id: number; code: string; name: string; isDefault: YesNo; isEnabled: YesNo }
+  role: { id: number; code: string; name: string; isDefault: YesNo; status: YesNo }
   platforms: RolePermissionPlatform[]
   menuIds: number[]
 }
@@ -109,9 +109,9 @@ export async function updateRole(
   })
 }
 
-export async function updateRoleStatus(id: number, isEnabled: YesNo): Promise<RoleStatusResult> {
+export async function updateRoleStatus(id: number, status: YesNo): Promise<RoleStatusResult> {
   return request.patch<RoleStatusResult>(`/api/admin/v1/permission/role/${id}/status`, {
-    isEnabled,
+    status,
   })
 }
 

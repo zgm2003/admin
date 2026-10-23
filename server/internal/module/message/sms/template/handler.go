@@ -32,7 +32,7 @@ type updateRequest struct {
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
@@ -93,11 +93,11 @@ func (h *Handler) Status(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	if request.IsEnabled == nil || !yesno.IsValid(*request.IsEnabled) {
-		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1")))
+	if request.Status == nil || !yesno.IsValid(*request.Status) {
+		response.Fail(c, apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1")))
 		return
 	}
-	if err := h.service.UpdateStatus(c.Request.Context(), id, *request.IsEnabled); err != nil {
+	if err := h.service.UpdateStatus(c.Request.Context(), id, *request.Status); err != nil {
 		response.Fail(c, err)
 		return
 	}

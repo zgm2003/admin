@@ -41,7 +41,7 @@ describe('menu form fields', () => {
       icon: null,
       remark: null,
       sortOrder: 100,
-      isEnabled: 1,
+      status: 1,
       isHidden: 0,
     })
   })

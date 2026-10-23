@@ -27,7 +27,7 @@ func TestMutationLeaseCommitsAndRollsBackExactFacts(t *testing.T) {
 	_ = client.DeleteMany(ctx, keys)
 
 	prior := MutationFacts{
-		Users:    []UserFact{{UserID: 72001, Generation: "user-old", IsEnabled: true}},
+		Users:    []UserFact{{UserID: 72001, Generation: "user-old", Status: true}},
 		Sessions: []SessionsFact{{Platform: "admin", UserID: 72001, Generation: "sessions-old"}},
 	}
 	if _, _, err := store.InstallUserReadyIfMissing(ctx, prior.Users[0]); err != nil {
@@ -44,13 +44,13 @@ func TestMutationLeaseCommitsAndRollsBackExactFacts(t *testing.T) {
 		t.Fatalf("invalidating user = %+v,%v", state, err)
 	}
 	next := MutationFacts{
-		Users:    []UserFact{{UserID: 72001, Generation: "user-new", IsEnabled: false}},
+		Users:    []UserFact{{UserID: 72001, Generation: "user-new", Status: false}},
 		Sessions: []SessionsFact{{Platform: "admin", UserID: 72001, Generation: "sessions-new"}},
 	}
 	if err := lease.Commit(ctx, next); err != nil {
 		t.Fatal(err)
 	}
-	if state, _, err := store.ReadUser(ctx, 72001); err != nil || state.State != StateReady || state.Generation != "user-new" || state.IsEnabled {
+	if state, _, err := store.ReadUser(ctx, 72001); err != nil || state.State != StateReady || state.Generation != "user-new" || state.Status {
 		t.Fatalf("committed user = %+v,%v", state, err)
 	}
 
@@ -75,7 +75,7 @@ func TestMutationAcquireRestoresEarlierKeysWhenCandidateChanged(t *testing.T) {
 	t.Cleanup(func() { _ = client.DeleteMany(context.Background(), keys) })
 	_ = client.DeleteMany(ctx, keys)
 
-	userFact := UserFact{UserID: 72002, Generation: "user-current", IsEnabled: true}
+	userFact := UserFact{UserID: 72002, Generation: "user-current", Status: true}
 	sessionsFact := SessionsFact{Platform: "admin", UserID: 72002, Generation: "sessions-current"}
 	_, _, _ = store.InstallUserReadyIfMissing(ctx, userFact)
 	_, _, _ = store.InstallSessionsReadyIfMissing(ctx, sessionsFact)
@@ -108,7 +108,7 @@ func TestAcquirePublishesRealtimeInvalidationInSameRedisCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	userFact := UserFact{UserID: 72003, Generation: "user-current", IsEnabled: true}
+	userFact := UserFact{UserID: 72003, Generation: "user-current", Status: true}
 	sessionsFact := SessionsFact{Platform: "admin", UserID: 72003, Generation: "sessions-current"}
 	if _, _, err := store.InstallUserReadyIfMissing(ctx, userFact); err != nil {
 		t.Fatal(err)

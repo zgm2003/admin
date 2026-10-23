@@ -55,7 +55,7 @@ type runtimeConfig struct {
 	FromName            string      `json:"fromName"`
 	ReplyTo             *string     `json:"replyTo"`
 	TTLMinutes          int16       `json:"ttlMinutes"`
-	IsEnabled           yesno.Value `json:"isEnabled"`
+	Status           yesno.Value `json:"status"`
 	CreatedAt           time.Time   `json:"createdAt"`
 	UpdatedAt           time.Time   `json:"updatedAt"`
 }
@@ -65,7 +65,7 @@ func runtimeConfigFromModel(value Config) runtimeConfig {
 		ID: value.ID, SecretIDCiphertext: value.SecretIDCiphertext,
 		SecretKeyCiphertext: value.SecretKeyCiphertext, Region: value.Region,
 		Endpoint: value.Endpoint, FromEmail: value.FromEmail, FromName: value.FromName,
-		ReplyTo: value.ReplyTo, TTLMinutes: value.TTLMinutes, IsEnabled: value.IsEnabled,
+		ReplyTo: value.ReplyTo, TTLMinutes: value.TTLMinutes, Status: value.Status,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}
 }
@@ -73,7 +73,7 @@ func runtimeConfigFromModel(value Config) runtimeConfig {
 func (c runtimeConfig) valid() error {
 	if c.ID < 1 || c.SecretIDCiphertext == "" || c.SecretKeyCiphertext == "" ||
 		c.Region == "" || c.FromEmail == "" || c.FromName == "" ||
-		c.TTLMinutes < 1 || !yesno.IsValid(c.IsEnabled) || c.UpdatedAt.IsZero() {
+		c.TTLMinutes < 1 || !yesno.IsValid(c.Status) || c.UpdatedAt.IsZero() {
 		return fmt.Errorf("mail runtime config is invalid")
 	}
 	return nil
@@ -462,7 +462,7 @@ func (s *runtimeStore) loadReadinessFromDatabase(ctx context.Context, scene stri
 	if err != nil {
 		return VerifyCodeReadiness{}, err
 	}
-	if config.IsEnabled != yesno.Yes || config.SecretIDCiphertext == "" || config.SecretKeyCiphertext == "" {
+	if config.Status != yesno.Yes || config.SecretIDCiphertext == "" || config.SecretKeyCiphertext == "" {
 		return VerifyCodeReadiness{}, nil
 	}
 	template, err := s.repository.FindTemplateByScene(ctx, scene)
@@ -472,7 +472,7 @@ func (s *runtimeStore) loadReadinessFromDatabase(ctx context.Context, scene stri
 	if err != nil {
 		return VerifyCodeReadiness{}, err
 	}
-	if template.IsEnabled != yesno.Yes {
+	if template.Status != yesno.Yes {
 		return VerifyCodeReadiness{}, nil
 	}
 	return VerifyCodeReadiness{Ready: true, TTLMinutes: int(config.TTLMinutes)}, nil
@@ -698,7 +698,7 @@ func validateRuntimeRuleJSON(payload []byte) error {
 		if err := json.Unmarshal(rawRule, &fields); err != nil {
 			return err
 		}
-		for _, name := range []string{"scope", "action", "isEnabled"} {
+		for _, name := range []string{"scope", "action", "status"} {
 			raw, ok := fields[name]
 			if !ok || string(raw) == "null" || len(raw) == 0 || (raw[0] != '-' && (raw[0] < '0' || raw[0] > '9')) {
 				return fmt.Errorf("rule %s must be a JSON number", name)
@@ -710,7 +710,7 @@ func validateRuntimeRuleJSON(payload []byte) error {
 
 func validateRuntimeRuleEnums(rules []RecipientRule) error {
 	for _, rule := range rules {
-		if !rule.Scope.IsValid() || !rule.Action.IsValid() || !yesno.IsValid(rule.IsEnabled) {
+		if !rule.Scope.IsValid() || !rule.Action.IsValid() || !yesno.IsValid(rule.Status) {
 			return fmt.Errorf("mail runtime recipient rule enum is invalid")
 		}
 	}

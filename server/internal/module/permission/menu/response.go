@@ -25,7 +25,7 @@ type managedMenuResponse struct {
 	Icon          *string               `json:"icon"`
 	Remark        *string               `json:"remark"`
 	SortOrder     int                   `json:"sortOrder"`
-	IsEnabled     int16                 `json:"isEnabled"`
+	Status     int16                 `json:"status"`
 	IsHidden      int16                 `json:"isHidden"`
 	CreatedAt     string                `json:"createdAt"`
 	UpdatedAt     string                `json:"updatedAt"`
@@ -37,7 +37,7 @@ type platformOptionResponse struct {
 	ID        int64  `json:"id"`
 	Code      string `json:"code"`
 	Name      string `json:"name"`
-	IsEnabled int16  `json:"isEnabled"`
+	Status int16  `json:"status"`
 }
 
 type menuCatalogResponse struct {
@@ -52,7 +52,7 @@ type menuIDResponse struct {
 
 type menuStatusResponse struct {
 	ID        int64 `json:"id"`
-	IsEnabled int16 `json:"isEnabled"`
+	Status int16 `json:"status"`
 }
 
 func newManagedMenuResponses(ctx context.Context, items []ManagedMenu) ([]managedMenuResponse, error) {
@@ -70,7 +70,7 @@ func newManagedMenuResponses(ctx context.Context, items []ManagedMenu) ([]manage
 func newManagedMenuResponse(ctx context.Context, item ManagedMenu, ancestorDisabled bool) (managedMenuResponse, error) {
 	children := make([]managedMenuResponse, 0, len(item.Children))
 	for _, child := range item.Children {
-		value, err := newManagedMenuResponse(ctx, child, ancestorDisabled || item.IsEnabled != yesno.Yes)
+		value, err := newManagedMenuResponse(ctx, child, ancestorDisabled || item.Status != yesno.Yes)
 		if err != nil {
 			return managedMenuResponse{}, err
 		}
@@ -80,12 +80,12 @@ func newManagedMenuResponse(ctx context.Context, item ManagedMenu, ancestorDisab
 	if err != nil {
 		return managedMenuResponse{}, err
 	}
-	if ancestorDisabled && item.IsEnabled != yesno.Yes {
+	if ancestorDisabled && item.Status != yesno.Yes {
 		presentation.StatusReason, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuParentDisabledReason, nil)
 		if err != nil {
 			return managedMenuResponse{}, err
 		}
-	} else if item.IsProtected && item.IsEnabled == yesno.Yes {
+	} else if item.IsProtected && item.Status == yesno.Yes {
 		presentation.StatusReason = presentation.ProtectionReason
 	}
 	return managedMenuResponse{
@@ -93,7 +93,7 @@ func newManagedMenuResponse(ctx context.Context, item ManagedMenu, ancestorDisab
 		ID: item.ID, PlatformID: item.PlatformID, PlatformCode: item.PlatformCode, PlatformName: item.PlatformName,
 		ParentID: item.ParentID, MenuType: item.MenuType, Name: item.Name, Code: item.Code,
 		I18nKey: item.I18nKey, Path: item.Path, ComponentPath: item.ComponentPath, Icon: item.Icon, Remark: item.Remark,
-		SortOrder: item.SortOrder, IsEnabled: int16(item.IsEnabled), IsHidden: int16(item.IsHidden),
+		SortOrder: item.SortOrder, Status: int16(item.Status), IsHidden: int16(item.IsHidden),
 		CreatedAt: item.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: item.UpdatedAt.UTC().Format(time.RFC3339Nano), IsProtected: protectedValue(item.IsProtected), Children: children,
 	}, nil
@@ -103,7 +103,7 @@ func newMenuCatalogResponse(ctx context.Context, catalog Catalog) (menuCatalogRe
 	platforms := make([]platformOptionResponse, 0, len(catalog.Platforms))
 	for _, platform := range catalog.Platforms {
 		platforms = append(platforms, platformOptionResponse{
-			ID: platform.ID, Code: platform.Code, Name: platform.Name, IsEnabled: int16(platform.IsEnabled),
+			ID: platform.ID, Code: platform.Code, Name: platform.Name, Status: int16(platform.Status),
 		})
 	}
 	tree, err := newManagedMenuResponses(ctx, catalog.MenuTree)

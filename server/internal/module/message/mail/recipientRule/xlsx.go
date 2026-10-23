@@ -25,7 +25,7 @@ func (s *Service) ImportTemplate(ctx context.Context) (ImportTemplate, error) {
 	if err != nil {
 		return ImportTemplate{}, apperror.DependencyUnavailable(err)
 	}
-	if row.ValueType != sharedsetting.ValueTypeMediaFile || row.IsEnabled != yesno.Yes {
+	if row.ValueType != sharedsetting.ValueTypeMediaFile || row.Status != yesno.Yes {
 		return ImportTemplate{}, apperror.DependencyUnavailable(fmt.Errorf("recipient rule template setting invalid"))
 	}
 	value := strings.TrimSpace(row.Value)
@@ -108,7 +108,7 @@ func (s *Service) ImportXlsx(ctx context.Context, input XlsxImportInput) (XlsxIm
 	values := make([]Model, len(preview.Rows))
 	for index, row := range preview.Rows {
 		data := *row.Data
-		values[index] = Model{Scope: data.Scope, Pattern: data.Pattern, Action: data.Action, Name: data.Name, Remark: data.Remark, IsEnabled: data.IsEnabled, CreatedAt: now, UpdatedAt: now}
+		values[index] = Model{Scope: data.Scope, Pattern: data.Pattern, Action: data.Action, Name: data.Name, Remark: data.Remark, Status: data.Status, CreatedAt: now, UpdatedAt: now}
 	}
 	err = s.runtime.Mutate(ctx, func(writeContext context.Context, expected int64) (configcache.MutationResult, error) {
 		return s.repository.CreateBatch(writeContext, values, expected, now)
@@ -180,7 +180,7 @@ func validateXlsxRow(row *XlsxRow) {
 		if cells[5] == "启用" {
 			enabled = yesno.Yes
 		}
-		row.Data = &Input{Scope: scope, Pattern: cells[1], Action: action, Name: cells[3], Remark: cells[4], IsEnabled: enabled}
+		row.Data = &Input{Scope: scope, Pattern: cells[1], Action: action, Name: cells[3], Remark: cells[4], Status: enabled}
 	}
 }
 

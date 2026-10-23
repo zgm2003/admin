@@ -349,7 +349,7 @@ describe('MenuManagement', () => {
       icon: null,
       remark: null,
       sortOrder: 100,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       isHidden: YesNo.No,
     }
     expect(createMenuMock).toHaveBeenCalledWith(expected)
@@ -467,7 +467,7 @@ describe('MenuManagement', () => {
       icon: null,
       remark: null,
       sortOrder: 100,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       isHidden: YesNo.Yes,
     })
   })
@@ -652,7 +652,7 @@ describe('MenuManagement', () => {
   it('uses exact status/delete APIs, reloads once, and preserves the table on failure', async () => {
     const mutableCatalog = menuCatalog(menuTree())
     getMenusMock.mockResolvedValueOnce(mutableCatalog).mockResolvedValue(mutableCatalog)
-    updateMenuStatusMock.mockResolvedValue({ id: 3, isEnabled: YesNo.Yes })
+    updateMenuStatusMock.mockResolvedValue({ id: 3, status: YesNo.Yes })
     deleteMenuMock.mockResolvedValue({ id: 3 })
     const wrapper = mountPage(pinia, [
       'permission:menu:list',
@@ -774,7 +774,7 @@ function menuTree(): ManagedMenuNode[] {
       componentPath: null,
       icon: 'lucide:settings-2',
       sortOrder: 100,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       isHidden: YesNo.No,
       isProtected: YesNo.No,
       createdAt: timestamp,
@@ -795,7 +795,7 @@ function menuTree(): ManagedMenuNode[] {
           componentPath: 'user/account',
           icon: 'lucide:panel-left',
           sortOrder: 10,
-          isEnabled: YesNo.Yes,
+          status: YesNo.Yes,
           isHidden: YesNo.No,
           isProtected: YesNo.No,
           createdAt: timestamp,
@@ -822,7 +822,7 @@ function menuTree(): ManagedMenuNode[] {
               componentPath: null,
               icon: null,
               sortOrder: 10,
-              isEnabled: YesNo.No,
+              status: YesNo.No,
               isHidden: YesNo.Yes,
               isProtected: YesNo.No,
               createdAt: timestamp,
@@ -840,8 +840,8 @@ function menuCatalog(menuTreeValue: ManagedMenuNode[] = menuTree()): MenuCatalog
   return {
     allowedRootTypes: ['directory', 'page'],
     platforms: [
-      { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes },
-      { id: 2, code: 'canvas', name: 'Canvas', isEnabled: YesNo.No },
+      { id: 1, code: 'admin', name: 'Admin', status: YesNo.Yes },
+      { id: 2, code: 'canvas', name: 'Canvas', status: YesNo.No },
     ],
     menuTree: menuTreeValue,
   }
@@ -865,7 +865,7 @@ function canvasMenuTree(): ManagedMenuNode[] {
       componentPath: 'test',
       icon: null,
       sortOrder: 10,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       isHidden: YesNo.No,
       isProtected: YesNo.No,
       createdAt: timestamp,
@@ -916,7 +916,7 @@ function rootWithEditableSubtree(): ManagedMenuNode {
     componentPath: null,
     icon: 'lucide:folder',
     sortOrder: 200,
-    isEnabled: YesNo.Yes,
+    status: YesNo.Yes,
     isHidden: YesNo.No,
     isProtected: YesNo.No,
     createdAt: root.createdAt,
@@ -937,7 +937,7 @@ function rootWithEditableSubtree(): ManagedMenuNode {
         componentPath: 'user/account',
         icon: 'lucide:panel-left',
         sortOrder: 10,
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
         isHidden: YesNo.No,
         isProtected: YesNo.No,
         createdAt: root.createdAt,

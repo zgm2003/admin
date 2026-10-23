@@ -21,7 +21,7 @@ type Model struct {
 	FromName            string         `gorm:"column:from_name;type:varchar(128);not null" json:"fromName"`
 	ReplyTo             *string        `gorm:"column:reply_to;type:varchar(254)" json:"replyTo"`
 	TTLMinutes          int16          `gorm:"column:ttl_minutes;not null" json:"ttlMinutes"`
-	IsEnabled           yesno.Value    `gorm:"column:is_enabled;type:smallint;not null" json:"isEnabled"`
+	Status           yesno.Value    `gorm:"column:status;type:smallint;not null" json:"status"`
 	LastTestAt          *time.Time     `gorm:"column:last_test_at;type:timestamptz" json:"lastTestAt"`
 	LastTestError       string         `gorm:"column:last_test_error;type:varchar(512);not null" json:"lastTestError"`
 	CreatedAt           time.Time      `gorm:"column:created_at;not null" json:"createdAt"`

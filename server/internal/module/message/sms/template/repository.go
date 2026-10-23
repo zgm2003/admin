@@ -78,11 +78,11 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status int16, e
 		if err != nil {
 			return false, err
 		}
-		if int16(current.IsEnabled) == status {
+		if int16(current.Status) == status {
 			return false, nil
 		}
 		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{
-			"is_enabled": status, "updated_at": now,
+			"status": status, "updated_at": now,
 		})
 		if query.Error != nil {
 			return false, query.Error

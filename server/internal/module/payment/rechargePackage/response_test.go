@@ -12,14 +12,14 @@ import (
 
 func TestSafeValueUsesDecimalAmountAndLocalizedActions(t *testing.T) {
 	badge := "Popular"
-	row := Model{ID: 2, Name: "Starter", AmountCents: 1234, Badge: &badge, IsEnabled: yesno.Yes, CreatedAt: time.Unix(1, 0).UTC(), UpdatedAt: time.Unix(2, 0).UTC()}
+	row := Model{ID: 2, Name: "Starter", AmountCents: 1234, Badge: &badge, Status: yesno.Yes, CreatedAt: time.Unix(1, 0).UTC(), UpdatedAt: time.Unix(2, 0).UTC()}
 	for _, test := range []struct {
 		locale i18n.Locale
 		label  string
 	}{{i18n.ZhCN, "启用"}, {i18n.EnUS, "Enabled"}} {
 		ctx := i18n.WithLocale(context.Background(), test.locale)
 		value, err := safeValue(ctx, row)
-		if err != nil || value.Amount != "12.34" || value.IsEnabled != yesno.Yes || value.Presentation.Status != test.label || !value.Actions.Update || !value.Actions.Status || !value.Actions.Delete {
+		if err != nil || value.Amount != "12.34" || value.Status != yesno.Yes || value.Presentation.Status != test.label || !value.Actions.Update || !value.Actions.Status || !value.Actions.Delete {
 			t.Fatalf("value=%+v err=%v", value, err)
 		}
 		raw, err := json.Marshal(value)
@@ -30,7 +30,7 @@ func TestSafeValueUsesDecimalAmountAndLocalizedActions(t *testing.T) {
 }
 
 func TestSafeValueRejectsCorruptRowsAndPreservesNullBadge(t *testing.T) {
-	row := Model{ID: 1, Name: "Starter", AmountCents: 1, IsEnabled: yesno.No}
+	row := Model{ID: 1, Name: "Starter", AmountCents: 1, Status: yesno.No}
 	value, err := safeValue(context.Background(), row)
 	if err != nil || value.Badge != nil {
 		t.Fatalf("null badge: %+v %v", value, err)

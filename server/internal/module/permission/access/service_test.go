@@ -54,8 +54,8 @@ func TestBuildSnapshotKeepsPageAndReadPermissionsIndependent(t *testing.T) {
 	snapshot, err := buildSnapshot(Source{
 		Version: 1,
 		Menus: []SourceMenu{
-			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.user"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "user:account:view", I18nKey: accessStringPointer("navigation.userAccount"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.user"), Status: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "user:account:view", I18nKey: accessStringPointer("navigation.userAccount"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No},
 		},
 		GrantedMenuIDs: []int64{pageID},
 	})
@@ -76,8 +76,8 @@ func TestBuildSnapshotAcceptsLowerCamelModuleIdentity(t *testing.T) {
 	snapshot, err := buildSnapshot(Source{
 		Version: 1,
 		Menus: []SourceMenu{
-			{ID: rootID, MenuType: MenuDirectory, Code: "permission", I18nKey: accessStringPointer("navigation.permission"), IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "permission:authPlatform:view", I18nKey: accessStringPointer("navigation.permissionAuthPlatform"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
+			{ID: rootID, MenuType: MenuDirectory, Code: "permission", I18nKey: accessStringPointer("navigation.permission"), Status: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "permission:authPlatform:view", I18nKey: accessStringPointer("navigation.permissionAuthPlatform"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No},
 		},
 		GrantedMenuIDs: []int64{pageID},
 	})
@@ -376,8 +376,8 @@ func TestBuildSnapshotSupportsCanvasRootPageAndAction(t *testing.T) {
 		Version:   1,
 		RoleCodes: []string{"canvas_user"},
 		Menus: []SourceMenu{
-			{ID: pageID, MenuType: MenuPage, Code: "canvas:test:list", I18nKey: accessStringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: 42, ParentID: &pageID, MenuType: MenuAction, Code: "canvas:test:button", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: pageID, MenuType: MenuPage, Code: "canvas:test:list", I18nKey: accessStringPointer("navigation.system"), Path: &path, ComponentPath: &componentPath, Status: yesno.Yes, IsHidden: yesno.No},
+			{ID: 42, ParentID: &pageID, MenuType: MenuAction, Code: "canvas:test:button", Status: yesno.Yes, IsHidden: yesno.Yes},
 		},
 		GrantedMenuIDs: []int64{42},
 	})
@@ -413,14 +413,14 @@ func TestRegisteredUserUploadActionDoesNotExposeStorageAndProfileIsRoot(t *testi
 	snapshot, err := buildSnapshot(Source{
 		Version: 1, RoleCodes: []string{"registered_user"},
 		Menus: []SourceMenu{
-			{ID: userDirectoryID, MenuType: MenuDirectory, Code: "user", I18nKey: accessStringPointer("navigation.user"), IsEnabled: yesno.Yes},
-			{ID: profileID, MenuType: MenuPage, Code: "user:profile:view", I18nKey: accessStringPointer("layout.user.profile"), Path: &profilePath, ComponentPath: &profileComponent, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: 3, ParentID: &profileID, MenuType: MenuAction, Code: "user:profile:detail", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: 4, ParentID: &profileID, MenuType: MenuAction, Code: "user:profile:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: 5, ParentID: &profileID, MenuType: MenuAction, Code: "user:password:update", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: storageDirectoryID, MenuType: MenuDirectory, Code: "storage", I18nKey: accessStringPointer("navigation.storage"), IsEnabled: yesno.Yes},
-			{ID: storagePageID, ParentID: &storageDirectoryID, MenuType: MenuPage, Code: "storage:object:view", I18nKey: accessStringPointer("navigation.storageObject"), Path: &storagePath, ComponentPath: &storageComponent, IsEnabled: yesno.Yes},
-			{ID: 8, ParentID: &storagePageID, MenuType: MenuAction, Code: "storage:object:upload", IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: userDirectoryID, MenuType: MenuDirectory, Code: "user", I18nKey: accessStringPointer("navigation.user"), Status: yesno.Yes},
+			{ID: profileID, MenuType: MenuPage, Code: "user:profile:view", I18nKey: accessStringPointer("layout.user.profile"), Path: &profilePath, ComponentPath: &profileComponent, Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 3, ParentID: &profileID, MenuType: MenuAction, Code: "user:profile:detail", Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 4, ParentID: &profileID, MenuType: MenuAction, Code: "user:profile:update", Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 5, ParentID: &profileID, MenuType: MenuAction, Code: "user:password:update", Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: storageDirectoryID, MenuType: MenuDirectory, Code: "storage", I18nKey: accessStringPointer("navigation.storage"), Status: yesno.Yes},
+			{ID: storagePageID, ParentID: &storageDirectoryID, MenuType: MenuPage, Code: "storage:object:view", I18nKey: accessStringPointer("navigation.storageObject"), Path: &storagePath, ComponentPath: &storageComponent, Status: yesno.Yes},
+			{ID: 8, ParentID: &storagePageID, MenuType: MenuAction, Code: "storage:object:upload", Status: yesno.Yes, IsHidden: yesno.Yes},
 		},
 		GrantedMenuIDs: []int64{profileID, 3, 4, 5, 8},
 	})
@@ -443,7 +443,7 @@ func TestBuildSnapshotAllowsSharedComponentPathButRejectsSharedRoutePath(t *test
 	source.Menus = append(source.Menus, SourceMenu{
 		ID: 5, ParentID: int64Pointer(1), MenuType: MenuPage, Code: "account:account:list",
 		I18nKey: accessStringPointer("navigation.userAccounts"), Path: &secondPath, ComponentPath: &sharedComponentPath,
-		SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.No,
+		SortOrder: 20, Status: yesno.Yes, IsHidden: yesno.No,
 	})
 	source.GrantedMenuIDs = []int64{2, 5}
 	if _, err := buildSnapshot(source); err != nil {
@@ -491,10 +491,10 @@ func baseSource(version int64) Source {
 	return Source{
 		Version: version, RoleCodes: []string{"registered_user", "ai_tester", "registered_user"},
 		Menus: []SourceMenu{
-			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.user"), SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "user:account:list", I18nKey: accessStringPointer("navigation.userAccount"), Path: &path, ComponentPath: &componentPath, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No},
-			{ID: 3, ParentID: &pageID, MenuType: MenuAction, Code: "user:account:create", I18nKey: nil, SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
-			{ID: 4, ParentID: &pageID, MenuType: MenuAction, Code: "user:account:delete", I18nKey: nil, SortOrder: 20, IsEnabled: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: rootID, MenuType: MenuDirectory, Code: "account", I18nKey: accessStringPointer("navigation.user"), SortOrder: 10, Status: yesno.Yes, IsHidden: yesno.No},
+			{ID: pageID, ParentID: &rootID, MenuType: MenuPage, Code: "user:account:list", I18nKey: accessStringPointer("navigation.userAccount"), Path: &path, ComponentPath: &componentPath, SortOrder: 10, Status: yesno.Yes, IsHidden: yesno.No},
+			{ID: 3, ParentID: &pageID, MenuType: MenuAction, Code: "user:account:create", I18nKey: nil, SortOrder: 10, Status: yesno.Yes, IsHidden: yesno.Yes},
+			{ID: 4, ParentID: &pageID, MenuType: MenuAction, Code: "user:account:delete", I18nKey: nil, SortOrder: 20, Status: yesno.Yes, IsHidden: yesno.Yes},
 		},
 		GrantedMenuIDs: []int64{3, 3},
 	}

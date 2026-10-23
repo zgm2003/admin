@@ -34,7 +34,7 @@ func NewService(repository *Repository, keys *secretkey.KeyRing) *Service {
 func (s *Service) Get(ctx context.Context) (Safe, error) {
 	value, err := s.repository.Find(ctx)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return Safe{Configured: false, TTLMinutes: 0, IsEnabled: yesno.No}, nil
+		return Safe{Configured: false, TTLMinutes: 0, Status: yesno.No}, nil
 	}
 	if err != nil {
 		return Safe{}, wrapRepository(err)
@@ -43,7 +43,7 @@ func (s *Service) Get(ctx context.Context) (Safe, error) {
 }
 
 func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
-	if input.TTLMinutes < minTTLMinutes || input.TTLMinutes > maxTTLMinutes || !yesno.IsValid(input.IsEnabled) {
+	if input.TTLMinutes < minTTLMinutes || input.TTLMinutes > maxTTLMinutes || !yesno.IsValid(input.Status) {
 		return Safe{}, apperror.InvalidRequest(fmt.Errorf("invalid mail config"))
 	}
 	fromEmail, err := normalizeAddress(input.FromEmail)
@@ -114,7 +114,7 @@ func (s *Service) Save(ctx context.Context, input Input) (Safe, error) {
 		"region": strings.TrimSpace(input.Region), "endpoint": nullableText(input.Endpoint),
 		"from_email": input.FromEmail, "from_name": strings.TrimSpace(input.FromName),
 		"reply_to": nullableText(input.ReplyTo), "ttl_minutes": input.TTLMinutes,
-		"is_enabled": input.IsEnabled, "updated_at": time.Now().UTC(),
+		"status": input.Status, "updated_at": time.Now().UTC(),
 	}
 	var saved Model
 	if s.runtime == nil {
@@ -149,7 +149,7 @@ func safe(value Model) Safe {
 		Configured: value.SecretIDCiphertext != "" && value.SecretKeyCiphertext != "",
 		Region:     value.Region, Endpoint: stringValue(value.Endpoint), FromEmail: value.FromEmail,
 		FromName: value.FromName, ReplyTo: stringValue(value.ReplyTo), TTLMinutes: int(value.TTLMinutes),
-		IsEnabled: value.IsEnabled, LastTestAt: value.LastTestAt, LastTestError: value.LastTestError,
+		Status: value.Status, LastTestAt: value.LastTestAt, LastTestError: value.LastTestError,
 	}
 }
 

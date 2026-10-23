@@ -22,7 +22,7 @@ func TestRuntimeSnapshotCodecRoundTripAndRejections(t *testing.T) {
 	domain := "https://cdn.example.com"
 	config := RuntimeConfig{
 		ID: 7, AppID: "1250000000", SecretIDCiphertext: "v1:cipher-id", SecretKeyCiphertext: "v1:cipher-key",
-		CurrentVersion: 2, IsEnabled: yesno.Yes, Deleted: false,
+		CurrentVersion: 2, Status: yesno.Yes, Deleted: false,
 		Versions: []RuntimeVersion{
 			{Version: 1, Bucket: "bucket-a", Region: "ap-guangzhou", Endpoint: &endpoint, BucketDomain: &domain},
 			{Version: 2, Bucket: "bucket-b", Region: "ap-shanghai"},
@@ -56,7 +56,7 @@ func TestRuntimeSnapshotCodecRoundTripAndRejections(t *testing.T) {
 		{"not an object", `[]`},
 		{"schema version", strings.Replace(raw, `"schemaVersion":1`, `"schemaVersion":2`, 1)},
 		{"empty ciphertext", strings.Replace(raw, `"secretIdCiphertext":"v1:cipher-id"`, `"secretIdCiphertext":""`, 1)},
-		{"invalid enabled flag", strings.Replace(raw, `"isEnabled":1`, `"isEnabled":9`, 1)},
+		{"invalid enabled flag", strings.Replace(raw, `"status":1`, `"status":9`, 1)},
 		{"empty versions", strings.Replace(raw, `"versions":[`, `"versions":[],"ignored":[`, 1)},
 		{"out of order versions", strings.Replace(raw, `"version":2,"bucket":"bucket-b"`, `"version":3,"bucket":"bucket-b"`, 1)},
 		{"empty bucket", strings.Replace(raw, `"bucket":"bucket-a"`, `"bucket":""`, 1)},
@@ -258,7 +258,7 @@ func TestMutationNoOpRestoresReadyWithoutAdvancingGeneration(t *testing.T) {
 	if _, err := service.states.Reconcile(ctx, scope, 1); err != nil {
 		t.Fatal(err)
 	}
-	repository.findByIDRow = Current{Model: Model{ID: 9, IsEnabled: yesno.Yes, CurrentVersion: 1}}
+	repository.findByIDRow = Current{Model: Model{ID: 9, Status: yesno.Yes, CurrentVersion: 1}}
 	if err := service.Update(ctx, 9, UpdateInput{Name: "Main", Bucket: "assets", Region: "ap-guangzhou"}); err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestMutationPublishFailureStillReportsBusinessSuccess(t *testing.T) {
 	if _, err := generations.InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 11, IsEnabled: yesno.Yes, CurrentVersion: 1}}}
+	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 11, Status: yesno.Yes, CurrentVersion: 1}}}
 	service := NewService(repository, mustKeys(t, "p"), &recordingConnectionTester{})
 	service.SetGenerations(generations, configcache.NewStore(client))
 	service.SetCache(NewCache(client))
@@ -329,7 +329,7 @@ func TestMutationUncertainCommitUsesAuthoritativeGeneration(t *testing.T) {
 	if _, err := generations.InitializeTx(ctx, db, scope, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 12, IsEnabled: yesno.Yes, CurrentVersion: 1}}}
+	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 12, Status: yesno.Yes, CurrentVersion: 1}}}
 	service := NewService(repository, mustKeys(t, "u"), &recordingConnectionTester{})
 	service.SetGenerations(generations, configcache.NewStore(client))
 	service.SetCache(NewCache(client))
@@ -356,7 +356,7 @@ func TestMutationUncertainCommitUsesAuthoritativeGeneration(t *testing.T) {
 func TestMutationBudgetExhaustionReturnsDependencyBusy(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	repository := &fakeConfigRepository{
-		findByIDRow: Current{Model: Model{ID: 13, IsEnabled: yesno.Yes, CurrentVersion: 1}},
+		findByIDRow: Current{Model: Model{ID: 13, Status: yesno.Yes, CurrentVersion: 1}},
 		updateErr:   configcache.ErrGenerationChanged,
 	}
 	service := newFakeService(t, db, repository)
@@ -389,7 +389,7 @@ func TestMutationBudgetExhaustionReturnsDependencyBusy(t *testing.T) {
 func TestMutationRedisErrorDoesNotWritePostgres(t *testing.T) {
 	db, ctx := openConfigDatabase(t)
 	broken := closedRedisClient(t)
-	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 14, IsEnabled: yesno.Yes, CurrentVersion: 1}}}
+	repository := &fakeConfigRepository{findByIDRow: Current{Model: Model{ID: 14, Status: yesno.Yes, CurrentVersion: 1}}}
 	service := NewService(repository, mustKeys(t, "w"), &recordingConnectionTester{})
 	service.SetGenerations(configcache.NewRepository(db), configcache.NewStore(broken))
 	service.SetCache(NewCache(broken))
@@ -435,7 +435,7 @@ func newFakeService(t *testing.T, db *gorm.DB, repository repository) *Service {
 
 func createRuntimeConfig(t *testing.T, ctx context.Context, service *Service, bucket string) int64 {
 	t.Helper()
-	id, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1250000000", SecretID: "secret-id", SecretKey: "secret-key", Bucket: bucket, Region: "ap-guangzhou", IsEnabled: yesno.Yes})
+	id, err := service.Create(ctx, CreateInput{Name: "Main", AppID: "1250000000", SecretID: "secret-id", SecretKey: "secret-key", Bucket: bucket, Region: "ap-guangzhou", Status: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}

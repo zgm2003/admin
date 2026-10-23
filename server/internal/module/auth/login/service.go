@@ -712,7 +712,7 @@ func (s *Service) loginWithPassword(ctx context.Context, policy authplatform.Pol
 		}
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
-	if credential.IsEnabled != yesno.Yes {
+	if credential.Status != yesno.Yes {
 		if logErr := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, Account: email, EventType: loginlog.EventLogin, LoginType: loginTypePointer(loginlog.LoginPassword), IsSuccess: yesno.No, ReasonCode: "account_disabled", ClientIP: input.Client.ClientIP, UserAgent: input.Client.UserAgent}); logErr != nil {
 			return Credential{}, logErr
 		}
@@ -771,7 +771,7 @@ func (s *Service) loginWithCode(ctx context.Context, policy authplatform.Policy,
 		s.recordCodeLoginFailure(ctx, input, policy, account, nil, "invalid_credentials")
 		return Credential{}, invalidCredentialError(fmt.Errorf("verification code is invalid or expired"))
 	}
-	if !isNewUser && credential.IsEnabled != yesno.Yes {
+	if !isNewUser && credential.Status != yesno.Yes {
 		s.recordCodeLoginFailure(ctx, input, policy, account, &credential.ID, "account_disabled")
 		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
 	}
@@ -802,7 +802,7 @@ func (s *Service) loginWithCode(ctx context.Context, policy authplatform.Policy,
 				return Credential{}, apperror.DependencyUnavailable(createErr)
 			}
 		} else {
-			credential = user.Credential{ID: created.ID, Username: created.Username, Email: created.Email, PasswordHash: created.PasswordHash, IsEnabled: created.IsEnabled}
+			credential = user.Credential{ID: created.ID, Username: created.Username, Email: created.Email, PasswordHash: created.PasswordHash, Status: created.Status}
 			loginType := loginTypeFor(input.LoginType)
 			_ = s.recordLoginEvent(ctx, loginlog.Event{
 				UserID: &credential.ID, PlatformID: policy.ID, Account: account,
@@ -811,7 +811,7 @@ func (s *Service) loginWithCode(ctx context.Context, policy authplatform.Policy,
 			})
 		}
 	}
-	if credential.IsEnabled != yesno.Yes {
+	if credential.Status != yesno.Yes {
 		return Credential{}, apperror.Forbidden(fmt.Errorf("user is disabled"))
 	}
 	return s.issueCredential(ctx, input.Client, policy, credential, account, loginTypeFor(input.LoginType), isNewUser)
@@ -891,7 +891,7 @@ func (s *Service) issueCredential(ctx context.Context, client authclient.Client,
 	if err := s.recordLoginEvent(ctx, loginlog.Event{UserID: &credential.ID, PlatformID: policy.ID, Account: account, EventType: loginlog.EventLogin, LoginType: loginTypePointer(loginType), IsSuccess: yesno.Yes, ReasonCode: "success", ClientIP: client.ClientIP, UserAgent: client.UserAgent}); err != nil {
 		return Credential{}, err
 	}
-	authority := usersession.Authority{Session: created, UserID: credential.ID, UserIsEnabled: credential.IsEnabled}
+	authority := usersession.Authority{Session: created, UserID: credential.ID, UserStatus: credential.Status}
 	if err := s.publishAuthority(ctx, authority, policy, userFact.Generation, nextSessionsFact.Generation, now); err != nil {
 		return Credential{}, err
 	}
@@ -1009,7 +1009,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string, client a
 	}
 	identity := identityFromAuthority(authority, policy, cacheResult)
 	identity.AccessExpiresAt = token.AccessExpiresAt
-	userFact, userErr := s.ensureUserReady(ctx, authority.UserID, authority.UserIsEnabled == yesno.Yes, authority.UserDeleted)
+	userFact, userErr := s.ensureUserReady(ctx, authority.UserID, authority.UserStatus == yesno.Yes, authority.UserDeleted)
 	if userErr != nil {
 		if isStateUpdating(userErr) {
 			return Identity{}, authplatform.SessionUpdating(userErr)
@@ -1048,7 +1048,7 @@ func (s *Service) ValidateRealtimeSession(ctx context.Context, platform string, 
 		return apperror.Unauthorized(fmt.Errorf("realtime session identity is invalid"))
 	}
 	userState, found, err := s.states.ReadUser(ctx, userID)
-	if err != nil || !found || userState.State != authstate.StateReady || userState.Deleted || !userState.IsEnabled {
+	if err != nil || !found || userState.State != authstate.StateReady || userState.Deleted || !userState.Status {
 		return apperror.Unauthorized(errors.Join(fmt.Errorf("realtime user state is unavailable"), err))
 	}
 	sessionsState, found, err := s.states.ReadSessions(ctx, platform, userID)
@@ -1123,7 +1123,7 @@ func (s *Service) Refresh(ctx context.Context, input RefreshInput) (Credential, 
 	if err := lease.Commit(ctx, authstate.MutationFacts{Sessions: []authstate.SessionsFact{nextSessionsFact}}); err != nil {
 		return Credential{}, apperror.DependencyUnavailable(err)
 	}
-	rotatedAuthority := usersession.Authority{Session: rotated, UserID: authority.UserID, UserIsEnabled: authority.UserIsEnabled, UserDeleted: authority.UserDeleted}
+	rotatedAuthority := usersession.Authority{Session: rotated, UserID: authority.UserID, UserStatus: authority.UserStatus, UserDeleted: authority.UserDeleted}
 	if err := s.publishAuthority(ctx, rotatedAuthority, policy, userFact.Generation, nextSessionsFact.Generation, now); err != nil {
 		return Credential{}, err
 	}
@@ -1194,7 +1194,7 @@ func (s *Service) cachedIdentity(ctx context.Context, token TokenIdentity, clien
 	if !userFound {
 		return Identity{}, false, "miss", nil
 	}
-	if userState.Deleted || !userState.IsEnabled {
+	if userState.Deleted || !userState.Status {
 		return Identity{}, false, "", apperror.Unauthorized(fmt.Errorf("user is unavailable"))
 	}
 	sessionsState, sessionsFound, sessionsErr := s.states.ReadSessions(ctx, token.Platform, token.UserID)
@@ -1229,7 +1229,7 @@ func (s *Service) cachedIdentity(ctx context.Context, token TokenIdentity, clien
 			Version: snapshot.SessionVersion, ClientIP: snapshot.ClientIP, RefreshExpiresAt: snapshot.RefreshExpiresAt,
 			Platform: snapshot.Platform,
 		},
-		UserID: snapshot.UserID, UserIsEnabled: yesno.Yes,
+		UserID: snapshot.UserID, UserStatus: yesno.Yes,
 	}
 	if err := s.enforceClient(ctx, authority, policy, client); err != nil {
 		return Identity{}, false, "", err
@@ -1284,7 +1284,7 @@ func (s *Service) ensureUserReady(ctx context.Context, userID int64, enabled, de
 		if state.State == authstate.StateInvalidating {
 			return authstate.UserFact{}, authstate.ErrUpdating
 		}
-		if state.IsEnabled != enabled || state.Deleted != deleted {
+		if state.Status != enabled || state.Deleted != deleted {
 			return authstate.UserFact{}, authstate.ErrGenerationChanged
 		}
 		return state.Fact(), nil
@@ -1293,7 +1293,7 @@ func (s *Service) ensureUserReady(ctx context.Context, userID int64, enabled, de
 	if generationErr != nil {
 		return authstate.UserFact{}, generationErr
 	}
-	fact := authstate.UserFact{UserID: userID, Generation: generation, IsEnabled: enabled, Deleted: deleted}
+	fact := authstate.UserFact{UserID: userID, Generation: generation, Status: enabled, Deleted: deleted}
 	installed, _, installErr := s.states.InstallUserReadyIfMissing(ctx, fact)
 	if installErr != nil {
 		return authstate.UserFact{}, errors.Join(err, installErr)
@@ -1301,7 +1301,7 @@ func (s *Service) ensureUserReady(ctx context.Context, userID int64, enabled, de
 	if installed.State == authstate.StateInvalidating {
 		return authstate.UserFact{}, authstate.ErrUpdating
 	}
-	if installed.IsEnabled != enabled || installed.Deleted != deleted {
+	if installed.Status != enabled || installed.Deleted != deleted {
 		return authstate.UserFact{}, authstate.ErrGenerationChanged
 	}
 	return installed.Fact(), nil
@@ -1368,7 +1368,7 @@ func identityFromAuthority(authority usersession.Authority, policy authplatform.
 
 func validateAuthority(authority usersession.Authority) error {
 	if authority.UserID < 1 || authority.Session.UserID != authority.UserID || authority.Session.ID < 1 || authority.Session.Version < 1 ||
-		authority.UserDeleted || authority.UserIsEnabled != yesno.Yes || authority.Session.RevokedAt != nil {
+		authority.UserDeleted || authority.UserStatus != yesno.Yes || authority.Session.RevokedAt != nil {
 		return fmt.Errorf("authoritative session is unavailable")
 	}
 	return nil

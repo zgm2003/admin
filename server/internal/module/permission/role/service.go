@@ -32,7 +32,7 @@ type ListQuery struct {
 	Page      int
 	PageSize  int
 	Keyword   string
-	IsEnabled *yesno.Value
+	Status *yesno.Value
 }
 
 type ListItem struct {
@@ -42,7 +42,7 @@ type ListItem struct {
 	Code            string
 	Name            string
 	IsDefault       yesno.Value
-	IsEnabled       yesno.Value
+	Status       yesno.Value
 	UserCount       int64
 	PermissionCount int64
 	CreatedAt       time.Time
@@ -88,12 +88,12 @@ func (s *Service) EnsureSystemRoles(ctx context.Context) error {
 				return roleDataInvalid(fmt.Errorf("fixed roles are missing while role data exists"))
 			}
 			if err := repository.Create(ctx, &Role{
-				Code: CodeSuperAdmin, Name: superAdminName, IsDefault: yesno.No, IsEnabled: yesno.Yes,
+				Code: CodeSuperAdmin, Name: superAdminName, IsDefault: yesno.No, Status: yesno.Yes,
 			}); err != nil {
 				return err
 			}
 			if err := repository.Create(ctx, &Role{
-				Code: CodeRegisteredUser, Name: registeredUserName, IsDefault: yesno.Yes, IsEnabled: yesno.Yes,
+				Code: CodeRegisteredUser, Name: registeredUserName, IsDefault: yesno.Yes, Status: yesno.Yes,
 			}); err != nil {
 				return err
 			}
@@ -121,7 +121,7 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 	}
 	query.Keyword = strings.TrimSpace(query.Keyword)
 	if query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 ||
-		(query.IsEnabled != nil && !yesno.IsValid(*query.IsEnabled)) || utf8.RuneCountInString(query.Keyword) > 64 {
+		(query.Status != nil && !yesno.IsValid(*query.Status)) || utf8.RuneCountInString(query.Keyword) > 64 {
 		return pagination.Result[ListItem]{}, apperror.InvalidRequest(fmt.Errorf("role list query is invalid"))
 	}
 	total, err := s.repository.Count(ctx, query)
@@ -151,7 +151,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		return 0, roleInvalidState(fmt.Errorf("role code or name is invalid"))
 	}
 	created := Role{
-		Code: input.Code, Name: input.Name, IsDefault: yesno.No, IsEnabled: yesno.Yes,
+		Code: input.Code, Name: input.Name, IsDefault: yesno.No, Status: yesno.Yes,
 	}
 	err := s.repository.Transaction(ctx, func(repository *Repository) error {
 		if err := repository.Create(ctx, &created); err != nil {
@@ -232,7 +232,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 		if stored.Code == CodeSuperAdmin {
 			return false, nil, roleSystemProtected(stored.Code, fmt.Errorf("super administrator status is immutable"))
 		}
-		if stored.IsEnabled == value {
+		if stored.Status == value {
 			return false, nil, nil
 		}
 		if value == yesno.No && stored.IsDefault == yesno.Yes {
@@ -279,7 +279,7 @@ func (s *Service) SetDefault(ctx context.Context, id int64) error {
 		if target.Code == CodeSuperAdmin {
 			return roleSystemProtected(target.Code, fmt.Errorf("super administrator cannot be default"))
 		}
-		if target.IsEnabled != yesno.Yes {
+		if target.Status != yesno.Yes {
 			return roleInvalidState(fmt.Errorf("default target is disabled"))
 		}
 		if target.IsDefault == yesno.Yes {
@@ -390,7 +390,7 @@ func (s *Service) Permissions(ctx context.Context, roleID int64) (Permissions, e
 	platformIDs := make(map[int64]struct{}, len(platforms))
 	for platformIndex := range platforms {
 		platform := &platforms[platformIndex]
-		if platform.ID < 1 || strings.TrimSpace(platform.Code) == "" || strings.TrimSpace(platform.Name) == "" || !yesno.IsValid(platform.IsEnabled) {
+		if platform.ID < 1 || strings.TrimSpace(platform.Code) == "" || strings.TrimSpace(platform.Name) == "" || !yesno.IsValid(platform.Status) {
 			return Permissions{}, roleDataInvalid(fmt.Errorf("permission platform %d has invalid stored values", platform.ID))
 		}
 		if _, exists := platformIDs[platform.ID]; exists {
@@ -409,7 +409,7 @@ func (s *Service) Permissions(ctx context.Context, roleID int64) (Permissions, e
 		}
 	}
 	return Permissions{
-		Role:      Summary{ID: stored.ID, Code: stored.Code, Name: stored.Name, IsDefault: stored.IsDefault, IsEnabled: stored.IsEnabled},
+		Role:      Summary{ID: stored.ID, Code: stored.Code, Name: stored.Name, IsDefault: stored.IsDefault, Status: stored.Status},
 		Platforms: platforms, MenuIDs: menuIDs,
 	}, nil
 }
@@ -627,10 +627,10 @@ func validateSystemRoleRecords(records []Role) error {
 	if !hasSuperAdmin || !hasRegisteredUser {
 		return roleDataInvalid(fmt.Errorf("fixed role set is incomplete"))
 	}
-	if superAdmin.Name != superAdminName || superAdmin.IsEnabled != yesno.Yes || superAdmin.IsDefault != yesno.No {
+	if superAdmin.Name != superAdminName || superAdmin.Status != yesno.Yes || superAdmin.IsDefault != yesno.No {
 		return roleDataInvalid(fmt.Errorf("super administrator fields are invalid"))
 	}
-	if registeredUser.Name != registeredUserName || !yesno.IsValid(registeredUser.IsEnabled) || !yesno.IsValid(registeredUser.IsDefault) {
+	if registeredUser.Name != registeredUserName || !yesno.IsValid(registeredUser.Status) || !yesno.IsValid(registeredUser.IsDefault) {
 		return roleDataInvalid(fmt.Errorf("registered user role fields are invalid"))
 	}
 	return nil
@@ -640,7 +640,7 @@ func validateDefaultRole(records []Role) error {
 	var defaultRole *Role
 	for index := range records {
 		record := &records[index]
-		if !yesno.IsValid(record.IsEnabled) || !yesno.IsValid(record.IsDefault) {
+		if !yesno.IsValid(record.Status) || !yesno.IsValid(record.IsDefault) {
 			return roleDataInvalid(fmt.Errorf("role %d has an invalid yes/no state", record.ID))
 		}
 		if record.IsDefault != yesno.Yes {
@@ -654,7 +654,7 @@ func validateDefaultRole(records []Role) error {
 	if defaultRole == nil {
 		return roleDataInvalid(fmt.Errorf("active default role is missing"))
 	}
-	if defaultRole.IsEnabled != yesno.Yes || defaultRole.Code == CodeSuperAdmin {
+	if defaultRole.Status != yesno.Yes || defaultRole.Code == CodeSuperAdmin {
 		return roleDataInvalid(fmt.Errorf("default role is disabled or protected"))
 	}
 	return nil

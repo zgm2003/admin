@@ -34,7 +34,7 @@ const config = ref<smsApi.SmsConfig>({
   region: '',
   endpoint: '',
   ttlMinutes: 0,
-  isEnabled: YesNo.No,
+  status: YesNo.No,
   lastTestAt: null,
   lastTestError: '',
 })

@@ -75,7 +75,7 @@ func TestStatusMutationRechecksNoOpAfterConcurrentAtomicSave(t *testing.T) {
 				t.Fatalf("concurrent PUT=%v status PATCH=%v", concurrentErr, err)
 			}
 			saved, err := service.Get(ctx, ruleID)
-			if err != nil || saved.IsEnabled != requested || saved.Name != "Concurrent change" {
+			if err != nil || saved.Status != requested || saved.Name != "Concurrent change" {
 				t.Fatalf("status request used stale no-op fact: saved=%+v err=%v", saved, err)
 			}
 		})
@@ -119,9 +119,9 @@ func TestStatusMutationValidatesEnabledParentsAndAllowsDisable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			query, parentID := "UPDATE permission_auth_platform SET is_enabled=0 WHERE id=?", platformID
+			query, parentID := "UPDATE permission_auth_platform SET status=0 WHERE id=?", platformID
 			if parent == "config" {
-				query, parentID = "UPDATE storage_cos_config SET is_enabled=0 WHERE id=?", configID
+				query, parentID = "UPDATE storage_cos_config SET status=0 WHERE id=?", configID
 			}
 			if err = db.WithContext(ctx).Exec(query, parentID).Error; err != nil {
 				t.Fatal(err)
@@ -140,7 +140,7 @@ func TestStatusMutationValidatesEnabledParentsAndAllowsDisable(t *testing.T) {
 				t.Fatal(err)
 			}
 			after, err := service.Get(ctx, ruleID)
-			if err != nil || after.IsEnabled != yesno.No || !after.UpdatedAt.Equal(before.UpdatedAt) {
+			if err != nil || after.Status != yesno.No || !after.UpdatedAt.Equal(before.UpdatedAt) {
 				t.Fatalf("locked no-op changed row: before=%+v after=%+v err=%v", before, after, err)
 			}
 		})
@@ -161,7 +161,7 @@ func TestStatusPatchUsesStatusPermissionWithoutFieldUpdatePermission(t *testing.
 			c.Next()
 		}
 	})
-	recorder := ruleJSON(router, http.MethodPatch, "/api/admin/v1/storage/uploadrule/7/status", `{"isEnabled":1}`)
+	recorder := ruleJSON(router, http.MethodPatch, "/api/admin/v1/storage/uploadrule/7/status", `{"status":1}`)
 	if recorder.Code != http.StatusOK || !reflect.DeepEqual(permissions, []string{PermissionStatus}) {
 		t.Fatalf("PATCH status=%d permissions=%v body=%s", recorder.Code, permissions, recorder.Body.String())
 	}

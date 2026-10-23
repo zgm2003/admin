@@ -33,7 +33,7 @@ func newMenuActions(item ManagedMenu, ancestorDisabled bool) menuActions {
 			children = append(children, child)
 		}
 	}
-	canStatus := (!item.IsProtected || item.IsEnabled != yesno.Yes) && (item.IsEnabled == yesno.Yes || !ancestorDisabled)
+	canStatus := (!item.IsProtected || item.Status != yesno.Yes) && (item.Status == yesno.Yes || !ancestorDisabled)
 	return menuActions{Update: true, Status: canStatus, Delete: !item.IsProtected, AddChild: len(children) > 0, AllowedChildTypes: children}
 }
 
@@ -76,7 +76,7 @@ func newMenuPresentation(ctx context.Context, item ManagedMenu) (menuPresentatio
 	if err != nil {
 		return menuPresentation{}, err
 	}
-	if item.IsEnabled == yesno.Yes {
+	if item.Status == yesno.Yes {
 		value.StatusLabel, err = i18n.Translate(i18n.LocaleFromContext(ctx), i18n.KeyMenuStatusEnabled, nil)
 		if err != nil {
 			return menuPresentation{}, err

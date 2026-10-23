@@ -13,7 +13,7 @@ export interface MenuFormState {
   icon: MenuIconName | null
   remark: string
   sortOrder: number
-  isEnabled: YesNo
+  status: YesNo
   isHidden: YesNo
   isProtected: YesNo
 }

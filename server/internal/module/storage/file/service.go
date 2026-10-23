@@ -372,7 +372,7 @@ func (s *Service) PrepareAvatar(ctx context.Context, id auth.Identity, sourceID 
 		if e != nil {
 			return AvatarCopy{}, mapError(e)
 		}
-		if runtime.Deleted || runtime.IsEnabled != yesno.Yes {
+		if runtime.Deleted || runtime.Status != yesno.Yes {
 			return AvatarCopy{}, conflict(ErrConflict)
 		}
 		now := s.now().UTC()

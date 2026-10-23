@@ -54,7 +54,7 @@ func TestConfigCreateReportsInvalidNotifyURLWithoutEchoingInput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	input := map[string]any{
 		"name": "Local sandbox", "provider": 1, "environment": 1,
-		"appId": "20260001", "sellerId": "20880001", "sortOrder": 0, "isEnabled": 1,
+		"appId": "20260001", "sellerId": "20880001", "sortOrder": 0, "status": 1,
 		"notifyUrl": "http://abc", "payMethods": []int{1, 2},
 		"privateKey": "LOCAL_PRIVATE_KEY", "appCertPEM": "LOCAL_APP_CERT",
 		"alipayCertPEM": "LOCAL_ALIPAY_CERT", "rootCertPEM": "LOCAL_ROOT_CERT",
@@ -97,7 +97,7 @@ func TestConfigCreateReportsCredentialFieldWithoutEchoingInput(t *testing.T) {
 		t.Run(test.field, func(t *testing.T) {
 			input := map[string]any{
 				"name": fixture.Name, "provider": fixture.Provider, "environment": fixture.Environment,
-				"appId": fixture.AppID, "sellerId": fixture.SellerID, "sortOrder": 0, "isEnabled": 0,
+				"appId": fixture.AppID, "sellerId": fixture.SellerID, "sortOrder": 0, "status": 0,
 				"notifyUrl": fixture.NotifyURL, "payMethods": fixture.PayMethods,
 				"privateKey": fixture.PrivateKey, "appCertPEM": fixture.AppCertPEM,
 				"alipayCertPEM": fixture.AlipayCertPEM, "rootCertPEM": fixture.RootCertPEM,
@@ -175,7 +175,7 @@ func TestConfigHandlerRejectsMalformedWithoutRepository(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	RegisterAdminRoutes(router.Group("/api/admin/v1"), NewHandler(NewService(nil, nil)), func(c *gin.Context) { c.Next() }, func(string) gin.HandlerFunc { return func(c *gin.Context) { c.Next() } })
-	for _, r := range []struct{ method, path, body string }{{"POST", "", `{"provider":"1"}`}, {"POST", "", `{"provider":1,"provider":2}`}, {"POST", "/1/version", `{"notifyUrl":"x","payMethods":[1]}`}, {"PUT", "/1", `{"name":"x","sortOrder":0,"provider":1}`}, {"PUT", "/0", `{}`}, {"PATCH", "/1/status", `{"isEnabled":"1"}`}, {"DELETE", "/1", `{}`}, {"GET", "?page=1&pageSize=20&isEnabled=01", ``}} {
+	for _, r := range []struct{ method, path, body string }{{"POST", "", `{"provider":"1"}`}, {"POST", "", `{"provider":1,"provider":2}`}, {"POST", "/1/version", `{"notifyUrl":"x","payMethods":[1]}`}, {"PUT", "/1", `{"name":"x","sortOrder":0,"provider":1}`}, {"PUT", "/0", `{}`}, {"PATCH", "/1/status", `{"status":"1"}`}, {"DELETE", "/1", `{}`}, {"GET", "?page=1&pageSize=20&status=01", ``}} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, httptest.NewRequest(r.method, "/api/admin/v1/payment/config"+r.path, bytes.NewBufferString(r.body)))
 		if w.Code != 400 {

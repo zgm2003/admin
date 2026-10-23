@@ -67,7 +67,7 @@ type ListQuery struct {
 	Page      int
 	PageSize  int
 	Keyword   string
-	IsEnabled *yesno.Value
+	Status *yesno.Value
 }
 
 type ListResult struct {
@@ -128,7 +128,7 @@ type listItem struct {
 	Value        string              `json:"value"`
 	ValueType    int                 `json:"valueType"`
 	Description  string              `json:"description"`
-	IsEnabled    yesno.Value         `json:"isEnabled"`
+	Status    yesno.Value         `json:"status"`
 	IsBuiltin    yesno.Value         `json:"isBuiltin"`
 	CreatedAt    time.Time           `json:"createdAt"`
 	UpdatedAt    time.Time           `json:"updatedAt"`

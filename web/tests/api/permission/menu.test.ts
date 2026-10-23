@@ -52,7 +52,7 @@ describe('thin API HTTP contract', () => {
       icon: null,
       remark: null,
       sortOrder: 1,
-      isEnabled: 0,
+      status: 0,
       isHidden: 0,
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
@@ -74,7 +74,7 @@ describe('thin API HTTP contract', () => {
       icon: null,
       remark: null,
       sortOrder: 1,
-      isEnabled: 0,
+      status: 0,
       isHidden: 0,
     }
     const error = new Error('request failed')
@@ -124,22 +124,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateMenuStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateMenuStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateMenuStatus>[1] = 0
+    const status: Parameters<typeof api.updateMenuStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateMenuStatus(id, isEnabled)
+    const result = await api.updateMenuStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/permission/menu/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateMenuStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateMenuStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateMenuStatus>[1] = 0
+    const status: Parameters<typeof api.updateMenuStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateMenuStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateMenuStatus(id, status)).rejects.toBe(error)
   })
   it('deleteMenu preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.deleteMenu>[0] = 1

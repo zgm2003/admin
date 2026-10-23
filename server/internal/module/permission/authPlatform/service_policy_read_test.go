@@ -102,7 +102,7 @@ func TestCurrentPolicyIgnoresLegacySchemaKeyAfterLoginTypesUpgrade(t *testing.T)
 	ctx := context.Background()
 	code := fmt.Sprintf("legacy_schema_%d", time.Now().UnixNano())
 	legacyKey := "auth:policy:" + code
-	if err := redisClient.SetString(ctx, legacyKey, `{"schemaVersion":1,"state":"ready","mutationToken":null,"policy":{"id":1,"code":"`+code+`","name":"Legacy","policyVersion":1,"accessTTL":900000000000,"refreshTTL":1209600000000000,"sessionCacheTTL":1800000000000,"accessCacheTTL":1800000000000,"bindDevice":false,"bindIP":false,"maxSessions":1,"allowRegister":false,"isEnabled":true,"isBuiltin":false,"deleted":false}}`, 0); err != nil {
+	if err := redisClient.SetString(ctx, legacyKey, `{"schemaVersion":1,"state":"ready","mutationToken":null,"policy":{"id":1,"code":"`+code+`","name":"Legacy","policyVersion":1,"accessTTL":900000000000,"refreshTTL":1209600000000000,"sessionCacheTTL":1800000000000,"accessCacheTTL":1800000000000,"bindDevice":false,"bindIP":false,"maxSessions":1,"allowRegister":false,"status":true,"isBuiltin":false,"deleted":false}}`, 0); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -127,7 +127,7 @@ func validReadPlatform() Platform {
 		ID: 1, Code: "admin", Name: "Admin", LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: 0, BindIP: 0, MaxSessions: 1, AllowRegister: 0, IsEnabled: 1, IsBuiltin: 1,
+		BindDevice: 0, BindIP: 0, MaxSessions: 1, AllowRegister: 0, Status: 1, IsBuiltin: 1,
 	}
 }
 
@@ -145,7 +145,7 @@ func validReadPolicy() Policy {
 		ID: 1, Code: "admin", Name: "Admin", LoginTypes: []LoginType{LoginTypeEmail, LoginTypePassword}, PolicyVersion: 1,
 		AccessTTL: 15 * time.Minute, RefreshTTL: 14 * 24 * time.Hour,
 		SessionCacheTTL: 30 * time.Minute, AccessCacheTTL: 30 * time.Minute,
-		MaxSessions: 1, AllowRegister: false, IsEnabled: true, IsBuiltin: true,
+		MaxSessions: 1, AllowRegister: false, Status: true, IsBuiltin: true,
 	}
 }
 

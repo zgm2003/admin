@@ -6,7 +6,7 @@ export type LoginType = string
 
 export interface AuthPlatformListQuery extends PageRequest {
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
 }
 
 export interface AuthPlatformListItem {
@@ -29,7 +29,7 @@ export interface AuthPlatformListItem {
   bindIP: YesNo
   maxSessions: number
   allowRegister: YesNo
-  isEnabled: YesNo
+  status: YesNo
   isBuiltin: YesNo
   createdAt: string
   updatedAt: string
@@ -47,7 +47,7 @@ export interface CreateAuthPlatformInput {
   bindIP: YesNo
   maxSessions: number
   allowRegister: YesNo
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface UpdateAuthPlatformInput {
@@ -65,7 +65,7 @@ export interface UpdateAuthPlatformInput {
 
 export interface AuthPlatformStatusResult {
   id: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export async function getAuthPlatforms(
@@ -89,7 +89,7 @@ export async function createAuthPlatform(input: CreateAuthPlatformInput): Promis
     bindIP: input.bindIP,
     maxSessions: input.maxSessions,
     allowRegister: input.allowRegister,
-    isEnabled: input.isEnabled,
+    status: input.status,
   })
 }
 
@@ -113,11 +113,11 @@ export async function updateAuthPlatform(
 
 export async function updateAuthPlatformStatus(
   id: number,
-  isEnabled: YesNo,
+  status: YesNo,
 ): Promise<AuthPlatformStatusResult> {
   return request.patch<AuthPlatformStatusResult>(
     `/api/admin/v1/permission/authplatform/${id}/status`,
-    { isEnabled },
+    { status },
   )
 }
 

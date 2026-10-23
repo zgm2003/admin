@@ -17,7 +17,7 @@ type ListQuery struct {
 	Page      int
 	PageSize  int
 	Keyword   string
-	IsEnabled *yesno.Value
+	Status *yesno.Value
 }
 type SecretInput struct {
 	Present bool
@@ -26,7 +26,7 @@ type SecretInput struct {
 type CreateInput struct {
 	Name, AppID, SecretID, SecretKey, Bucket, Region string
 	Endpoint, BucketDomain                           *string
-	IsEnabled                                        yesno.Value
+	Status                                        yesno.Value
 	Remark                                           string
 }
 
@@ -47,15 +47,15 @@ type createRequest struct {
 	Region       *string               `json:"region"`
 	Endpoint     nullableStringRequest `json:"endpoint"`
 	BucketDomain nullableStringRequest `json:"bucketDomain"`
-	IsEnabled    *yesno.Value          `json:"isEnabled"`
+	Status    *yesno.Value          `json:"status"`
 	Remark       *string               `json:"remark"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Name == nil || r.AppID == nil || r.SecretID == nil || r.SecretKey == nil || r.Bucket == nil || r.Region == nil || r.IsEnabled == nil || r.Remark == nil {
+	if r.Name == nil || r.AppID == nil || r.SecretID == nil || r.SecretKey == nil || r.Bucket == nil || r.Region == nil || r.Status == nil || r.Remark == nil {
 		return CreateInput{}, fmt.Errorf("every COS config field is required")
 	}
-	input := CreateInput{Name: *r.Name, AppID: *r.AppID, SecretID: *r.SecretID, SecretKey: *r.SecretKey, Bucket: *r.Bucket, Region: *r.Region, Endpoint: r.Endpoint.Value, BucketDomain: r.BucketDomain.Value, IsEnabled: *r.IsEnabled, Remark: *r.Remark}
+	input := CreateInput{Name: *r.Name, AppID: *r.AppID, SecretID: *r.SecretID, SecretKey: *r.SecretKey, Bucket: *r.Bucket, Region: *r.Region, Endpoint: r.Endpoint.Value, BucketDomain: r.BucketDomain.Value, Status: *r.Status, Remark: *r.Remark}
 	if err := validateCreate(input); err != nil {
 		return CreateInput{}, err
 	}
@@ -123,11 +123,11 @@ func (r *nullableStringRequest) UnmarshalJSON(data []byte) error {
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {
-	allowed := map[string]struct{}{"page": {}, "pageSize": {}, "keyword": {}, "isEnabled": {}}
+	allowed := map[string]struct{}{"page": {}, "pageSize": {}, "keyword": {}, "status": {}}
 	for key, entries := range values {
 		if _, ok := allowed[key]; !ok || len(entries) != 1 {
 			return ListQuery{}, fmt.Errorf("invalid list query")
@@ -142,13 +142,13 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		return ListQuery{}, fmt.Errorf("pageSize invalid")
 	}
 	q := ListQuery{Page: page, PageSize: size, Keyword: values.Get("keyword")}
-	if raw := values.Get("isEnabled"); raw != "" {
+	if raw := values.Get("status"); raw != "" {
 		n, e := strconv.Atoi(raw)
 		v := yesno.Value(n)
 		if e != nil || !yesno.IsValid(v) {
-			return ListQuery{}, fmt.Errorf("isEnabled invalid")
+			return ListQuery{}, fmt.Errorf("status invalid")
 		}
-		q.IsEnabled = &v
+		q.Status = &v
 	}
 	return q, nil
 }
@@ -169,8 +169,8 @@ func validateCreate(input CreateInput) error {
 			return err
 		}
 	}
-	if !yesno.IsValid(input.IsEnabled) {
-		return fmt.Errorf("isEnabled is invalid")
+	if !yesno.IsValid(input.Status) {
+		return fmt.Errorf("status is invalid")
 	}
 	if err := validateOptionalURL("endpoint", input.Endpoint); err != nil {
 		return err

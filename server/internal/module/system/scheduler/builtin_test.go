@@ -28,7 +28,7 @@ func (s settingReaderStub) FindByKey(context.Context, string) (sharedsetting.Rec
 func TestHistoryCleanerUsesConfiguredRetention(t *testing.T) {
 	now := time.Date(2026, 9, 20, 4, 0, 0, 0, time.UTC)
 	repository := &historyRepositoryStub{}
-	cleaner := NewHistoryCleaner(repository, settingReaderStub{record: sharedsetting.Record{Key: sharedsetting.SchedulerHistoryRetentionDaysKey, Value: "30", ValueType: sharedsetting.ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes}})
+	cleaner := NewHistoryCleaner(repository, settingReaderStub{record: sharedsetting.Record{Key: sharedsetting.SchedulerHistoryRetentionDaysKey, Value: "30", ValueType: sharedsetting.ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.Yes}})
 	cleaner.now = func() time.Time { return now }
 	if err := cleaner.Cleanup(context.Background()); err != nil {
 		t.Fatal(err)

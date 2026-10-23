@@ -61,26 +61,26 @@ type createRequest struct {
 	Icon          nullableString `json:"icon"`
 	Remark        nullableString `json:"remark"`
 	SortOrder     *int           `json:"sortOrder"`
-	IsEnabled     *yesno.Value   `json:"isEnabled"`
+	Status     *yesno.Value   `json:"status"`
 	IsHidden      *yesno.Value   `json:"isHidden"`
 }
 
 func (request createRequest) input() (CreateInput, error) {
 	if request.PlatformID == nil || !request.ParentID.Present || request.MenuType == nil || request.Name == nil || request.Code == nil || !request.I18nKey.Present ||
 		!request.Path.Present || !request.ComponentPath.Present || !request.Icon.Present || request.SortOrder == nil ||
-		request.IsEnabled == nil || request.IsHidden == nil {
+		request.Status == nil || request.IsHidden == nil {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("all create menu fields are required"))
 	}
 	if *request.PlatformID < 1 || (request.ParentID.Value != nil && *request.ParentID.Value < 1) {
 		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("parentId must be null or a positive integer"))
 	}
-	if *request.SortOrder < 0 || !yesno.IsValid(*request.IsEnabled) || !yesno.IsValid(*request.IsHidden) {
-		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder, isEnabled, or isHidden is invalid"))
+	if *request.SortOrder < 0 || !yesno.IsValid(*request.Status) || !yesno.IsValid(*request.IsHidden) {
+		return CreateInput{}, apperror.InvalidRequest(fmt.Errorf("sortOrder, status, or isHidden is invalid"))
 	}
 	return CreateInput{
 		PlatformID: *request.PlatformID, ParentID: request.ParentID.Value, MenuType: *request.MenuType, Name: *request.Name, Code: *request.Code,
 		I18nKey: request.I18nKey.Value, Path: request.Path.Value, ComponentPath: request.ComponentPath.Value,
-		Icon: request.Icon.Value, Remark: request.Remark.Value, SortOrder: *request.SortOrder, IsEnabled: *request.IsEnabled, IsHidden: *request.IsHidden,
+		Icon: request.Icon.Value, Remark: request.Remark.Value, SortOrder: *request.SortOrder, Status: *request.Status, IsHidden: *request.IsHidden,
 	}, nil
 }
 
@@ -133,14 +133,14 @@ func (request updateRequest) input() (UpdateInput, error) {
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func (request statusRequest) value() (yesno.Value, error) {
-	if request.IsEnabled == nil || !yesno.IsValid(*request.IsEnabled) {
-		return 0, apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+	if request.Status == nil || !yesno.IsValid(*request.Status) {
+		return 0, apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 	}
-	return *request.IsEnabled, nil
+	return *request.Status, nil
 }
 
 func parseMenuID(value string) (int64, error) {

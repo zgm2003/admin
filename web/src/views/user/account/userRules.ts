@@ -57,7 +57,7 @@ export function userSearchFields(
       label: t('user.role'),
       placeholder: t('user.allRoles'),
       options: roles.map((role) => ({
-        label: `${role.name} (${role.code})${role.isEnabled === YesNo.No ? ` · ${t('user.roleDisabled')}` : ''}`,
+        label: `${role.name} (${role.code})${role.status === YesNo.No ? ` · ${t('user.roleDisabled')}` : ''}`,
         value: role.id,
       })),
       width: 220,

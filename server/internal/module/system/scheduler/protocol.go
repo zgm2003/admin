@@ -14,7 +14,7 @@ type Schedule struct {
 	CronExpression string
 	Timezone       string
 	Params         json.RawMessage
-	IsEnabled      int16          `gorm:"column:is_enabled"`
+	Status      int16          `gorm:"column:status"`
 	Status         ScheduleStatus `gorm:"-"`
 	NextRunAt      *time.Time
 	BuiltinKey     *string

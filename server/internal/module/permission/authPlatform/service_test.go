@@ -39,13 +39,13 @@ func TestServiceDeleteRejectsPlatformWithActiveMenus(t *testing.T) {
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Menu Guard", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No,
-		MaxSessions: 1, AllowRegister: yesno.No, IsEnabled: yesno.Yes,
+		MaxSessions: 1, AllowRegister: yesno.No, Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	i18nKey := "navigation.system"
-	storedMenu := menu.Menu{PlatformID: platformID, MenuType: menu.TypeDirectory, Name: "Menu Guard", Code: "menu-guard", I18nKey: &i18nKey, IsEnabled: yesno.Yes, IsHidden: yesno.No}
+	storedMenu := menu.Menu{PlatformID: platformID, MenuType: menu.TypeDirectory, Name: "Menu Guard", Code: "menu-guard", I18nKey: &i18nKey, Status: yesno.Yes, IsHidden: yesno.No}
 	if err := connection.GORM.WithContext(ctx).Create(&storedMenu).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestServiceCreateRollsBackPlatformWhenPolicyProvisioningFails(t *testing.T)
 	_, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Provision rollback", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, Status: yesno.Yes,
 	})
 	if err == nil {
 		t.Fatal("platform creation succeeded after policy provisioning failed")
@@ -115,7 +115,7 @@ func TestServicePlatformLifecycleAdvancesBothRateLimitGenerations(t *testing.T) 
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Dual generation", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestServicePlatformCreateRollsBackBothGenerationsWhenSecondAdvanceFails(t *
 	_, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Second advance", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, Status: yesno.Yes,
 	})
 	if err == nil {
 		t.Fatal("platform creation succeeded after the second generation advance failed")
@@ -194,7 +194,7 @@ func TestServicePlatformCreateRollsBackMailLeaseWhenSMSLeaseIsBusy(t *testing.T)
 	_, err = service.Create(ctx, authplatform.CreateInput{
 		Code: fmt.Sprintf("busy_sms_%d", time.Now().UnixNano()), Name: "Busy SMS", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail},
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600, SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.Yes, Status: yesno.Yes,
 	})
 	if err == nil {
 		t.Fatal("platform creation succeeded while the SMS generation lease was busy")
@@ -312,7 +312,7 @@ func TestServiceUpdateAllowsNonBuiltinRegistration(t *testing.T) {
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Registration", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No, IsEnabled: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1, AllowRegister: yesno.No, Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -349,7 +349,7 @@ func TestServicePlatformMutationsApplyExactSessionEffects(t *testing.T) {
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Sessions", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
-		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 3, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 3, AllowRegister: yesno.Yes, Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -443,7 +443,7 @@ func TestServicePlatformNoOpDoesNotAdvancePolicyVersion(t *testing.T) {
 	if err := service.Update(ctx, stored.ID, input); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.UpdateStatus(ctx, stored.ID, stored.IsEnabled); err != nil {
+	if err := service.UpdateStatus(ctx, stored.ID, stored.Status); err != nil {
 		t.Fatal(err)
 	}
 	after, err := authplatform.NewRepository(connection.GORM).FindPolicy(ctx, "admin")
@@ -467,14 +467,14 @@ func TestServicePlatformRollbackRestoresPolicyAndSessionState(t *testing.T) {
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Rollback", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No,
-		MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+		MaxSessions: 1, AllowRegister: yesno.Yes, Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	createdUser := createPlatformUser(t, connection.GORM, ctx, "rollback_user")
 	session := createPlatformSessions(t, connection.GORM, ctx, createdUser.ID, code, time.Now().UTC().Add(-time.Hour), 1)[0]
-	if err := connection.GORM.WithContext(ctx).Exec("ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_test_permission_auth_platform_rollback CHECK (is_enabled = 1)").Error; err != nil {
+	if err := connection.GORM.WithContext(ctx).Exec("ALTER TABLE permission_auth_platform ADD CONSTRAINT ck_test_permission_auth_platform_rollback CHECK (status = 1)").Error; err != nil {
 		t.Fatal(err)
 	}
 	err = service.UpdateStatus(ctx, platformID, yesno.No)
@@ -482,7 +482,7 @@ func TestServicePlatformRollbackRestoresPolicyAndSessionState(t *testing.T) {
 		t.Fatal("rollback mutation succeeded")
 	}
 	stored, err := authplatform.NewRepository(connection.GORM).FindPolicy(ctx, code)
-	if err != nil || stored.Name != "Rollback" || stored.PolicyVersion != 1 || stored.IsEnabled != yesno.Yes {
+	if err != nil || stored.Name != "Rollback" || stored.PolicyVersion != 1 || stored.Status != yesno.Yes {
 		t.Fatalf("rolled-back policy = %+v,%v", stored, err)
 	}
 	var storedSession auth.Session
@@ -513,7 +513,7 @@ func TestServicePlatformPublishFailureLeavesCommittedSessionStateWithoutOldPolic
 	platformID, err := service.Create(ctx, authplatform.CreateInput{
 		Code: code, Name: "Publish", LoginTypes: []authplatform.LoginType{authplatform.LoginTypeEmail, authplatform.LoginTypePassword}, AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800, BindDevice: yesno.No, BindIP: yesno.No,
-		MaxSessions: 1, AllowRegister: yesno.Yes, IsEnabled: yesno.Yes,
+		MaxSessions: 1, AllowRegister: yesno.Yes, Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -531,7 +531,7 @@ func TestServicePlatformPublishFailureLeavesCommittedSessionStateWithoutOldPolic
 		END;
 		$$ LANGUAGE plpgsql;
 		CREATE TRIGGER delay_permission_auth_platform_publish
-		BEFORE UPDATE OF is_enabled ON permission_auth_platform
+		BEFORE UPDATE OF status ON permission_auth_platform
 		FOR EACH ROW EXECUTE FUNCTION delay_permission_auth_platform_publish()`).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -553,7 +553,7 @@ func TestServicePlatformPublishFailureLeavesCommittedSessionStateWithoutOldPolic
 	if err := connection.GORM.WithContext(ctx).Unscoped().Take(&stored, platformID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.IsEnabled != yesno.No || stored.PolicyVersion != 2 {
+	if stored.Status != yesno.No || stored.PolicyVersion != 2 {
 		t.Fatalf("committed platform = %+v", stored)
 	}
 	var storedSession auth.Session

@@ -27,14 +27,14 @@ func (r updateRequest) input() (UpdateInput, error) {
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func (r statusRequest) value() (yesno.Value, error) {
-	if r.IsEnabled == nil || !yesno.IsValid(*r.IsEnabled) {
-		return 0, apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+	if r.Status == nil || !yesno.IsValid(*r.Status) {
+		return 0, apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 	}
-	return *r.IsEnabled, nil
+	return *r.Status, nil
 }
 
 type rolesRequest struct {
@@ -58,7 +58,7 @@ func parseUserID(value string) (int64, error) {
 }
 
 func parseListQuery(values url.Values) (ListQuery, error) {
-	allowed := map[string]struct{}{"page": {}, "pageSize": {}, "keyword": {}, "isEnabled": {}, "roleId": {}}
+	allowed := map[string]struct{}{"page": {}, "pageSize": {}, "keyword": {}, "status": {}, "roleId": {}}
 	for key, entries := range values {
 		if _, exists := allowed[key]; !exists || len(entries) != 1 {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("invalid or repeated query parameter"))
@@ -75,13 +75,13 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("keyword is too long"))
 		}
 	}
-	if entries, exists := values["isEnabled"]; exists {
+	if entries, exists := values["status"]; exists {
 		parsed, parseErr := strconv.ParseInt(entries[0], 10, 16)
 		value := yesno.Value(parsed)
 		if parseErr != nil || !yesno.IsValid(value) {
-			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("isEnabled must be 0 or 1"))
+			return ListQuery{}, apperror.InvalidRequest(fmt.Errorf("status must be 0 or 1"))
 		}
-		query.IsEnabled = &value
+		query.Status = &value
 	}
 	if entries, exists := values["roleId"]; exists {
 		roleID, parseErr := sharedvalidate.ParsePositiveInt64(entries[0], "role id")

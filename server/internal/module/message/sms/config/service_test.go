@@ -119,7 +119,7 @@ func validInput() Input {
 		Region:     "ap-guangzhou",
 		Endpoint:   "",
 		TTLMinutes: 5,
-		IsEnabled:  yesno.Yes,
+		Status:  yesno.Yes,
 	}
 }
 
@@ -171,7 +171,7 @@ func TestUpdateEncryptsCredentialsAndInvalidatesRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
-	if !safe.Configured || safe.TTLMinutes != 5 || safe.IsEnabled != yesno.Yes {
+	if !safe.Configured || safe.TTLMinutes != 5 || safe.Status != yesno.Yes {
 		t.Fatalf("safe = %+v", safe)
 	}
 	if !strings.HasPrefix(repository.created.SecretIDCiphertext, "sms:v1:") ||
@@ -195,7 +195,7 @@ func TestUpdateKeepsExistingSecretsWhenBothAreEmpty(t *testing.T) {
 		row: Model{
 			ID: 3, SecretIDCiphertext: "sms:v1:stored-id", SecretKeyCiphertext: "sms:v1:stored-key",
 			SecretIDHint: "AK***Id", SecretKeyHint: "ex***ue", SDKAppID: "1400000000",
-			SignName: "旧签名", Region: "ap-guangzhou", TTLMinutes: 10, IsEnabled: yesno.No,
+			SignName: "旧签名", Region: "ap-guangzhou", TTLMinutes: 10, Status: yesno.No,
 		},
 	}
 	runtime := &fakeRuntime{}
@@ -235,13 +235,13 @@ func TestUpdateRejectsSingleSecretReplacementAndInvalidFields(t *testing.T) {
 		{name: "overlong signature", mutate: func(input *Input) { input.SignName = strings.Repeat("签", maxSignNameLength+1) }},
 		{name: "invalid region", mutate: func(input *Input) { input.Region = "ap guangzhou" }},
 		{name: "invalid endpoint", mutate: func(input *Input) { input.Endpoint = "https://sms.tencentcloudapi.com" }},
-		{name: "invalid enabled", mutate: func(input *Input) { input.IsEnabled = yesno.Value(2) }},
+		{name: "invalid enabled", mutate: func(input *Input) { input.Status = yesno.Value(2) }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			input := validInput()
 			test.mutate(&input)
 			repository := &fakeRepository{found: true}
-			repository.row = Model{ID: 3, Region: "ap-guangzhou", TTLMinutes: 5, IsEnabled: yesno.Yes}
+			repository.row = Model{ID: 3, Region: "ap-guangzhou", TTLMinutes: 5, Status: yesno.Yes}
 			runtime := &fakeRuntime{}
 			_, err := newTestService(t, repository, runtime).Update(context.Background(), input)
 			if appErrorCode(err) != apperror.CodeInvalidRequest {

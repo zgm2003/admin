@@ -44,7 +44,7 @@ func TestListServiceValidatesQueryAndReturnsNonNilEmptyPage(t *testing.T) {
 		{Page: 0, PageSize: 20},
 		{Page: 1, PageSize: 0},
 		{Page: 1, PageSize: 101},
-		{Page: 1, PageSize: 20, IsEnabled: &invalidEnabled},
+		{Page: 1, PageSize: 20, Status: &invalidEnabled},
 		{Page: 1, PageSize: 20, RoleID: &invalidRoleID},
 		{Page: 1, PageSize: 20, Keyword: strings.Repeat("界", 255)},
 	} {
@@ -59,7 +59,7 @@ func TestListServiceValidatesQueryAndReturnsNonNilEmptyPage(t *testing.T) {
 func TestListServiceMapsInvalidStoredRelations(t *testing.T) {
 	tx, ctx, _ := openUserTransaction(t)
 	unique := fmt.Sprintf("service_invalid_%d", time.Now().UnixNano())
-	if err := tx.WithContext(ctx).Create(&account.User{Username: unique, Email: unique + "@example.com", PasswordHash: "hash", IsEnabled: yesno.Yes}).Error; err != nil {
+	if err := tx.WithContext(ctx).Create(&account.User{Username: unique, Email: unique + "@example.com", PasswordHash: "hash", Status: yesno.Yes}).Error; err != nil {
 		t.Fatal(err)
 	}
 	_, err := newUserTestService(t, account.NewRepository(tx)).List(ctx, account.ListQuery{ActorUserID: 1, Page: 1, PageSize: 20, Keyword: unique})
@@ -208,11 +208,11 @@ func TestServiceRolesReturnsCompleteOptionsAndStrictCurrentRelations(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	disabled := role.Role{Code: fmt.Sprintf("disabled_%d", time.Now().UnixNano()), Name: "Disabled", IsEnabled: yesno.Yes}
+	disabled := role.Role{Code: fmt.Sprintf("disabled_%d", time.Now().UnixNano()), Name: "Disabled", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&disabled).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", disabled.ID).Update("is_enabled", yesno.No).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", disabled.ID).Update("status", yesno.No).Error; err != nil {
 		t.Fatal(err)
 	}
 	target := createListedUser(t, tx, ctx, fmt.Sprintf("roles%d", time.Now().UnixNano()), fmt.Sprintf("roles%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), disabled.ID, defaultRole.ID)
@@ -222,7 +222,7 @@ func TestServiceRolesReturnsCompleteOptionsAndStrictCurrentRelations(t *testing.
 	}
 	foundDisabled := false
 	for _, option := range result.Roles {
-		if option.ID == disabled.ID && option.IsEnabled == yesno.No {
+		if option.ID == disabled.ID && option.Status == yesno.No {
 			foundDisabled = true
 		}
 	}
@@ -232,7 +232,7 @@ func TestServiceRolesReturnsCompleteOptionsAndStrictCurrentRelations(t *testing.
 	if _, err := newUserTestService(t, account.NewRepository(tx)).Roles(ctx, target.ID, 9223372036854770000); appErrorCodeForUser(err) != account.CodeUserNotFound {
 		t.Fatalf("unknown Roles() error = %v", err)
 	}
-	corrupt := account.User{Username: fmt.Sprintf("corrupt%d", time.Now().UnixNano()), Email: fmt.Sprintf("corrupt%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes}
+	corrupt := account.User{Username: fmt.Sprintf("corrupt%d", time.Now().UnixNano()), Email: fmt.Sprintf("corrupt%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&corrupt).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -247,11 +247,11 @@ func TestServiceUpdateRolesNormalizesDiffAndPreservesHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	disabled := role.Role{Code: fmt.Sprintf("assigned_%d", time.Now().UnixNano()), Name: "Assigned disabled", IsEnabled: yesno.Yes}
+	disabled := role.Role{Code: fmt.Sprintf("assigned_%d", time.Now().UnixNano()), Name: "Assigned disabled", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&disabled).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", disabled.ID).Update("is_enabled", yesno.No).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", disabled.ID).Update("status", yesno.No).Error; err != nil {
 		t.Fatal(err)
 	}
 	actor := createListedUser(t, tx, ctx, fmt.Sprintf("roleactor%d", time.Now().UnixNano()), fmt.Sprintf("roleactor%d@example.com", time.Now().UnixNano()), yesno.Yes, time.Now().UTC(), defaultRole.ID)
@@ -335,7 +335,7 @@ func TestServiceUpdateRolesRedisFailurePreventsPostgreSQLMutation(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	extraRole := role.Role{Code: fmt.Sprintf("redis_role_%d", time.Now().UnixNano()), Name: "Redis role", IsEnabled: yesno.Yes}
+	extraRole := role.Role{Code: fmt.Sprintf("redis_role_%d", time.Now().UnixNano()), Name: "Redis role", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&extraRole).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -478,7 +478,7 @@ func TestServiceUpdateStatusRedisFailurePreventsPostgreSQLMutation(t *testing.T)
 	if err := tx.WithContext(ctx).Take(&storedSession, session.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.IsEnabled != yesno.Yes || storedSession.RevokedAt != nil {
+	if stored.Status != yesno.Yes || storedSession.RevokedAt != nil {
 		t.Fatalf("PostgreSQL mutated without Redis coordination: user=%+v session=%+v", stored, storedSession)
 	}
 }
@@ -659,7 +659,7 @@ func assertDisabledUserAndRevokedSessions(t *testing.T, tx *gorm.DB, ctx context
 	if err := tx.WithContext(ctx).Take(&stored, userID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if stored.IsEnabled != yesno.No {
+	if stored.Status != yesno.No {
 		t.Fatalf("status mutation was incomplete: user=%+v", stored)
 	}
 	for _, sessionID := range sessionIDs {
@@ -676,7 +676,7 @@ func assertDisabledUserAndRevokedSessions(t *testing.T, tx *gorm.DB, ctx context
 func assertReadyUserState(t *testing.T, store *authstate.Store, userID int64, enabled, deleted bool) {
 	t.Helper()
 	state, found, err := store.ReadUser(context.Background(), userID)
-	if err != nil || !found || state.State != authstate.StateReady || state.IsEnabled != enabled || state.Deleted != deleted {
+	if err != nil || !found || state.State != authstate.StateReady || state.Status != enabled || state.Deleted != deleted {
 		t.Fatalf("user state = %+v found=%v error=%v", state, found, err)
 	}
 }

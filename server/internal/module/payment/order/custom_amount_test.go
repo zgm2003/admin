@@ -142,7 +142,7 @@ func TestCustomRechargeReadsCurrentMinimumAndFailsClosed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := &createRepositoryStub{}
 			service := createServiceFixture(repo)
-			setting := rechargeSettingsStub{row: sharedsetting.Record{Key: sharedsetting.PaymentRechargeMinimumAmountKey, Value: tc.value, ValueType: tc.typeID, IsEnabled: tc.enabled}}
+			setting := rechargeSettingsStub{row: sharedsetting.Record{Key: sharedsetting.PaymentRechargeMinimumAmountKey, Value: tc.value, ValueType: tc.typeID, Status: tc.enabled}}
 			if tc.missing {
 				setting.err = errors.New("settings offline")
 			}

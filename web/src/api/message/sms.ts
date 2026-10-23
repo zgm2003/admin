@@ -37,7 +37,7 @@ export interface SmsConfig {
   region: string
   endpoint: string
   ttlMinutes: number
-  isEnabled: YesNo
+  status: YesNo
   lastTestAt: string | null
   lastTestError: string
 }
@@ -50,7 +50,7 @@ export interface SmsConfigInput {
   region: string
   endpoint: string
   ttlMinutes: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface SmsTemplate {
@@ -61,7 +61,7 @@ export interface SmsTemplate {
   content: string
   variableKeys: string[]
   exampleVariables: Record<string, string>
-  isEnabled: YesNo
+  status: YesNo
   createdAt: string
   updatedAt: string
 }
@@ -82,7 +82,7 @@ export interface SmsRule {
   action: number
   name: string
   remark: string
-  isEnabled: YesNo
+  status: YesNo
   createdAt: string
   updatedAt: string
 }
@@ -142,7 +142,7 @@ export interface SmsRuleInput {
   action: number
   name: string
   remark: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface SmsRuleUpdateInput {
@@ -151,7 +151,7 @@ export interface SmsRuleUpdateInput {
   action: number
   name: string
   remark: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface SmsRateLimitPolicy {
@@ -213,8 +213,8 @@ export async function updateSmsTemplate(id: number, data: SmsTemplateInput): Pro
   return request.put<SmsTemplate>(`/api/admin/v1/message/sms/template/${id}`, data)
 }
 
-export async function updateSmsTemplateStatus(id: number, isEnabled: YesNo): Promise<void> {
-  return request.patch<void>(`/api/admin/v1/message/sms/template/${id}/status`, { isEnabled })
+export async function updateSmsTemplateStatus(id: number, status: YesNo): Promise<void> {
+  return request.patch<void>(`/api/admin/v1/message/sms/template/${id}/status`, { status })
 }
 
 export async function listSmsRules(): Promise<SmsRule[]> {
@@ -229,8 +229,8 @@ export async function updateSmsRule(id: number, data: SmsRuleUpdateInput): Promi
   return request.put<SmsRule>(`/api/admin/v1/message/sms/recipient-rule/${id}`, data)
 }
 
-export async function updateSmsRuleStatus(id: number, isEnabled: YesNo): Promise<void> {
-  return request.patch<void>(`/api/admin/v1/message/sms/recipient-rule/${id}/status`, { isEnabled })
+export async function updateSmsRuleStatus(id: number, status: YesNo): Promise<void> {
+  return request.patch<void>(`/api/admin/v1/message/sms/recipient-rule/${id}/status`, { status })
 }
 
 export async function deleteSmsRule(id: number): Promise<void> {

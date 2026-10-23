@@ -85,7 +85,7 @@ func TestHistoryRejectsInvalidFiltersBeforeDatabaseAccess(t *testing.T) {
 
 func TestPlansAreNewestFirstWithStableCursor(t *testing.T) {
 	db, ctx := openSchedulerRepositoryDatabase(t)
-	if err := db.WithContext(ctx).Exec(`CREATE TABLE system_scheduler_schedule(id BIGINT PRIMARY KEY, task_type TEXT, is_enabled SMALLINT, params JSONB, created_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ);
+	if err := db.WithContext(ctx).Exec(`CREATE TABLE system_scheduler_schedule(id BIGINT PRIMARY KEY, task_type TEXT, status SMALLINT, params JSONB, created_at TIMESTAMPTZ NOT NULL, deleted_at TIMESTAMPTZ);
  INSERT INTO system_scheduler_schedule VALUES (1,'cleanup',1,'{}','2026-10-12 12:00:00+00',NULL),(2,'cleanup',1,'{}','2026-10-12 10:00:00+00',NULL),(3,'cleanup',1,'{}','2026-10-12 13:00:00+00','2026-10-12 14:00:00+00'),(4,'cleanup',1,'{}','2026-10-12 12:00:00+00',NULL);`).Error; err != nil {
 		t.Fatal(err)
 	}

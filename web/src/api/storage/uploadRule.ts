@@ -15,7 +15,7 @@ export interface UploadRule {
   allowedExtensions: string[]
   allowedMimeTypes: string[]
   accessMode: 'private' | 'public'
-  isEnabled: YesNo
+  status: YesNo
   remark: string
   createdAt: string
   updatedAt: string
@@ -25,7 +25,7 @@ export interface UploadRuleQuery extends PageRequest {
   platformId?: number
   cosConfigId?: number
   keyword?: string
-  isEnabled?: YesNo
+  status?: YesNo
 }
 
 interface UploadRuleCreateFields {
@@ -41,7 +41,7 @@ interface UploadRuleCreateFields {
 
 export interface CreateUploadRuleInput extends UploadRuleCreateFields {
   platformId: number
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface UpdateUploadRuleInput {
@@ -51,14 +51,14 @@ export interface UpdateUploadRuleInput {
   allowedExtensions: string[]
   allowedMimeTypes: string[]
   remark: string
-  isEnabled?: YesNo
+  status?: YesNo
 }
 
 export interface PlatformOption {
   id: number
   code: string
   name: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface ConfigSummary {
@@ -66,7 +66,7 @@ export interface ConfigSummary {
   name: string
   bucket: string
   region: string
-  isEnabled: YesNo
+  status: YesNo
 }
 
 export interface UploadRulePageInit {
@@ -99,11 +99,11 @@ export async function updateUploadRule(
 
 export async function updateUploadRuleStatus(
   id: number,
-  isEnabled: YesNo,
-): Promise<{ id: number; isEnabled: YesNo }> {
-  return request.patch<{ id: number; isEnabled: YesNo }>(
+  status: YesNo,
+): Promise<{ id: number; status: YesNo }> {
+  return request.patch<{ id: number; status: YesNo }>(
     `/api/admin/v1/storage/uploadrule/${id}/status`,
-    { isEnabled },
+    { status },
   )
 }
 

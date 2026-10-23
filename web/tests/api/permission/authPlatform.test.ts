@@ -37,7 +37,7 @@ describe('thin API HTTP contract', () => {
       bindIP: 0,
       maxSessions: 1,
       allowRegister: 0,
-      isEnabled: 0,
+      status: 0,
     }
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.post).mockResolvedValue(dataFromServer)
@@ -55,7 +55,7 @@ describe('thin API HTTP contract', () => {
       bindIP: input.bindIP,
       maxSessions: input.maxSessions,
       allowRegister: input.allowRegister,
-      isEnabled: input.isEnabled,
+      status: input.status,
     })
   })
   it('createAuthPlatform propagates request failures unchanged', async () => {
@@ -71,7 +71,7 @@ describe('thin API HTTP contract', () => {
       bindIP: 0,
       maxSessions: 1,
       allowRegister: 0,
-      isEnabled: 0,
+      status: 0,
     }
     const error = new Error('request failed')
     vi.mocked(request.post).mockRejectedValue(error)
@@ -131,22 +131,22 @@ describe('thin API HTTP contract', () => {
   })
   it('updateAuthPlatformStatus preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.updateAuthPlatformStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateAuthPlatformStatus>[1] = 0
+    const status: Parameters<typeof api.updateAuthPlatformStatus>[1] = 0
     const dataFromServer = { id: 7, serverAdded: { label: 'new value', numericValue: 99 } }
     vi.mocked(request.patch).mockResolvedValue(dataFromServer)
-    const result = await api.updateAuthPlatformStatus(id, isEnabled)
+    const result = await api.updateAuthPlatformStatus(id, status)
     expect(result).toBe(dataFromServer)
     expect(request.patch).toHaveBeenCalledExactlyOnceWith(
       `/api/admin/v1/permission/authplatform/${id}/status`,
-      { isEnabled },
+      { status },
     )
   })
   it('updateAuthPlatformStatus propagates request failures unchanged', async () => {
     const id: Parameters<typeof api.updateAuthPlatformStatus>[0] = 1
-    const isEnabled: Parameters<typeof api.updateAuthPlatformStatus>[1] = 0
+    const status: Parameters<typeof api.updateAuthPlatformStatus>[1] = 0
     const error = new Error('request failed')
     vi.mocked(request.patch).mockRejectedValue(error)
-    await expect(api.updateAuthPlatformStatus(id, isEnabled)).rejects.toBe(error)
+    await expect(api.updateAuthPlatformStatus(id, status)).rejects.toBe(error)
   })
   it('deleteAuthPlatform preserves the HTTP contract and backend data', async () => {
     const id: Parameters<typeof api.deleteAuthPlatform>[0] = 1

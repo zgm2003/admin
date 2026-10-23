@@ -26,9 +26,9 @@ describe('role permission matrix', () => {
     expect(groups[0]?.rows.map((row) => row.pageId)).toEqual([2, 5])
     expect(groups[0]?.rows[1]?.actions[0]).toMatchObject({
       id: 6,
-      isEnabled: YesNo.No,
+      status: YesNo.No,
     })
-    expect(platforms[1]?.platformIsEnabled).toBe(YesNo.No)
+    expect(platforms[1]?.platformStatus).toBe(YesNo.No)
     expect(platforms[1]?.groups[0]).toMatchObject({
       groupKey: 'platform:2',
       rows: [{ pageId: 7, actions: [{ id: 8 }] }],
@@ -109,12 +109,12 @@ function matrixGroups() {
 
 function permissionPlatforms(): RolePermissionPlatform[] {
   return [
-    { id: 1, code: 'admin', name: 'Admin', isEnabled: YesNo.Yes, menuTree: menuTree() },
+    { id: 1, code: 'admin', name: 'Admin', status: YesNo.Yes, menuTree: menuTree() },
     {
       id: 2,
       code: 'canvas',
       name: 'Canvas',
-      isEnabled: YesNo.No,
+      status: YesNo.No,
       menuTree: [
         {
           id: 7,
@@ -122,7 +122,7 @@ function permissionPlatforms(): RolePermissionPlatform[] {
           menuType: 'page',
           code: 'canvas:test:list',
           name: 'Test',
-          isEnabled: YesNo.Yes,
+          status: YesNo.Yes,
           children: [
             {
               id: 8,
@@ -130,7 +130,7 @@ function permissionPlatforms(): RolePermissionPlatform[] {
               menuType: 'action',
               code: 'canvas:test:button',
               name: 'Test Button',
-              isEnabled: YesNo.Yes,
+              status: YesNo.Yes,
               children: [],
             },
           ],
@@ -148,7 +148,7 @@ function menuTree(): RolePermissionTreeNode[] {
       menuType: 'directory',
       code: 'system',
       name: '系统管理',
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       children: [
         {
           id: 2,
@@ -156,7 +156,7 @@ function menuTree(): RolePermissionTreeNode[] {
           menuType: 'page',
           code: 'permission:role:list',
           name: '角色管理',
-          isEnabled: YesNo.Yes,
+          status: YesNo.Yes,
           children: [
             {
               id: 3,
@@ -164,7 +164,7 @@ function menuTree(): RolePermissionTreeNode[] {
               menuType: 'action',
               code: 'permission:role:create',
               name: '新增角色',
-              isEnabled: YesNo.Yes,
+              status: YesNo.Yes,
               children: [],
             },
           ],
@@ -175,7 +175,7 @@ function menuTree(): RolePermissionTreeNode[] {
           menuType: 'directory',
           code: 'system:settings',
           name: '系统设置',
-          isEnabled: YesNo.Yes,
+          status: YesNo.Yes,
           children: [
             {
               id: 5,
@@ -183,7 +183,7 @@ function menuTree(): RolePermissionTreeNode[] {
               menuType: 'page',
               code: 'permission:menu:list',
               name: '菜单管理',
-              isEnabled: YesNo.Yes,
+              status: YesNo.Yes,
               children: [
                 {
                   id: 6,
@@ -191,7 +191,7 @@ function menuTree(): RolePermissionTreeNode[] {
                   menuType: 'action',
                   code: 'permission:menu:delete',
                   name: '删除菜单',
-                  isEnabled: YesNo.No,
+                  status: YesNo.No,
                   children: [],
                 },
               ],

@@ -20,7 +20,7 @@ func TestModelAndSafeValueContracts(t *testing.T) {
 	domain := "https://cdn.example.com"
 	now := time.Date(2026, 8, 30, 8, 0, 0, 0, time.UTC)
 	row := Current{
-		Model:        Model{ID: 7, Name: "Main", AppID: "1250000000", SecretIDCiphertext: "v1:secret-id", SecretKeyCiphertext: "v1:secret-key", CurrentVersion: 3, IsEnabled: yesno.Yes, Remark: "primary", CreatedAt: now, UpdatedAt: now},
+		Model:        Model{ID: 7, Name: "Main", AppID: "1250000000", SecretIDCiphertext: "v1:secret-id", SecretKeyCiphertext: "v1:secret-key", CurrentVersion: 3, Status: yesno.Yes, Remark: "primary", CreatedAt: now, UpdatedAt: now},
 		Bucket:       "assets",
 		Region:       "ap-guangzhou",
 		Endpoint:     &endpoint,

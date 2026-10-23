@@ -95,7 +95,7 @@ func seededRows() []Model {
 			Content:           "{1} 有效期 {2} 分钟",
 			VariableKeys:      jsonOf(fixed.VariableKeys),
 			ExampleVariables:  jsonOf(map[string]string{"code": "123456", "ttl_minutes": "5"}),
-			IsEnabled:         yesno.No,
+			Status:         yesno.No,
 			CreatedAt:         time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 			UpdatedAt:         time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
 		})
@@ -189,7 +189,7 @@ func TestUpdatePersistsAllowedFieldsAndTrims(t *testing.T) {
 
 func TestUpdateRequiresAValidTemplateBeforeStayingEnabled(t *testing.T) {
 	rows := seededRows()
-	rows[0].IsEnabled = yesno.Yes
+	rows[0].Status = yesno.Yes
 	repository := &fakeRepository{rows: rows}
 	input := validUpdate()
 	input.TencentTemplateID = ""

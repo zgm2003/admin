@@ -40,7 +40,7 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 			from_name VARCHAR(128) NOT NULL,
 			reply_to VARCHAR(254),
 			ttl_minutes SMALLINT NOT NULL,
-			is_enabled SMALLINT NOT NULL,
+			status SMALLINT NOT NULL,
 			last_test_at TIMESTAMPTZ,
 			last_test_error VARCHAR(512) NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL,
@@ -55,7 +55,7 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 			tencent_template_id INTEGER NOT NULL,
 			variables JSONB NOT NULL,
 			example_variables JSONB NOT NULL,
-			is_enabled SMALLINT NOT NULL,
+			status SMALLINT NOT NULL,
 			created_at TIMESTAMPTZ NOT NULL,
 			updated_at TIMESTAMPTZ NOT NULL,
 			deleted_at TIMESTAMPTZ
@@ -64,10 +64,10 @@ func TestSendConcurrentChallengeUsesDatabaseUniqueness(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (region, from_email, from_name, ttl_minutes, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "ap-guangzhou", "sender@example.com", "Sender", 5, yesno.Yes, now, now).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_config (region, from_email, from_name, ttl_minutes, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "ap-guangzhou", "sender@example.com", "Sender", 5, yesno.Yes, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (scene, name, subject, tencent_template_id, variables, example_variables, is_enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, SceneLogin, "Login", "Login code", 47941, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO message_mail_template (scene, name, subject, tencent_template_id, variables, example_variables, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?)`, SceneLogin, "Login", "Login code", 47941, `{"code":"123456","ttl_minutes":"10"}`, `{"code":"123456","ttl_minutes":"10"}`, yesno.Yes, now, now).Error; err != nil {
 		t.Fatal(err)
 	}
 

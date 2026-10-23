@@ -68,7 +68,7 @@ watch(
       fromName: value.fromName,
       replyTo: value.replyTo,
       ttlMinutes: value.ttlMinutes,
-      isEnabled: value.isEnabled,
+      status: value.status,
     }
     testEmail.value = value.fromEmail
     void nextTick(() => formRef.value?.clearValidate())
@@ -86,7 +86,7 @@ function blankForm(): mailApi.MailConfigInput {
     fromName: '',
     replyTo: '',
     ttlMinutes: 0,
-    isEnabled: YesNo.No,
+    status: YesNo.No,
   }
 }
 
@@ -117,12 +117,12 @@ async function save(): Promise<void> {
   const payload = { ...form.value }
   saving.value = true
   try {
-    if (props.config.configured && payload.isEnabled !== props.config.isEnabled) {
+    if (props.config.configured && payload.status !== props.config.status) {
       await ElMessageBox.confirm(
         t('confirm.status', {
           name: t('navigation.mail'),
           status: t(
-            payload.isEnabled === YesNo.Yes ? 'common.enable' : 'common.disable',
+            payload.status === YesNo.Yes ? 'common.enable' : 'common.disable',
           ),
         }),
         t('confirm.title'),
@@ -268,7 +268,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
         <el-col :xs="24" :md="12">
           <el-form-item :label="t('common.enable')">
             <el-switch
-              v-model="form.isEnabled"
+              v-model="form.status"
               :active-value="YesNo.Yes"
               :inactive-value="YesNo.No"
             />
@@ -281,7 +281,7 @@ watch(locale, () => void loadRegionOptions(), { immediate: true })
               <el-button
                 data-testid="mail-config-test"
                 :loading="testing"
-                :disabled="!catalogReady || !config.configured || config.isEnabled !== YesNo.Yes"
+                :disabled="!catalogReady || !config.configured || config.status !== YesNo.Yes"
                 :icon="Send"
                 @click="sendTest"
               >

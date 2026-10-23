@@ -286,9 +286,9 @@ func TestServicePropagatesRepositoryFailure(t *testing.T) {
 
 func TestServiceReadsAndAtomicallyUpdatesBrandSettings(t *testing.T) {
 	repo := &fakeRepository{rows: map[string]Record{
-		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, Status: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, Status: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, Status: yesno.Yes, IsBuiltin: yesno.Yes},
 	}}
 	harness := openSettingGenerationHarness(t)
 	service := harness.service(repo)
@@ -327,11 +327,11 @@ func TestServiceReadsAndSanitizesSingleLegalDocuments(t *testing.T) {
 	repo := &fakeRepository{rows: map[string]Record{
 		LegalUserAgreementKey: {
 			Key: LegalUserAgreementKey, Value: "<p>Agreement</p>", ValueType: ValueTypeString,
-			IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+			Status: yesno.Yes, IsBuiltin: yesno.Yes,
 		},
 		LegalPrivacyPolicyKey: {
 			Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeString,
-			IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+			Status: yesno.Yes, IsBuiltin: yesno.Yes,
 		},
 	}}
 	harness := openSettingGenerationHarness(t)
@@ -382,8 +382,8 @@ func TestServiceRejectsInvalidLegalDocumentsBeforeRepositoryAccess(t *testing.T)
 
 func TestServiceLegalDocumentRejectsUnavailableSetting(t *testing.T) {
 	for _, row := range []Record{
-		{Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeJSON, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		{Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeString, IsEnabled: yesno.No, IsBuiltin: yesno.Yes},
+		{Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeJSON, Status: yesno.Yes, IsBuiltin: yesno.Yes},
+		{Key: LegalPrivacyPolicyKey, Value: "<p>Privacy</p>", ValueType: ValueTypeString, Status: yesno.No, IsBuiltin: yesno.Yes},
 	} {
 		harness := openSettingGenerationHarness(t)
 		service := harness.service(&fakeRepository{rows: map[string]Record{LegalPrivacyPolicyKey: row}})
@@ -410,8 +410,8 @@ func TestRepositoryUpdateBrandRollsBackWhenOneSettingIsMissing(t *testing.T) {
 	db, ctx := openSettingDatabase(t)
 	now := time.Now().UTC()
 	if err := db.WithContext(ctx).Create([]Model{
-		{Key: BrandTitleZhCNKey, Value: "旧中文", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
-		{Key: BrandTitleEnUSKey, Value: "OLD", ValueType: ValueTypeString, Description: "", IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Key: BrandTitleZhCNKey, Value: "旧中文", ValueType: ValueTypeString, Description: "", Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
+		{Key: BrandTitleEnUSKey, Value: "OLD", ValueType: ValueTypeString, Description: "", Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now},
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestServiceMutationAcquiresLeaseBeforeDatabaseMutation(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	seedSettingRow(t, harness.db, harness.ctx, numericSettingRow(generationTestKey, "2", yesno.No))
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	observed := ""
 	fake.onMutation = func(mutationCtx context.Context) error {
@@ -488,7 +488,7 @@ func TestServiceMutationRollsBackLeaseWhenDatabaseFails(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{
 		rows: map[string]Record{
-			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 		},
 		mutationErr: errors.New("database down"),
 	}
@@ -508,7 +508,7 @@ func TestServiceMutationRollsBackLeaseOnNoOp(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{
 		rows: map[string]Record{
-			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 		},
 		hasMutation: true,
 		mutation:    configcache.MutationResult{Changed: false},
@@ -527,7 +527,7 @@ func TestServiceMutationRollsBackLeaseOnNoOp(t *testing.T) {
 func TestServiceMutationReturnsSuccessWhenPublishFails(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	fake.onMutation = func(context.Context) error {
 		return harness.client.Delete(context.Background(), configcache.StateKey(harness.scope))
@@ -545,7 +545,7 @@ func TestServiceMutationReturnsSuccessWhenPublishFails(t *testing.T) {
 func TestServiceMutationTreatsUncertainCommitAsCommitted(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	fake.onMutation = func(mutationCtx context.Context) error {
 		if err := harness.db.WithContext(mutationCtx).Exec(
@@ -569,7 +569,7 @@ func TestServiceMutationTreatsUncertainCommitAsCommitted(t *testing.T) {
 func TestServiceMutationCancelsTransactionWhenLeaseRenewalFails(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	cancelled := make(chan error, 1)
 	fake.onMutation = func(mutationCtx context.Context) error {
@@ -607,7 +607,7 @@ func TestServiceCacheHitSkipsPostgres(t *testing.T) {
 	now := time.Now().UTC()
 	row := Record{
 		ID: 7, Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Description: "",
-		IsEnabled: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now,
+		Status: yesno.Yes, IsBuiltin: yesno.No, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := harness.cache.PutRecord(harness.ctx, 1, row); err != nil {
 		t.Fatal(err)
@@ -627,7 +627,7 @@ func TestServiceCacheHitSkipsPostgres(t *testing.T) {
 func TestServiceCacheRejectsSnapshotCoordinateMismatch(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "5", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "5", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	service := harness.service(fake)
 	snapshotKey, err := configcache.SnapshotKey(harness.scope, 1, recordVariant(generationTestKey))
@@ -654,7 +654,7 @@ func TestServiceCacheRejectsSnapshotCoordinateMismatch(t *testing.T) {
 func TestServiceCacheMissingStateRecoversFromPostgres(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	service := harness.service(fake)
 	if err := harness.client.Delete(harness.ctx, configcache.StateKey(harness.scope)); err != nil {
@@ -678,7 +678,7 @@ func TestServiceColdFillSingleLeaderAndFollowerBudget(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{
 		rows: map[string]Record{
-			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 		},
 		findDelay: 30 * time.Millisecond,
 	}
@@ -738,7 +738,7 @@ func TestServiceColdFillFollowersRecoverWithinBudget(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{
 		rows: map[string]Record{
-			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+			generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 		},
 		findDelay: 20 * time.Millisecond,
 	}
@@ -772,7 +772,7 @@ func TestServiceColdFillDropsStaleGenerationResult(t *testing.T) {
 	loaded := make(chan struct{})
 	release := make(chan struct{})
 	first := true
-	current := Record{Key: generationTestKey, Value: "old", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+	current := Record{Key: generationTestKey, Value: "old", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No}
 	fake := &fakeRepository{}
 	fake.onFind = func(ctx context.Context, _ string) (Record, error) {
 		mutex.Lock()
@@ -805,7 +805,7 @@ func TestServiceColdFillDropsStaleGenerationResult(t *testing.T) {
 	<-loaded
 
 	mutex.Lock()
-	current = Record{Key: generationTestKey, Value: "new", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No}
+	current = Record{Key: generationTestKey, Value: "new", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No}
 	mutex.Unlock()
 	if err := harness.db.WithContext(harness.ctx).Exec(
 		`UPDATE system_config_cache_state SET generation = 2 WHERE namespace = 'system.setting' AND scope_key = ?`,
@@ -864,7 +864,7 @@ func TestServiceCacheRedisFailureDoesNotReadPostgres(t *testing.T) {
 func TestServiceCacheInvalidatingWaitExhaustsBudget(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	service := harness.service(fake)
 	service.readBudget = 80 * time.Millisecond
@@ -885,9 +885,9 @@ func TestServiceCacheInvalidatingWaitExhaustsBudget(t *testing.T) {
 func TestServiceBrandUsesSingleSnapshotVariant(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
-		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandTitleZhCNKey:     {Key: BrandTitleZhCNKey, Value: "智澜", ValueType: ValueTypeString, Status: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandTitleEnUSKey:     {Key: BrandTitleEnUSKey, Value: "ZHILAN", ValueType: ValueTypeString, Status: yesno.Yes, IsBuiltin: yesno.Yes},
+		BrandDefaultAvatarKey: {Key: BrandDefaultAvatarKey, Value: "", ValueType: ValueTypeMediaVisual, Status: yesno.Yes, IsBuiltin: yesno.Yes},
 	}}
 	service := harness.service(fake)
 
@@ -914,7 +914,7 @@ func TestServiceBrandUsesSingleSnapshotVariant(t *testing.T) {
 func TestServiceCacheCorruptSnapshotIsRepairedByLeader(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	service := harness.service(fake)
 	snapshotKey, err := configcache.SnapshotKey(harness.scope, 1, recordVariant(generationTestKey))
@@ -991,7 +991,7 @@ func (c *commandCounter) reset() {
 func TestServiceHotReadUsesOneStateAndOneSnapshotCommand(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	counter := newCommandCounter()
 	harness.client.UniversalClient().AddHook(counter)
@@ -1199,7 +1199,7 @@ func TestServiceMutationRetriesWholeFlowAfterGenerationChangesInsideTransaction(
 func TestServiceMutationBudgetExhaustionIsDependencyFailureWithoutDatabaseMutation(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	lease, err := harness.store.Acquire(harness.ctx, harness.scope, 1)
 	if err != nil {
@@ -1232,7 +1232,7 @@ func TestServiceMutationBudgetExhaustionIsDependencyFailureWithoutDatabaseMutati
 func TestServiceMutationRedisFailureDoesNotEnterDatabaseMutation(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	service := harness.service(fake)
 	if err := harness.client.Close(); err != nil {
@@ -1252,7 +1252,7 @@ func TestServiceMutationRedisFailureDoesNotEnterDatabaseMutation(t *testing.T) {
 func TestServiceCacheCorruptStateIsRepairedByAuthority(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	service := harness.service(fake)
 	if err := harness.client.SetString(harness.ctx, configcache.StateKey(harness.scope), "not-json", 0); err != nil {
@@ -1275,7 +1275,7 @@ func TestServiceCacheCorruptStateIsRepairedByAuthority(t *testing.T) {
 func TestServiceCacheScopeFlushRecoversFromAuthority(t *testing.T) {
 	harness := openSettingGenerationHarness(t)
 	fake := &fakeRepository{rows: map[string]Record{
-		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, IsEnabled: yesno.Yes, IsBuiltin: yesno.No},
+		generationTestKey: {Key: generationTestKey, Value: "2", ValueType: ValueTypeNumber, Status: yesno.Yes, IsBuiltin: yesno.No},
 	}}
 	service := harness.service(fake)
 	if _, err := service.Find(harness.ctx, generationTestKey); err != nil {

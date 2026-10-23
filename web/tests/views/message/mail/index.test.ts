@@ -77,7 +77,7 @@ describe('mail service page', () => {
       fromName: 'Admin',
       replyTo: '',
       ttlMinutes: 10,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       lastTestAt: null,
       lastTestError: '',
     })
@@ -91,7 +91,7 @@ describe('mail service page', () => {
         content: '<!DOCTYPE html><html><head></head><body>{{code}} {{ttl_minutes}}</body></html>',
         variableKeys: ['code', 'ttl_minutes'],
         exampleVariables: { code: '123456', ttl_minutes: '10' },
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
         createdAt: '2026-09-01T00:00:00Z',
         updatedAt: '2026-09-01T00:00:00Z',
       },
@@ -121,7 +121,7 @@ describe('mail service page', () => {
       fromName: '智域云阁',
       replyTo: '',
       ttlMinutes: 5,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       lastTestAt: null,
       lastTestError: '',
     })
@@ -350,7 +350,7 @@ describe('mail service page', () => {
       fromName: 'Admin',
       replyTo: '',
       ttlMinutes: 10,
-      isEnabled: YesNo.No,
+      status: YesNo.No,
       lastTestAt: null,
       lastTestError: '',
     })
@@ -374,7 +374,7 @@ describe('mail service page', () => {
         fromName: 'Admin',
         replyTo: '',
         ttlMinutes: 10,
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
         lastTestAt: null,
         lastTestError: '',
       })
@@ -386,7 +386,7 @@ describe('mail service page', () => {
         fromName: 'Admin',
         replyTo: '',
         ttlMinutes: 10,
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
         lastTestAt: '2026-09-08T10:00:00Z',
         lastTestError: 'mail recipient denied',
       })
@@ -483,7 +483,7 @@ describe('mail service page', () => {
       action: 0,
       name: '',
       remark: '',
-      isEnabled: 1,
+      status: 1,
     })
     expect(mailApi.listMailRules).toHaveBeenCalledTimes(2)
   })
@@ -498,7 +498,7 @@ describe('mail service page', () => {
         action: 1,
         name: 'Domain allow',
         remark: '',
-        isEnabled: 1,
+        status: 1,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -509,7 +509,7 @@ describe('mail service page', () => {
         action: 0,
         name: 'Email deny',
         remark: '',
-        isEnabled: 1,
+        status: 1,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -552,7 +552,7 @@ describe('mail service page', () => {
       action: 0,
       name: 'Domain allow',
       remark: '',
-      isEnabled: 1,
+      status: 1,
     })
     expect(mailApi.listMailRules).toHaveBeenCalledTimes(2)
   })
@@ -566,12 +566,12 @@ describe('mail service page', () => {
         action: 0,
         name: 'Blocked domain',
         remark: '',
-        isEnabled: YesNo.Yes,
+        status: YesNo.Yes,
         createdAt: '2026-09-01T00:00:00Z',
         updatedAt: '2026-09-01T00:00:00Z',
       },
     ])
-    vi.mocked(mailApi.updateMailRuleStatus).mockResolvedValueOnce({ id: 7, isEnabled: YesNo.No })
+    vi.mocked(mailApi.updateMailRuleStatus).mockResolvedValueOnce({ id: 7, status: YesNo.No })
     const wrapper = mountPage(['message:mail:list', 'message:mail:rule:status'])
     await flushPromises()
     await selectTab(wrapper, '收件规则')
@@ -817,7 +817,7 @@ describe('mail service page', () => {
       fromName: 'New sender',
       replyTo: '',
       ttlMinutes: 10,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       lastTestAt: null,
       lastTestError: '',
     })
@@ -836,7 +836,7 @@ describe('mail service page', () => {
       fromName: 'Old sender',
       replyTo: '',
       ttlMinutes: 10,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
       lastTestAt: null,
       lastTestError: '',
     })
@@ -975,7 +975,7 @@ describe('mail service page', () => {
             action: 0,
             name: '规则',
             remark: '',
-            isEnabled: YesNo.Yes,
+            status: YesNo.Yes,
           },
           errors: [],
         },
@@ -1040,7 +1040,7 @@ describe('mail service page', () => {
             action: 0,
             name: 'parsed-name',
             remark: '',
-            isEnabled: YesNo.Yes,
+            status: YesNo.Yes,
           },
           errors: [],
         },
@@ -1053,7 +1053,7 @@ describe('mail service page', () => {
             action: 1,
             name: 'duplicate-name',
             remark: '',
-            isEnabled: YesNo.No,
+            status: YesNo.No,
           },
           errors: ['duplicate_existing'],
         },
@@ -1170,7 +1170,7 @@ describe('mail service page', () => {
               action: 0,
               name: 'new',
               remark: '',
-              isEnabled: YesNo.Yes,
+              status: YesNo.Yes,
             },
             errors: [],
           },
@@ -1206,7 +1206,7 @@ describe('mail service page', () => {
             action: 0,
             name: 'old',
             remark: '',
-            isEnabled: YesNo.Yes,
+            status: YesNo.Yes,
           },
           errors: [],
         },
@@ -1232,7 +1232,7 @@ describe('mail service page', () => {
               action: 0,
               name: '重试',
               remark: '',
-              isEnabled: YesNo.Yes,
+              status: YesNo.Yes,
             },
             errors: [],
           },
@@ -1306,7 +1306,7 @@ describe('mail service page', () => {
             action: 0,
             name: '过期',
             remark: '',
-            isEnabled: YesNo.Yes,
+            status: YesNo.Yes,
           },
           errors: [],
         },
@@ -1342,7 +1342,7 @@ describe('mail service page', () => {
             action: 0,
             name: '名称',
             remark: '',
-            isEnabled: YesNo.Yes,
+            status: YesNo.Yes,
           },
           errors: [],
         },

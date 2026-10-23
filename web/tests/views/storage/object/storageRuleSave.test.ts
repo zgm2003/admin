@@ -27,7 +27,7 @@ const form: RuleForm = {
   platformId: 1,
   cosConfigId: 2,
   accessMode: 'private',
-  isEnabled: YesNo.Yes,
+  status: YesNo.Yes,
 }
 const t = (key: string) => key
 describe('atomic upload rule saving', () => {
@@ -44,7 +44,7 @@ describe('atomic upload rule saving', () => {
     expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
     expect(updateUploadRule).toHaveBeenCalledExactlyOnceWith(7, {
       ...mutable,
-      isEnabled: YesNo.Yes,
+      status: YesNo.Yes,
     })
     expect(updateUploadRuleStatus).not.toHaveBeenCalled()
   })
@@ -67,8 +67,8 @@ describe('atomic upload rule saving', () => {
     expect(updateUploadRuleStatus).not.toHaveBeenCalled()
   })
   it('confirms disabled status before the atomic write', async () => {
-    await saveExistingRule(7, { ...form, isEnabled: YesNo.No }, true, mutable, t)
-    expect(updateUploadRule).toHaveBeenCalledExactlyOnceWith(7, { ...mutable, isEnabled: YesNo.No })
+    await saveExistingRule(7, { ...form, status: YesNo.No }, true, mutable, t)
+    expect(updateUploadRule).toHaveBeenCalledExactlyOnceWith(7, { ...mutable, status: YesNo.No })
     expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
   })
   it('confirms enabled creation even with no stale list row', async () => {

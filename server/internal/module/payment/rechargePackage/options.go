@@ -20,7 +20,7 @@ type Limits struct {
 
 type Defaults struct {
 	SortOrder int32       `json:"sortOrder"`
-	IsEnabled yesno.Value `json:"isEnabled"`
+	Status yesno.Value `json:"status"`
 }
 
 type Options struct {
@@ -46,7 +46,7 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 			option.New(ctx, yesno.No, "停用", "Disabled"),
 			option.New(ctx, yesno.Yes, "启用", "Enabled"),
 		},
-		Defaults: Defaults{SortOrder: 0, IsEnabled: yesno.No},
+		Defaults: Defaults{SortOrder: 0, Status: yesno.No},
 		Limits:   Limits{Name: MaxNameLength, Badge: MaxBadgeLength, AmountScale: 2, MinimumAmount: "0.01", MaximumAmount: maximum, SortMinimum: 0, SortMaximum: 2147483647},
 	}, nil
 }

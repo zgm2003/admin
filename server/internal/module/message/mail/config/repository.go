@@ -85,7 +85,7 @@ func (r *Repository) Delete(ctx context.Context, expected int64, now time.Time) 
 			return false, gorm.ErrRecordNotFound
 		}
 		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", row.ID).Updates(map[string]any{
-			"deleted_at": now, "updated_at": now, "is_enabled": yesno.No,
+			"deleted_at": now, "updated_at": now, "status": yesno.No,
 		})
 		if query.Error != nil {
 			return false, query.Error
@@ -155,7 +155,7 @@ func sameConfig(left, right Model) bool {
 		left.Region == right.Region && equalText(left.Endpoint, right.Endpoint) &&
 		left.FromEmail == right.FromEmail && left.FromName == right.FromName &&
 		equalText(left.ReplyTo, right.ReplyTo) && left.TTLMinutes == right.TTLMinutes &&
-		left.IsEnabled == right.IsEnabled
+		left.Status == right.Status
 }
 
 func equalText(left, right *string) bool {
@@ -187,14 +187,14 @@ func setField(row *Model, key string, value any) {
 		row.ReplyTo = textPointer(value)
 	case "ttl_minutes":
 		row.TTLMinutes = int16(value.(int))
-	case "is_enabled":
+	case "status":
 		switch enabled := value.(type) {
 		case yesno.Value:
-			row.IsEnabled = enabled
+			row.Status = enabled
 		case int16:
-			row.IsEnabled = yesno.Value(enabled)
+			row.Status = yesno.Value(enabled)
 		case int:
-			row.IsEnabled = yesno.Value(enabled)
+			row.Status = yesno.Value(enabled)
 		}
 	}
 }

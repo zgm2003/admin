@@ -13,7 +13,7 @@ func TestCacheRecordPayloadRoundTripsWithStrictCoordinates(t *testing.T) {
 	now := time.Now().UTC()
 	row := Record{
 		ID: 7, Key: "auth.captcha.ttl_minutes", Value: "2", ValueType: ValueTypeNumber, Description: "",
-		IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now,
+		Status: yesno.Yes, IsBuiltin: yesno.Yes, CreatedAt: now, UpdatedAt: now,
 	}
 	payload, err := encodeRecordPayload(12, row)
 	if err != nil {
@@ -23,7 +23,7 @@ func TestCacheRecordPayloadRoundTripsWithStrictCoordinates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeRecordPayload() error = %v", err)
 	}
-	if decoded.Generation != 12 || decoded.Key != row.Key || decoded.Value != row.Value || decoded.ValueType != ValueTypeNumber || decoded.IsEnabled != yesno.Yes {
+	if decoded.Generation != 12 || decoded.Key != row.Key || decoded.Value != row.Value || decoded.ValueType != ValueTypeNumber || decoded.Status != yesno.Yes {
 		t.Fatalf("decoded payload = %+v", decoded)
 	}
 	if decoded.record().ID != 7 || !decoded.record().CreatedAt.Equal(now) {
@@ -32,7 +32,7 @@ func TestCacheRecordPayloadRoundTripsWithStrictCoordinates(t *testing.T) {
 }
 
 func TestCacheRecordPayloadRejectsUnknownDuplicateAndInvalidFields(t *testing.T) {
-	valid := `{"schemaVersion":1,"generation":12,"id":7,"key":"auth.captcha.ttl_minutes","value":"2","valueType":2,"description":"","isEnabled":1,"isBuiltin":1,"createdAt":"2026-09-16T00:00:00Z","updatedAt":"2026-09-16T00:00:00Z"}`
+	valid := `{"schemaVersion":1,"generation":12,"id":7,"key":"auth.captcha.ttl_minutes","value":"2","valueType":2,"description":"","status":1,"isBuiltin":1,"createdAt":"2026-09-16T00:00:00Z","updatedAt":"2026-09-16T00:00:00Z"}`
 	if _, err := decodeRecordPayload(valid); err != nil {
 		t.Fatalf("valid payload rejected: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestCacheRecordPayloadRejectsUnknownDuplicateAndInvalidFields(t *testing.T)
 		{"zero generation", strings.Replace(valid, `"generation":12`, `"generation":0`, 1)},
 		{"empty key", strings.Replace(valid, `"key":"auth.captcha.ttl_minutes"`, `"key":""`, 1)},
 		{"invalid value type", strings.Replace(valid, `"valueType":2`, `"valueType":9`, 1)},
-		{"invalid enabled flag", strings.Replace(valid, `"isEnabled":1`, `"isEnabled":5`, 1)},
+		{"invalid enabled flag", strings.Replace(valid, `"status":1`, `"status":5`, 1)},
 		{"missing field", strings.Replace(valid, `"description":"",`, ``, 1)},
 		{"not an object", `[]`},
 	}

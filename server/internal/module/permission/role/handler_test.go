@@ -20,10 +20,10 @@ func TestRoleHandlerListParsesOnlyTheExactQuery(t *testing.T) {
 	service := &roleHTTPService{listResult: pagination.Result[role.ListItem]{
 		List: []role.ListItem{}, Total: 0, Page: 1, PageSize: 20,
 	}}
-	recorder := serveRoleRequest(t, service, http.MethodGet, "/api/admin/v1/permission/role?page=1&pageSize=20&keyword=test&isEnabled=0", nil)
+	recorder := serveRoleRequest(t, service, http.MethodGet, "/api/admin/v1/permission/role?page=1&pageSize=20&keyword=test&status=0", nil)
 	assertRoleEnvelope(t, recorder, http.StatusOK, 0)
 	if service.listCalls != 1 || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 ||
-		service.listQuery.Keyword != "test" || service.listQuery.IsEnabled == nil || *service.listQuery.IsEnabled != yesno.No {
+		service.listQuery.Keyword != "test" || service.listQuery.Status == nil || *service.listQuery.Status != yesno.No {
 		t.Fatalf("list query = %+v calls=%d", service.listQuery, service.listCalls)
 	}
 
@@ -33,7 +33,7 @@ func TestRoleHandlerListParsesOnlyTheExactQuery(t *testing.T) {
 		"/api/admin/v1/permission/role?page=1&pageSize=101",
 		"/api/admin/v1/permission/role?page=1&pageSize=20&unknown=1",
 		"/api/admin/v1/permission/role?page=1&page=2&pageSize=20",
-		"/api/admin/v1/permission/role?page=1&pageSize=20&isEnabled=2",
+		"/api/admin/v1/permission/role?page=1&pageSize=20&status=2",
 	} {
 		invalidService := &roleHTTPService{}
 		responseRecorder := serveRoleRequest(t, invalidService, http.MethodGet, path, nil)
@@ -54,7 +54,7 @@ func TestRoleHandlerMutationsUseClosedContracts(t *testing.T) {
 	}{
 		{method: http.MethodPost, path: "/api/admin/v1/permission/role", body: []byte(`{"code":"tester","name":"Tester"}`), status: http.StatusCreated},
 		{method: http.MethodPut, path: "/api/admin/v1/permission/role/7", body: []byte(`{"name":"Updated"}`), status: http.StatusOK},
-		{method: http.MethodPatch, path: "/api/admin/v1/permission/role/7/status", body: []byte(`{"isEnabled":0}`), status: http.StatusOK},
+		{method: http.MethodPatch, path: "/api/admin/v1/permission/role/7/status", body: []byte(`{"status":0}`), status: http.StatusOK},
 		{method: http.MethodPatch, path: "/api/admin/v1/permission/role/7/default", status: http.StatusOK},
 		{method: http.MethodDelete, path: "/api/admin/v1/permission/role/7", status: http.StatusOK},
 		{method: http.MethodPut, path: "/api/admin/v1/permission/role/7/permission", body: []byte(`{"menuIds":[2,3]}`), status: http.StatusOK},
@@ -79,7 +79,7 @@ func TestRoleHandlerMutationsUseClosedContracts(t *testing.T) {
 		{method: http.MethodPost, path: "/api/admin/v1/permission/role", body: []byte(`{"code":"tester"}`)},
 		{method: http.MethodPost, path: "/api/admin/v1/permission/role", body: []byte(`{"code":"tester","name":"Tester","msg":"old"}`)},
 		{method: http.MethodPut, path: "/api/admin/v1/permission/role/0", body: []byte(`{"name":"Tester"}`)},
-		{method: http.MethodPatch, path: "/api/admin/v1/permission/role/7/status", body: []byte(`{"isEnabled":2}`)},
+		{method: http.MethodPatch, path: "/api/admin/v1/permission/role/7/status", body: []byte(`{"status":2}`)},
 		{method: http.MethodPatch, path: "/api/admin/v1/permission/role/7/default", body: []byte(`{}`)},
 		{method: http.MethodDelete, path: "/api/admin/v1/permission/role/7", body: []byte(`{}`)},
 		{method: http.MethodPut, path: "/api/admin/v1/permission/role/7/permission", body: []byte(`{"menuIds":null}`)},
@@ -93,9 +93,9 @@ func TestRoleHandlerMutationsUseClosedContracts(t *testing.T) {
 
 func TestRoleHandlerPermissionsReturnsPlatformGroups(t *testing.T) {
 	service := &roleHTTPService{permissionsResult: role.Permissions{
-		Role: role.Summary{ID: 7, Code: "operator", Name: "Operator", IsDefault: yesno.No, IsEnabled: yesno.Yes},
+		Role: role.Summary{ID: 7, Code: "operator", Name: "Operator", IsDefault: yesno.No, Status: yesno.Yes},
 		Platforms: []role.PermissionPlatform{{
-			ID: 2, Code: "canvas", Name: "Canvas", IsEnabled: yesno.No, MenuTree: []role.PermissionTreeNode{},
+			ID: 2, Code: "canvas", Name: "Canvas", Status: yesno.No, MenuTree: []role.PermissionTreeNode{},
 		}},
 		MenuIDs: []int64{11},
 	}}
@@ -126,7 +126,7 @@ func TestRoleHandlerPermissionsReturnsPlatformGroups(t *testing.T) {
 	if len(platforms) != 1 || len(platforms[0]) != 5 {
 		t.Fatalf("permission platforms = %v", platforms)
 	}
-	for _, key := range []string{"id", "code", "name", "isEnabled", "menuTree"} {
+	for _, key := range []string{"id", "code", "name", "status", "menuTree"} {
 		if _, exists := platforms[0][key]; !exists {
 			t.Fatalf("permission platform is missing %q: %s", key, recorder.Body.String())
 		}

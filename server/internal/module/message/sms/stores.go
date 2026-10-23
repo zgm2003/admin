@@ -70,7 +70,7 @@ func (s Stores) runtimeLoader() func(context.Context) (RuntimeFacts, error) {
 					SecretIDCiphertext: configured.SecretIDCiphertext, SecretKeyCiphertext: configured.SecretKeyCiphertext,
 					SDKAppID: configured.SDKAppID, SignName: configured.SignName,
 					Region: configured.Region, Endpoint: endpoint,
-					TTLMinutes: int(configured.TTLMinutes), IsEnabled: configured.IsEnabled,
+					TTLMinutes: int(configured.TTLMinutes), Status: configured.Status,
 				},
 				Templates: make(map[string]TemplateFact),
 			}
@@ -103,7 +103,7 @@ func (s Stores) loadTemplatesInto(ctx context.Context, facts *RuntimeFacts) (int
 		return 0, fmt.Errorf("sms template source: %w", err)
 	}
 	for _, row := range rows {
-		fact := TemplateFact{Name: row.Name, TencentTemplateID: row.TencentTemplateID, IsEnabled: row.IsEnabled}
+		fact := TemplateFact{Name: row.Name, TencentTemplateID: row.TencentTemplateID, Status: row.Status}
 		if err := unmarshalJSON(row.VariableKeys, &fact.VariableKeys); err != nil {
 			return 0, err
 		}
@@ -124,7 +124,7 @@ func (s Stores) loadRulesInto(ctx context.Context, facts *RuntimeFacts) (int, er
 		facts.Rules = append(facts.Rules, RuleFact{
 			ID: row.ID, Scope: row.Scope, Action: row.Action,
 			Pattern:   row.Pattern,
-			IsEnabled: row.IsEnabled,
+			Status: row.Status,
 		})
 	}
 	return len(rows), nil

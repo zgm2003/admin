@@ -63,7 +63,7 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 		"bind_ip":                   {dataType: "smallint", nullable: "NO"},
 		"max_sessions":              {dataType: "smallint", nullable: "NO"},
 		"allow_register":            {dataType: "smallint", nullable: "NO"},
-		"is_enabled":                {dataType: "smallint", nullable: "NO"},
+		"status":                {dataType: "smallint", nullable: "NO"},
 		"is_builtin":                {dataType: "smallint", nullable: "NO"},
 		"created_at":                {dataType: "timestamp with time zone", nullable: "NO"},
 		"updated_at":                {dataType: "timestamp with time zone", nullable: "NO"},
@@ -100,7 +100,7 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 		"ck_permission_auth_platform_bind_ip":                   {"CHECK", "bind_ip"},
 		"ck_permission_auth_platform_max_sessions":              {"CHECK", "max_sessions", "100"},
 		"ck_permission_auth_platform_allow_register":            {"CHECK", "allow_register"},
-		"ck_permission_auth_platform_is_enabled":                {"CHECK", "is_enabled"},
+		"ck_permission_auth_platform_status":                {"CHECK", "status"},
 		"ck_permission_auth_platform_is_builtin":                {"CHECK", "is_builtin"},
 	}
 	for name, fragments := range constraints {
@@ -124,7 +124,7 @@ func TestAuthenticationPlatformSchemaAndBuiltinAdmin(t *testing.T) {
 	}
 
 	admin := readAdmin(t, connection.GORM)
-	if admin.Name != "Admin" || admin.PolicyVersion != 1 || admin.AccessTTLSeconds != 900 || admin.RefreshTTLSeconds != 1209600 || admin.SessionCacheTTLSeconds != 1800 || admin.AccessCacheTTLSeconds != 1800 || admin.BindDevice != yesno.No || admin.BindIP != yesno.No || admin.MaxSessions != 1 || admin.AllowRegister != yesno.Yes || admin.IsEnabled != yesno.Yes || admin.IsBuiltin != yesno.Yes || admin.DeletedAt.Valid {
+	if admin.Name != "Admin" || admin.PolicyVersion != 1 || admin.AccessTTLSeconds != 900 || admin.RefreshTTLSeconds != 1209600 || admin.SessionCacheTTLSeconds != 1800 || admin.AccessCacheTTLSeconds != 1800 || admin.BindDevice != yesno.No || admin.BindIP != yesno.No || admin.MaxSessions != 1 || admin.AllowRegister != yesno.Yes || admin.Status != yesno.Yes || admin.IsBuiltin != yesno.Yes || admin.DeletedAt.Valid {
 		t.Fatalf("builtin admin = %+v", admin)
 	}
 }
@@ -148,7 +148,7 @@ func TestEnsureCanvasPresetCreatesBuiltinRegistrationPlatformAndIsIdempotent(t *
 	if first.Name != "Canvas" || first.PolicyVersion != 1 || first.AccessTTLSeconds != 900 ||
 		first.RefreshTTLSeconds != 1_209_600 || first.SessionCacheTTLSeconds != 1_800 ||
 		first.AccessCacheTTLSeconds != 1_800 || first.BindDevice != yesno.No || first.BindIP != yesno.No ||
-		first.MaxSessions != 1 || first.AllowRegister != yesno.Yes || first.IsEnabled != yesno.Yes ||
+		first.MaxSessions != 1 || first.AllowRegister != yesno.Yes || first.Status != yesno.Yes ||
 		first.IsBuiltin != yesno.Yes || first.DeletedAt.Valid {
 		t.Fatalf("Canvas preset = %+v", first)
 	}
@@ -187,7 +187,7 @@ func TestEnsureCanvasPresetPromotesExistingPlatformWithoutResettingPolicy(t *tes
 	existing.BindIP = yesno.Yes
 	existing.MaxSessions = 3
 	existing.AllowRegister = yesno.No
-	existing.IsEnabled = yesno.No
+	existing.Status = yesno.No
 	existing.IsBuiltin = yesno.No
 	if err := connection.GORM.WithContext(ctx).Create(&existing).Error; err != nil {
 		t.Fatal(err)
@@ -205,7 +205,7 @@ func TestEnsureCanvasPresetPromotesExistingPlatformWithoutResettingPolicy(t *tes
 		promoted.RefreshTTLSeconds != existing.RefreshTTLSeconds || promoted.SessionCacheTTLSeconds != existing.SessionCacheTTLSeconds ||
 		promoted.AccessCacheTTLSeconds != existing.AccessCacheTTLSeconds || promoted.BindDevice != existing.BindDevice ||
 		promoted.BindIP != existing.BindIP || promoted.MaxSessions != existing.MaxSessions ||
-		promoted.AllowRegister != existing.AllowRegister || promoted.IsEnabled != existing.IsEnabled ||
+		promoted.AllowRegister != existing.AllowRegister || promoted.Status != existing.Status ||
 		!promoted.CreatedAt.Equal(existing.CreatedAt) || !promoted.UpdatedAt.After(existing.UpdatedAt) {
 		t.Fatalf("promoted Canvas platform = %+v, existing = %+v", promoted, existing)
 	}
@@ -228,7 +228,7 @@ func TestEnsureSchemaPreservesBuiltinAdminRegistrationPolicy(t *testing.T) {
 	historical.BindDevice = yesno.Yes
 	historical.BindIP = yesno.Yes
 	historical.MaxSessions = 2
-	historical.IsEnabled = yesno.No
+	historical.Status = yesno.No
 	if err := db.Create(&historical).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestEnsureSchemaPreservesBuiltinAdminRegistrationPolicy(t *testing.T) {
 	if first.AllowRegister != historical.AllowRegister || first.PolicyVersion != historical.PolicyVersion {
 		t.Fatalf("registration policy was rewritten = %+v", first)
 	}
-	if first.Name != historical.Name || first.AccessTTLSeconds != historical.AccessTTLSeconds || first.RefreshTTLSeconds != historical.RefreshTTLSeconds || first.SessionCacheTTLSeconds != historical.SessionCacheTTLSeconds || first.AccessCacheTTLSeconds != historical.AccessCacheTTLSeconds || first.BindDevice != historical.BindDevice || first.BindIP != historical.BindIP || first.MaxSessions != historical.MaxSessions || first.IsEnabled != historical.IsEnabled || !first.CreatedAt.Equal(historical.CreatedAt) {
+	if first.Name != historical.Name || first.AccessTTLSeconds != historical.AccessTTLSeconds || first.RefreshTTLSeconds != historical.RefreshTTLSeconds || first.SessionCacheTTLSeconds != historical.SessionCacheTTLSeconds || first.AccessCacheTTLSeconds != historical.AccessCacheTTLSeconds || first.BindDevice != historical.BindDevice || first.BindIP != historical.BindIP || first.MaxSessions != historical.MaxSessions || first.Status != historical.Status || !first.CreatedAt.Equal(historical.CreatedAt) {
 		t.Fatalf("editable policy values were reset: historical=%+v migrated=%+v", historical, first)
 	}
 	if err := authplatform.EnsureSchema(ctx, db); err != nil {
@@ -335,7 +335,7 @@ func validHistoricalAdmin(now time.Time) authplatform.Platform {
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		AllowRegister: yesno.Yes, Status: yesno.Yes, IsBuiltin: yesno.Yes,
 		CreatedAt: now, UpdatedAt: now,
 	}
 }

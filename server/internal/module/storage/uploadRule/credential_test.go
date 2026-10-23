@@ -88,7 +88,7 @@ func TestIssueCredentialsValidatesAndSignsPlatformRule(t *testing.T) {
 	}
 	configService := newConfigService(t, db, keys)
 	domain := "https://cdn.example.com"
-	configID, err := configService.Create(ctx, cosconfig.CreateInput{Name: "Main", AppID: "1250000000", SecretID: "secret-id", SecretKey: "secret-key", Bucket: "assets", Region: "ap-guangzhou", BucketDomain: &domain, IsEnabled: yesno.Yes})
+	configID, err := configService.Create(ctx, cosconfig.CreateInput{Name: "Main", AppID: "1250000000", SecretID: "secret-id", SecretKey: "secret-key", Bucket: "assets", Region: "ap-guangzhou", BucketDomain: &domain, Status: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestIssueCredentialsRejectsRuleViolations(t *testing.T) {
 	platformID := insertPlatform(t, db, ctx, "admin", yesno.Yes)
 	keys, _ := secretkey.New(strings.Repeat("z", 64))
 	configService := newConfigService(t, db, keys)
-	configID, err := configService.Create(ctx, cosconfig.CreateInput{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "assets", Region: "ap-guangzhou", IsEnabled: yesno.Yes})
+	configID, err := configService.Create(ctx, cosconfig.CreateInput{Name: "Main", AppID: "1", SecretID: "id", SecretKey: "key", Bucket: "assets", Region: "ap-guangzhou", Status: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestObjectURLUsesImmutableRouteAndHistoricalPublicVersion(t *testing.T) {
 	oldDomain := "https://old.example.com/base"
 	currentDomain := "https://current.example.com"
 	runtime := &fixedRuntimeSource{config: cosconfig.RuntimeConfig{
-		ID: configID, AppID: "1250000000", CurrentVersion: 2, IsEnabled: yesno.No,
+		ID: configID, AppID: "1250000000", CurrentVersion: 2, Status: yesno.No,
 		Versions: []cosconfig.RuntimeVersion{
 			{Version: 1, Bucket: "old", Region: "ap-guangzhou", BucketDomain: &oldDomain},
 			{Version: 2, Bucket: "current", Region: "ap-shanghai", BucketDomain: &currentDomain},
@@ -196,7 +196,7 @@ func TestObjectURLUsesImmutableRouteAndHistoricalPublicVersion(t *testing.T) {
 	if err != nil || result.URL != oldDomain+"/"+key || result.ExpiresAt != nil {
 		t.Fatalf("public result=%+v error=%v", result, err)
 	}
-	if err := db.WithContext(ctx).Model(&Model{}).Where("id = ?", ruleID).Updates(map[string]any{"is_enabled": yesno.No, "deleted_at": time.Now().UTC()}).Error; err != nil {
+	if err := db.WithContext(ctx).Model(&Model{}).Where("id = ?", ruleID).Updates(map[string]any{"status": yesno.No, "deleted_at": time.Now().UTC()}).Error; err != nil {
 		t.Fatal(err)
 	}
 	routeKey, _ := routeCacheKey(ruleID)
@@ -240,7 +240,7 @@ func TestObjectURLReadyRouteAndRuntimeUseZeroPostgresSelects(t *testing.T) {
 	domain := "https://cdn.example.com"
 	configID, err := configService.Create(ctx, cosconfig.CreateInput{
 		Name: "Hot", AppID: "1250000000", SecretID: "secret-id", SecretKey: "secret-key",
-		Bucket: "assets", Region: "ap-guangzhou", BucketDomain: &domain, IsEnabled: yesno.Yes,
+		Bucket: "assets", Region: "ap-guangzhou", BucketDomain: &domain, Status: yesno.Yes,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -294,7 +294,7 @@ func TestObjectURLPresignsPrivateHistoricalVersionAndFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	configService := newConfigService(t, db, keys)
-	configID, err := configService.Create(ctx, cosconfig.CreateInput{Name: "Private", AppID: "1250000000", SecretID: "secret-id", SecretKey: "secret-key", Bucket: "old", Region: "ap-guangzhou", IsEnabled: yesno.Yes})
+	configID, err := configService.Create(ctx, cosconfig.CreateInput{Name: "Private", AppID: "1250000000", SecretID: "secret-id", SecretKey: "secret-key", Bucket: "old", Region: "ap-guangzhou", Status: yesno.Yes})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestObjectURLPresignsPrivateHistoricalVersionAndFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime.CurrentVersion = 2
-	runtime.IsEnabled = yesno.No
+	runtime.Status = yesno.No
 	runtime.Versions = append(runtime.Versions, cosconfig.RuntimeVersion{Version: 2, Bucket: "current", Region: "ap-shanghai"})
 	repository := NewRepository(db)
 	ruleID, err := NewService(repository, nil, nil, nil, nil).Create(ctx, validCreate(platformID, configID, []string{"private-file"}, yesno.Yes))

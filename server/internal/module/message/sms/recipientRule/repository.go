@@ -70,7 +70,7 @@ func (r *Repository) Update(ctx context.Context, value *Model, expected int64, n
 		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", value.ID).Updates(map[string]any{
 			"scope": value.Scope, "pattern": value.Pattern,
 			"action": value.Action, "name": value.Name, "remark": value.Remark,
-			"is_enabled": value.IsEnabled, "updated_at": now,
+			"status": value.Status, "updated_at": now,
 		})
 		if query.Error != nil {
 			return false, mapWriteError(query.Error)
@@ -88,11 +88,11 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status int16, e
 		if err != nil {
 			return false, err
 		}
-		if int16(current.IsEnabled) == status {
+		if int16(current.Status) == status {
 			return false, nil
 		}
 		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{
-			"is_enabled": status, "updated_at": now,
+			"status": status, "updated_at": now,
 		})
 		if query.Error != nil {
 			return false, query.Error
@@ -164,7 +164,7 @@ func lockRule(ctx context.Context, tx *gorm.DB, id int64) (Model, error) {
 
 func sameRule(left, right Model) bool {
 	return left.Scope == right.Scope && left.Pattern == right.Pattern &&
-		left.Action == right.Action && left.Name == right.Name && left.Remark == right.Remark && left.IsEnabled == right.IsEnabled
+		left.Action == right.Action && left.Name == right.Name && left.Remark == right.Remark && left.Status == right.Status
 }
 
 func mapWriteError(err error) error {

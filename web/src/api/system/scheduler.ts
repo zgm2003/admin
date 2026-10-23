@@ -12,7 +12,7 @@ export interface Schedule {
   cronExpression: string
   timezone: string
   params: Record<string, unknown>
-  isEnabled: boolean
+  status: boolean
   status: number
   actions: { delete: boolean }
   nextRunAt: string | null
@@ -105,7 +105,7 @@ export async function createSchedule(input: {
   cronExpression: string
   timezone: string
   params: Record<string, unknown>
-  isEnabled: boolean
+  status: boolean
 }): Promise<Schedule> {
   return request.post<Schedule>('/api/admin/v1/system/scheduler/schedule', input)
 }
@@ -123,8 +123,8 @@ export async function updateSchedule(
   return request.put<Schedule>(`/api/admin/v1/system/scheduler/schedule/${id}`, input)
 }
 
-export async function setScheduleStatus(id: number, isEnabled: boolean): Promise<void> {
-  return request.patch<void>(`/api/admin/v1/system/scheduler/schedule/${id}/status`, { isEnabled })
+export async function setScheduleStatus(id: number, status: boolean): Promise<void> {
+  return request.patch<void>(`/api/admin/v1/system/scheduler/schedule/${id}/status`, { status })
 }
 
 export async function deleteSchedule(id: number): Promise<void> {

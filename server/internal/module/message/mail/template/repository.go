@@ -54,7 +54,7 @@ func (r *Repository) Update(ctx context.Context, id int64, expectedScene string,
 		}
 		desired := row
 		applyTemplateValues(&desired, values)
-		if desired.IsEnabled == yesno.Yes {
+		if desired.Status == yesno.Yes {
 			if desired.TencentTemplateID == nil || *desired.TencentTemplateID < 1 {
 				return false, fmt.Errorf("enabled template requires a provider template id")
 			}
@@ -91,10 +91,10 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, enabled yesno.V
 				return false, err
 			}
 		}
-		if row.IsEnabled == enabled {
+		if row.Status == enabled {
 			return false, nil
 		}
-		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{"is_enabled": enabled, "updated_at": now})
+		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{"status": enabled, "updated_at": now})
 		if query.Error != nil {
 			return false, query.Error
 		}

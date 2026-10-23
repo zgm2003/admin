@@ -65,7 +65,7 @@ func TestProcessorUserAudienceCreatesRecipientsAndEventsOnce(t *testing.T) {
 
 func TestProcessorKeepsPublishedAtStableAcrossBatches(t *testing.T) {
 	db, ctx := openTaskDB(t)
-	if err := db.WithContext(ctx).Exec(`INSERT INTO user_account(id,username,is_enabled,deleted_at) SELECT value,'user-' || value,1,NULL FROM generate_series(3,501) AS value`).Error; err != nil {
+	if err := db.WithContext(ctx).Exec(`INSERT INTO user_account(id,username,status,deleted_at) SELECT value,'user-' || value,1,NULL FROM generate_series(3,501) AS value`).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.WithContext(ctx).Exec(`INSERT INTO permission_user_role(user_id,role_id,created_at,updated_at) SELECT value,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP FROM generate_series(3,501) AS value`).Error; err != nil {

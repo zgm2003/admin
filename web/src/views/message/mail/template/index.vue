@@ -36,7 +36,7 @@ const saving = ref(false)
 const editorVisible = ref(false)
 const form = ref<MailTemplateInput>(blankTemplate())
 const enabledCount = computed(
-  () => props.templates.filter((item) => item.isEnabled === YesNo.Yes).length,
+  () => props.templates.filter((item) => item.status === YesNo.Yes).length,
 )
 const columns = computed<TableColumn<MailTemplate>[]>(() => [
   { key: 'name', prop: 'name', label: t('mail.name'), minWidth: 170 },
@@ -111,7 +111,7 @@ async function copyHtml(): Promise<void> {
 
 async function toggle(row: MailTemplate): Promise<void> {
   try {
-    const next = row.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+    const next = row.status === YesNo.Yes ? YesNo.No : YesNo.Yes
     await ElMessageBox.confirm(
       t('confirm.status', {
         name: row.name,
@@ -178,7 +178,7 @@ async function saveTemplate(): Promise<void> {
       </template>
       <template #cell-status="{ row }: { row: MailTemplate }">
         <el-switch
-          :model-value="row.isEnabled"
+          :model-value="row.status"
           inline-prompt
           :active-text="t('common.enable')"
           :inactive-text="t('common.disable')"

@@ -65,7 +65,7 @@ func (s *Service) UpdateSchedule(ctx context.Context, id int64, input ScheduleIn
 		return Schedule{}, err
 	}
 	input.TaskType = current.TaskType
-	input.Enabled = current.IsEnabled == 1
+	input.Enabled = current.Status == 1
 	if _, err = ParseCron(input.CronExpression); err != nil {
 		return Schedule{}, apperror.InvalidRequest(err)
 	}

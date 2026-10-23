@@ -31,7 +31,7 @@ type Record struct {
 	Value       string
 	ValueType   int
 	Description string
-	IsEnabled   yesno.Value
+	Status      yesno.Value
 	IsBuiltin   yesno.Value
 }
 

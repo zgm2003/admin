@@ -17,7 +17,7 @@ type CreateInput struct {
 	AmountCents int64
 	Badge       *string
 	SortOrder   int32
-	IsEnabled   yesno.Value
+	Status   yesno.Value
 }
 
 type UpdateInput struct {
@@ -30,7 +30,7 @@ type UpdateInput struct {
 type ListQuery struct {
 	Page, PageSize int
 	Keyword        string
-	IsEnabled      *yesno.Value
+	Status      *yesno.Value
 }
 
 type createRequest struct {
@@ -38,18 +38,18 @@ type createRequest struct {
 	Amount    *string      `json:"amount"`
 	Badge     *string      `json:"badge"`
 	SortOrder *int32       `json:"sortOrder"`
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Name == nil || r.Amount == nil || r.SortOrder == nil || r.IsEnabled == nil {
-		return CreateInput{}, fmt.Errorf("name, amount, sortOrder and isEnabled are required")
+	if r.Name == nil || r.Amount == nil || r.SortOrder == nil || r.Status == nil {
+		return CreateInput{}, fmt.Errorf("name, amount, sortOrder and status are required")
 	}
 	cents, err := parseAmount(*r.Amount)
 	if err != nil {
 		return CreateInput{}, err
 	}
-	input := CreateInput{Name: strings.TrimSpace(*r.Name), AmountCents: cents, Badge: r.Badge, SortOrder: *r.SortOrder, IsEnabled: *r.IsEnabled}
+	input := CreateInput{Name: strings.TrimSpace(*r.Name), AmountCents: cents, Badge: r.Badge, SortOrder: *r.SortOrder, Status: *r.Status}
 	if err := validateCreate(input); err != nil {
 		return CreateInput{}, err
 	}
@@ -104,14 +104,14 @@ func parseBadge(raw json.RawMessage) (*string, error) {
 }
 
 type statusRequest struct {
-	IsEnabled *yesno.Value `json:"isEnabled"`
+	Status *yesno.Value `json:"status"`
 }
 
 func validateCreate(input CreateInput) error {
 	if err := validateUpdate(UpdateInput{input.Name, input.AmountCents, input.Badge, input.SortOrder}); err != nil {
 		return err
 	}
-	if err := validateFlags(input.IsEnabled); err != nil {
+	if err := validateFlags(input.Status); err != nil {
 		return err
 	}
 	return nil
@@ -135,7 +135,7 @@ func validateUpdate(input UpdateInput) error {
 
 func parseListQuery(values url.Values) (ListQuery, error) {
 	for key, entries := range values {
-		if (key != "page" && key != "pageSize" && key != "keyword" && key != "isEnabled") || len(entries) != 1 {
+		if (key != "page" && key != "pageSize" && key != "keyword" && key != "status") || len(entries) != 1 {
 			return ListQuery{}, fmt.Errorf("query invalid")
 		}
 	}
@@ -147,16 +147,16 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 	if !utf8.ValidString(query.Keyword) || utf8.RuneCountInString(query.Keyword) > MaxNameLength {
 		return ListQuery{}, fmt.Errorf("keyword invalid")
 	}
-	if raw, exists := values["isEnabled"]; exists {
+	if raw, exists := values["status"]; exists {
 		switch raw[0] {
 		case "0":
 			value := yesno.No
-			query.IsEnabled = &value
+			query.Status = &value
 		case "1":
 			value := yesno.Yes
-			query.IsEnabled = &value
+			query.Status = &value
 		default:
-			return ListQuery{}, fmt.Errorf("isEnabled invalid")
+			return ListQuery{}, fmt.Errorf("status invalid")
 		}
 	}
 	return query, nil

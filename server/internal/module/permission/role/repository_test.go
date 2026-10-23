@@ -55,7 +55,7 @@ func TestEnsureSystemRolesCreatesAndValidatesRoles(t *testing.T) {
 	}
 	for _, stored := range roles {
 		expected := want[stored.Code]
-		if stored.Name != expected.name || stored.IsDefault != expected.isDefault || stored.IsEnabled != yesno.Yes {
+		if stored.Name != expected.name || stored.IsDefault != expected.isDefault || stored.Status != yesno.Yes {
 			t.Errorf("role %s = %+v", stored.Code, stored)
 		}
 	}
@@ -73,7 +73,7 @@ func TestRepositoryFindPermissionPlatformsIncludesDisabledAndExcludesDeleted(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(platforms) != 2 || platforms[0].Code != authplatform.BuiltinAdminCode || platforms[1].ID != canvas.ID || platforms[1].IsEnabled != yesno.No {
+	if len(platforms) != 2 || platforms[0].Code != authplatform.BuiltinAdminCode || platforms[1].ID != canvas.ID || platforms[1].Status != yesno.No {
 		t.Fatalf("permission platforms = %+v", platforms)
 	}
 }
@@ -116,7 +116,7 @@ func TestFindDefaultRequiresExactlyOneEnabledRole(t *testing.T) {
 		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeRegisteredUser).Update("is_enabled", yesno.No).Error; err != nil {
+		if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeRegisteredUser).Update("status", yesno.No).Error; err != nil {
 			t.Fatal(err)
 		}
 		if _, err := repository.FindDefault(ctx); err == nil {
@@ -149,7 +149,7 @@ func TestFindByCodeRejectsDeletedOrDisabledRole(t *testing.T) {
 		if err := role.NewService(repository, nil).EnsureSystemRoles(ctx); err != nil {
 			t.Fatal(err)
 		}
-		if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeSuperAdmin).Update("is_enabled", yesno.No).Error; err != nil {
+		if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeSuperAdmin).Update("status", yesno.No).Error; err != nil {
 			t.Fatal(err)
 		}
 		if _, err := repository.FindByCode(ctx, role.CodeSuperAdmin); err == nil {
@@ -180,7 +180,7 @@ func TestHasActiveUserWithRole(t *testing.T) {
 	}
 	testRole := role.Role{
 		Code: fmt.Sprintf("role_attachment_%d", time.Now().UnixNano()), Name: "Role Attachment Test",
-		IsDefault: yesno.No, IsEnabled: yesno.Yes,
+		IsDefault: yesno.No, Status: yesno.Yes,
 	}
 	if err := tx.WithContext(ctx).Create(&testRole).Error; err != nil {
 		t.Fatal(err)
@@ -189,7 +189,7 @@ func TestHasActiveUserWithRole(t *testing.T) {
 		Username:     fmt.Sprintf("role-test-%d", time.Now().UnixNano()),
 		Email:        fmt.Sprintf("role-test-%d@example.com", time.Now().UnixNano()),
 		PasswordHash: "not-a-real-hash",
-		IsEnabled:    yesno.Yes,
+		Status:    yesno.Yes,
 	}
 	if err := tx.WithContext(ctx).Create(&createdUser).Error; err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ func TestHasActiveUserWithRole(t *testing.T) {
 func TestRepositoryEffectiveAccessVersionsByRoleAreSortedAndExact(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
 	repository := role.NewRepository(tx)
-	testRole := role.Role{Code: fmt.Sprintf("access_scope_%d", time.Now().UnixNano()), Name: "Access scope", IsEnabled: yesno.Yes}
+	testRole := role.Role{Code: fmt.Sprintf("access_scope_%d", time.Now().UnixNano()), Name: "Access scope", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&testRole).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -241,13 +241,13 @@ func TestRepositoryEffectiveAccessVersionsByRoleAreSortedAndExact(t *testing.T) 
 
 func TestRepositoryEffectiveAccessVersionsRejectMissingVersion(t *testing.T) {
 	tx, ctx := openRoleTransaction(t)
-	testRole := role.Role{Code: fmt.Sprintf("missing_version_%d", time.Now().UnixNano()), Name: "Missing version", IsEnabled: yesno.Yes}
+	testRole := role.Role{Code: fmt.Sprintf("missing_version_%d", time.Now().UnixNano()), Name: "Missing version", Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&testRole).Error; err != nil {
 		t.Fatal(err)
 	}
 	created := account.User{
 		Username: fmt.Sprintf("missing_version_%d", time.Now().UnixNano()),
-		Email:    fmt.Sprintf("missing_version_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", IsEnabled: yesno.Yes,
+		Email:    fmt.Sprintf("missing_version_%d@example.com", time.Now().UnixNano()), PasswordHash: "hash", Status: yesno.Yes,
 	}
 	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
 		t.Fatal(err)
@@ -265,20 +265,20 @@ func TestRepositoryListUsesStableFiltersAndExactCounts(t *testing.T) {
 	repository := role.NewRepository(tx)
 	unique := fmt.Sprintf("role_list_%d", time.Now().UnixNano())
 	createdAt := time.Now().UTC().Add(-time.Hour)
-	first := role.Role{Code: unique + "_a", Name: unique + " First", IsDefault: yesno.No, IsEnabled: yesno.Yes, CreatedAt: createdAt}
-	second := role.Role{Code: unique + "_b", Name: unique + " Second", IsDefault: yesno.No, IsEnabled: yesno.No, CreatedAt: createdAt}
+	first := role.Role{Code: unique + "_a", Name: unique + " First", IsDefault: yesno.No, Status: yesno.Yes, CreatedAt: createdAt}
+	second := role.Role{Code: unique + "_b", Name: unique + " Second", IsDefault: yesno.No, Status: yesno.No, CreatedAt: createdAt}
 	if err := tx.WithContext(ctx).Create(&first).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := tx.WithContext(ctx).Create(&second).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", second.ID).Update("is_enabled", yesno.No).Error; err != nil {
+	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("id = ?", second.ID).Update("status", yesno.No).Error; err != nil {
 		t.Fatal(err)
 	}
-	second.IsEnabled = yesno.No
+	second.Status = yesno.No
 	disabledUser := account.User{
-		Username: unique, Email: unique + "@example.com", PasswordHash: "not-a-real-hash", IsEnabled: yesno.No,
+		Username: unique, Email: unique + "@example.com", PasswordHash: "not-a-real-hash", Status: yesno.No,
 	}
 	if err := tx.WithContext(ctx).Create(&disabledUser).Error; err != nil {
 		t.Fatal(err)
@@ -289,7 +289,7 @@ func TestRepositoryListUsesStableFiltersAndExactCounts(t *testing.T) {
 	}
 	componentPath := "access/menus/" + unique
 	path := "/" + componentPath
-	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "List", Code: unique + ":list", I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, IsEnabled: yesno.No, IsHidden: yesno.No}
+	page := menu.Menu{PlatformID: roleTestAdminPlatformID(t, tx, ctx), MenuType: menu.TypePage, Name: "List", Code: unique + ":list", I18nKey: roleTestStringPointer("navigation.systemMenus"), Path: &path, ComponentPath: &componentPath, Status: yesno.No, IsHidden: yesno.No}
 	if err := tx.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestRepositoryListUsesStableFiltersAndExactCounts(t *testing.T) {
 	}
 
 	enabled := yesno.Yes
-	total, err = repository.Count(ctx, role.ListQuery{Page: 1, PageSize: 10, Keyword: unique, IsEnabled: &enabled})
+	total, err = repository.Count(ctx, role.ListQuery{Page: 1, PageSize: 10, Keyword: unique, Status: &enabled})
 	if err != nil || total != 1 {
 		t.Fatalf("enabled count = %d,%v", total, err)
 	}
@@ -344,9 +344,9 @@ func TestRepositoryListTreatsPercentAndUnderscoreLiterally(t *testing.T) {
 	repository := role.NewRepository(tx)
 	unique := fmt.Sprintf("literal_%d", time.Now().UnixNano())
 	values := []role.Role{
-		{Code: unique + "_percent", Name: "Value 100% " + unique, IsEnabled: yesno.Yes},
-		{Code: unique + "_underscore", Name: "Value_under " + unique, IsEnabled: yesno.Yes},
-		{Code: unique + "_plain", Name: "Value plain " + unique, IsEnabled: yesno.Yes},
+		{Code: unique + "_percent", Name: "Value 100% " + unique, Status: yesno.Yes},
+		{Code: unique + "_underscore", Name: "Value_under " + unique, Status: yesno.Yes},
+		{Code: unique + "_plain", Name: "Value plain " + unique, Status: yesno.Yes},
 	}
 	for index := range values {
 		if err := tx.WithContext(ctx).Create(&values[index]).Error; err != nil {
@@ -392,7 +392,7 @@ func TestEnsureSystemRolesPreservesCustomDefault(t *testing.T) {
 	if err := tx.WithContext(ctx).Model(&role.Role{}).Where("code = ?", role.CodeRegisteredUser).Update("is_default", yesno.No).Error; err != nil {
 		t.Fatal(err)
 	}
-	custom := role.Role{Code: "custom_default", Name: "Custom Default", IsDefault: yesno.Yes, IsEnabled: yesno.Yes}
+	custom := role.Role{Code: "custom_default", Name: "Custom Default", IsDefault: yesno.Yes, Status: yesno.Yes}
 	if err := tx.WithContext(ctx).Create(&custom).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -489,14 +489,14 @@ func roleTestAdminPlatformID(t *testing.T, db *gorm.DB, ctx context.Context) int
 	return platform.ID
 }
 
-func createRoleTestPlatform(t *testing.T, db *gorm.DB, ctx context.Context, code, name string, isEnabled yesno.Value) authplatform.Platform {
+func createRoleTestPlatform(t *testing.T, db *gorm.DB, ctx context.Context, code, name string, status yesno.Value) authplatform.Platform {
 	t.Helper()
 	platform := authplatform.Platform{
 		Code: code, Name: name, LoginTypes: json.RawMessage(`["email","password"]`), PolicyVersion: 1,
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1_209_600,
 		SessionCacheTTLSeconds: 1_800, AccessCacheTTLSeconds: 1_800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.Yes, IsEnabled: isEnabled, IsBuiltin: yesno.No,
+		AllowRegister: yesno.Yes, Status: status, IsBuiltin: yesno.No,
 	}
 	if err := db.WithContext(ctx).Create(&platform).Error; err != nil {
 		t.Fatalf("create test authentication platform: %v", err)
@@ -509,13 +509,13 @@ func createRoleAccessUser(t *testing.T, tx *gorm.DB, ctx context.Context, roleID
 	unique := time.Now().UnixNano()
 	created := account.User{
 		Username: fmt.Sprintf("role_access_%d", unique), Email: fmt.Sprintf("role_access_%d@example.com", unique),
-		PasswordHash: "hash", IsEnabled: enabled,
+		PasswordHash: "hash", Status: enabled,
 	}
 	if err := tx.WithContext(ctx).Create(&created).Error; err != nil {
 		t.Fatal(err)
 	}
 	if enabled == yesno.No {
-		if err := tx.WithContext(ctx).Model(&account.User{}).Where("id = ?", created.ID).Update("is_enabled", yesno.No).Error; err != nil {
+		if err := tx.WithContext(ctx).Model(&account.User{}).Where("id = ?", created.ID).Update("status", yesno.No).Error; err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -537,12 +537,12 @@ func TestCreateRoleGrantsCompleteNotificationBasePermissions(t *testing.T) {
 	db, ctx := openRoleDatabase(t)
 	platform := createRoleTestPlatform(t, db, ctx, "notify", "Notify", yesno.Yes)
 	path, component, i18nKey := "/message/notification", "message/notification", "menu.message.notification"
-	page := menu.Menu{PlatformID: platform.ID, MenuType: menu.TypePage, Name: "Notification", Code: "message:notification:view", Path: &path, ComponentPath: &component, I18nKey: &i18nKey, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}
+	page := menu.Menu{PlatformID: platform.ID, MenuType: menu.TypePage, Name: "Notification", Code: "message:notification:view", Path: &path, ComponentPath: &component, I18nKey: &i18nKey, Status: yesno.Yes, IsHidden: yesno.Yes}
 	if err := db.WithContext(ctx).Create(&page).Error; err != nil {
 		t.Fatal(err)
 	}
 	for _, code := range []string{"message:notification:list", "message:notification:read", "message:notification:delete"} {
-		if err := db.WithContext(ctx).Create(&menu.Menu{PlatformID: platform.ID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: code, Code: code, IsEnabled: yesno.Yes, IsHidden: yesno.Yes}).Error; err != nil {
+		if err := db.WithContext(ctx).Create(&menu.Menu{PlatformID: platform.ID, ParentID: &page.ID, MenuType: menu.TypeAction, Name: code, Code: code, Status: yesno.Yes, IsHidden: yesno.Yes}).Error; err != nil {
 			t.Fatal(err)
 		}
 	}

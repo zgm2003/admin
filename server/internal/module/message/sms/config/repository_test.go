@@ -38,7 +38,7 @@ CREATE TABLE message_sms_config(
  region VARCHAR(64) NOT NULL,
  endpoint VARCHAR(255),
  ttl_minutes SMALLINT NOT NULL,
- is_enabled SMALLINT NOT NULL DEFAULT 0,
+ status SMALLINT NOT NULL DEFAULT 0,
  last_test_at TIMESTAMPTZ,
  last_test_error VARCHAR(512) NOT NULL DEFAULT '',
  created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -82,7 +82,7 @@ func activeConfig() Model {
 	return Model{
 		SecretIDCiphertext: "sms:v1:id", SecretKeyCiphertext: "sms:v1:key",
 		SecretIDHint: "AK***Id", SecretKeyHint: "ex***ue", SDKAppID: "1400006666",
-		SignName: "签名", Region: "ap-guangzhou", TTLMinutes: 5, IsEnabled: yesno.Yes,
+		SignName: "签名", Region: "ap-guangzhou", TTLMinutes: 5, Status: yesno.Yes,
 	}
 }
 
@@ -103,7 +103,7 @@ func TestRepositoryKeepsASingleActiveConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.ID != first.ID || stored.SDKAppID != "1400006666" || stored.IsEnabled != yesno.Yes {
+	if stored.ID != first.ID || stored.SDKAppID != "1400006666" || stored.Status != yesno.Yes {
 		t.Fatalf("stored = %+v", stored)
 	}
 }
@@ -148,7 +148,7 @@ func TestRepositoryUpdatesEditableFieldsAndTestResult(t *testing.T) {
 	endpoint := "sms.tencentcloudapi.com"
 	value.Endpoint = &endpoint
 	value.TTLMinutes = 30
-	value.IsEnabled = yesno.No
+	value.Status = yesno.No
 	updatedAt := time.Date(2026, 9, 10, 10, 0, 0, 0, time.UTC)
 	if _, err := repository.Update(ctx, &value, 2, updatedAt); err != nil {
 		t.Fatal(err)
@@ -162,7 +162,7 @@ func TestRepositoryUpdatesEditableFieldsAndTestResult(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.TTLMinutes != 30 || stored.IsEnabled != yesno.No ||
+	if stored.TTLMinutes != 30 || stored.Status != yesno.No ||
 		stored.Endpoint == nil || *stored.Endpoint != endpoint {
 		t.Fatalf("stored = %+v", stored)
 	}

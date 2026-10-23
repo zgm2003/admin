@@ -52,13 +52,13 @@ func (r *Repository) CreateSchedule(ctx context.Context, input ScheduleInput, ac
 		status = ScheduleEnabled
 	}
 	var row Schedule
-	query := `INSERT INTO system_scheduler_schedule(name,description,task_type,cron_expression,timezone,params,is_enabled,next_run_at,created_by,updated_by,created_at,updated_at)
+	query := `INSERT INTO system_scheduler_schedule(name,description,task_type,cron_expression,timezone,params,status,next_run_at,created_by,updated_by,created_at,updated_at)
 	VALUES(?,?,?,?,?,?::jsonb,?, ?,?,?,?,?) RETURNING *`
 	if err := r.db.WithContext(ctx).Raw(query, input.Name, input.Description, input.TaskType, input.CronExpression, input.Timezone, string(input.Params), boolToInt(input.Enabled), nullableNext(status, next), actor, actor, now, now).Scan(&row).Error; err != nil {
 		return Schedule{}, mapRepositoryError(err)
 	}
 	row.Status = status
-	row.IsEnabled = int16(boolToInt(input.Enabled))
+	row.Status = int16(boolToInt(input.Enabled))
 	return row, nil
 }
 
@@ -79,7 +79,7 @@ func (r *Repository) UpdateSchedule(ctx context.Context, id int64, input Schedul
 	var row Schedule
 	result := r.db.WithContext(ctx).Model(&Schedule{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{
 		"name": input.Name, "description": input.Description, "cron_expression": input.CronExpression, "timezone": input.Timezone,
-		"params": string(input.Params), "is_enabled": boolToInt(input.Enabled), "next_run_at": nullableNextBool(input.Enabled, next), "updated_by": actor, "updated_at": now,
+		"params": string(input.Params), "status": boolToInt(input.Enabled), "next_run_at": nullableNextBool(input.Enabled, next), "updated_by": actor, "updated_at": now,
 	})
 	if result.Error != nil {
 		return Schedule{}, mapRepositoryError(result.Error)
@@ -117,7 +117,7 @@ func (r *Repository) SetScheduleEnabled(ctx context.Context, id int64, enabled b
 			}
 			next = &value
 		}
-		result := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"is_enabled": boolToInt(enabled), "next_run_at": next, "updated_by": actor, "updated_at": now})
+		result := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"status": boolToInt(enabled), "next_run_at": next, "updated_by": actor, "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
@@ -152,7 +152,7 @@ func (r *Repository) DeleteSchedule(ctx context.Context, id int64, now time.Time
 		if now.IsZero() {
 			now = time.Now().UTC()
 		}
-		res := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"deleted_at": now, "updated_at": now, "is_enabled": 0, "next_run_at": nil})
+		res := tx.WithContext(ctx).Model(&Schedule{}).Where("id=? AND deleted_at IS NULL", id).Updates(map[string]any{"deleted_at": now, "updated_at": now, "status": 0, "next_run_at": nil})
 		if res.Error != nil {
 			return res.Error
 		}
@@ -174,7 +174,7 @@ func (r *Repository) ListSchedules(ctx context.Context, query ScheduleQuery) ([]
 	limit := normalizeLimit(query.Limit)
 	db := r.db.WithContext(ctx).Where("deleted_at IS NULL")
 	if query.Status != nil {
-		db = db.Where("is_enabled=?", boolToInt(*query.Status == ScheduleEnabled))
+		db = db.Where("status=?", boolToInt(*query.Status == ScheduleEnabled))
 	}
 	if query.TaskType != "" {
 		db = db.Where("task_type=?", query.TaskType)
@@ -299,7 +299,7 @@ func (r *Repository) CreateDueJobs(ctx context.Context, now time.Time, limit int
 	created := 0
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var rows []Schedule
-		if err := tx.WithContext(ctx).Raw(`SELECT * FROM system_scheduler_schedule WHERE deleted_at IS NULL AND is_enabled=1 AND next_run_at IS NOT NULL AND next_run_at<=? ORDER BY next_run_at,id LIMIT ? FOR UPDATE SKIP LOCKED`, now, limit).Scan(&rows).Error; err != nil {
+		if err := tx.WithContext(ctx).Raw(`SELECT * FROM system_scheduler_schedule WHERE deleted_at IS NULL AND status=1 AND next_run_at IS NOT NULL AND next_run_at<=? ORDER BY next_run_at,id LIMIT ? FOR UPDATE SKIP LOCKED`, now, limit).Scan(&rows).Error; err != nil {
 			return err
 		}
 		for index := range rows {
@@ -732,7 +732,7 @@ func (s *Schedule) normalize() {
 	if s == nil {
 		return
 	}
-	if s.IsEnabled == 1 {
+	if s.Status == 1 {
 		s.Status = ScheduleEnabled
 	} else {
 		s.Status = ScheduleDisabled

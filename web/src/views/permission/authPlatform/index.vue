@@ -89,7 +89,7 @@ const form = ref<AuthPlatformForm>({
   bindIP: YesNo.No,
   maxSessions: 0,
   allowRegister: YesNo.No,
-  isEnabled: YesNo.No,
+  status: YesNo.No,
 })
 
 const canList = computed(() => access.hasPermission('permission:authPlatform:list'))
@@ -133,7 +133,7 @@ function search(): void {
     page: 1,
     pageSize: query.value.pageSize,
     ...(normalizedKeyword === '' ? {} : { keyword: normalizedKeyword }),
-    ...(statusFilter.value === '' ? {} : { isEnabled: statusFilter.value }),
+    ...(statusFilter.value === '' ? {} : { status: statusFilter.value }),
   }
   void loadPage()
 }
@@ -224,7 +224,7 @@ async function submit(): Promise<void> {
 
 async function toggleStatus(platform: AuthPlatformListItem): Promise<void> {
   if (!canStatus.value || !platform.actions.status) return
-  const next = platform.isEnabled === YesNo.Yes ? YesNo.No : YesNo.Yes
+  const next = platform.status === YesNo.Yes ? YesNo.No : YesNo.Yes
   if (next === YesNo.No && !(await confirmAction('permission.authPlatform.confirm.disable'))) return
   try {
     await updateAuthPlatformStatus(platform.id, next)
@@ -442,9 +442,9 @@ watch(
         >
       </template>
       <template #cell-status="{ row }: { row: AuthPlatformListItem }"
-        ><el-tag size="small" :type="row.isEnabled === YesNo.Yes ? 'success' : 'danger'">{{
+        ><el-tag size="small" :type="row.status === YesNo.Yes ? 'success' : 'danger'">{{
           t(
-            row.isEnabled === YesNo.Yes
+            row.status === YesNo.Yes
               ? 'common.enable'
               : 'common.disable',
           )
@@ -469,12 +469,12 @@ watch(
           <el-button
             v-if="canStatus && row.actions.status"
             text
-            :type="row.isEnabled === YesNo.Yes ? 'warning' : 'success'"
+            :type="row.status === YesNo.Yes ? 'warning' : 'success'"
             data-testid="auth-platform-status"
             @click="toggleStatus(row)"
             >{{
               t(
-                row.isEnabled === YesNo.Yes
+                row.status === YesNo.Yes
                   ? 'common.disable'
                   : 'common.enable',
               )

@@ -227,7 +227,7 @@ func (s *Service) retentionCutoff(ctx context.Context) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	if record.Key != sharedsetting.MessageNotificationRetentionDaysKey || record.IsEnabled != yesno.Yes || record.IsBuiltin != yesno.Yes {
+	if record.Key != sharedsetting.MessageNotificationRetentionDaysKey || record.Status != yesno.Yes || record.IsBuiltin != yesno.Yes {
 		return time.Time{}, errors.New("notification retention setting must be enabled and builtin")
 	}
 	days, err := record.Number()

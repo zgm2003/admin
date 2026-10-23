@@ -65,7 +65,7 @@ func TestMailboxServiceMapsPublicErrors(t *testing.T) {
 	dependencyErr := errors.New("database unavailable")
 	validSetting := mailboxServiceSettingStub{record: sharedsetting.Record{
 		Key: sharedsetting.MessageNotificationRetentionDaysKey, Value: "180", ValueType: sharedsetting.ValueTypeNumber,
-		IsEnabled: yesno.Yes, IsBuiltin: yesno.Yes,
+		Status: yesno.Yes, IsBuiltin: yesno.Yes,
 	}}
 	tests := []struct {
 		name       string

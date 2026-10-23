@@ -70,7 +70,7 @@ type Safe struct {
 	Action    Action      `json:"action"`
 	Name      string      `json:"name"`
 	Remark    string      `json:"remark"`
-	IsEnabled yesno.Value `json:"isEnabled"`
+	Status yesno.Value `json:"status"`
 	CreatedAt string      `json:"createdAt"`
 	UpdatedAt string      `json:"updatedAt"`
 }
@@ -85,7 +85,7 @@ type CreateInput struct {
 	Action    Action
 	Name      string
 	Remark    string
-	IsEnabled yesno.Value
+	Status yesno.Value
 }
 
 // UpdateInput keeps the pattern optional: omitting it preserves the stored
@@ -96,7 +96,7 @@ type UpdateInput struct {
 	Action    Action
 	Name      string
 	Remark    string
-	IsEnabled yesno.Value
+	Status yesno.Value
 }
 
 type repository interface {
@@ -121,7 +121,7 @@ func safeOf(value Model) Safe {
 		Action:    value.Action,
 		Name:      value.Name,
 		Remark:    value.Remark,
-		IsEnabled: value.IsEnabled,
+		Status: value.Status,
 		CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}

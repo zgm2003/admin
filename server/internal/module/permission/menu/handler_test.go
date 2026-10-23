@@ -22,10 +22,10 @@ import (
 func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	now := time.Date(2026, 8, 19, 2, 0, 0, 0, time.UTC)
 	service := &menuHTTPService{listResult: menu.Catalog{
-		Platforms: []menu.PlatformOption{{ID: 1, Code: "admin", Name: "Admin", IsEnabled: yesno.Yes}},
+		Platforms: []menu.PlatformOption{{ID: 1, Code: "admin", Name: "Admin", Status: yesno.Yes}},
 		MenuTree: []menu.ManagedMenu{{
 			ID: 1, PlatformID: 1, PlatformCode: "admin", PlatformName: "Admin", MenuType: menu.TypeDirectory, Name: "报表", Code: "reports", I18nKey: menuTestStringPointer("navigation.system"),
-			SortOrder: 10, IsEnabled: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
+			SortOrder: 10, Status: yesno.Yes, IsHidden: yesno.No, CreatedAt: now, UpdatedAt: now,
 			IsProtected: true, Children: []menu.ManagedMenu{},
 		}}}}
 	recorder := serveMenuRequest(t, service, http.MethodGet, "/api/admin/v1/permission/menu?platformId=1", nil)
@@ -43,7 +43,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	if err := json.Unmarshal(data["platforms"], &platforms); err != nil || len(platforms) != 1 || len(platforms[0]) != 4 {
 		t.Fatalf("platforms = %s error=%v", data["platforms"], err)
 	}
-	for _, key := range []string{"id", "code", "name", "isEnabled"} {
+	for _, key := range []string{"id", "code", "name", "status"} {
 		if platforms[0][key] == nil {
 			t.Fatalf("platform response missing %q", key)
 		}
@@ -52,7 +52,7 @@ func TestMenuHandlerListReturnsClosedTreeResponse(t *testing.T) {
 	if err := json.Unmarshal(data["menuTree"], &rows); err != nil || len(rows) != 1 {
 		t.Fatalf("menuTree = %s error=%v", data["menuTree"], err)
 	}
-	wantKeys := []string{"presentation", "actions", "id", "platformId", "platformCode", "platformName", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "remark", "sortOrder", "isEnabled", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
+	wantKeys := []string{"presentation", "actions", "id", "platformId", "platformCode", "platformName", "parentId", "menuType", "name", "code", "i18nKey", "path", "componentPath", "icon", "remark", "sortOrder", "status", "isHidden", "createdAt", "updatedAt", "isProtected", "children"}
 	if len(rows[0]) != len(wantKeys) {
 		t.Fatalf("menu response keys = %v", rows[0])
 	}
@@ -94,26 +94,26 @@ func TestMenuHandlerListRejectsInvalidPlatformQuery(t *testing.T) {
 }
 
 func TestMenuHandlerCreateRequiresEveryFieldAndExplicitNull(t *testing.T) {
-	valid := `{"platformId":2,"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`
+	valid := `{"platformId":2,"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"status":0,"isHidden":0}`
 	service := &menuHTTPService{createID: 41}
 	recorder := serveMenuRequest(t, service, http.MethodPost, "/api/admin/v1/permission/menu", []byte(valid))
 	assertMenuEnvelope(t, recorder, http.StatusCreated, 0)
-	if service.createCalls != 1 || service.createInput.PlatformID != 2 || service.createInput.ParentID != nil || service.createInput.SortOrder != 0 || service.createInput.IsEnabled != yesno.No || service.createInput.IsHidden != yesno.No {
+	if service.createCalls != 1 || service.createInput.PlatformID != 2 || service.createInput.ParentID != nil || service.createInput.SortOrder != 0 || service.createInput.Status != yesno.No || service.createInput.IsHidden != yesno.No {
 		t.Fatalf("create input = %+v calls=%d", service.createInput, service.createCalls)
 	}
 	assertMutationData(t, recorder, map[string]float64{"id": 41})
 
 	invalidBodies := []string{
-		`{"platformId":0,"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"isEnabled":0,"isHidden":0}`,
-		`{"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"Folder","sortOrder":0,"isEnabled":0,"isHidden":0}`,
-		`{"parentId":0,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"Folder","sortOrder":0,"isEnabled":0,"isHidden":0}`,
-		`{"parentId":"1","menuType":"page","code":"reports:list","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":0,"isEnabled":1,"isHidden":0}`,
-		`{"parentId":null,"menuType":null,"code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"isEnabled":1,"isHidden":0}`,
-		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":null,"isEnabled":1,"isHidden":0}`,
-		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"isEnabled":2,"isHidden":0}`,
-		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"isEnabled":1,"isHidden":2}`,
-		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"isEnabled":1,"isHidden":0,"unknown":true}`,
-		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"isEnabled":1,"isHidden":0,"msg":"old"}`,
+		`{"platformId":0,"parentId":null,"menuType":"directory","name":"报表","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"lucide:folder","sortOrder":0,"status":0,"isHidden":0}`,
+		`{"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"Folder","sortOrder":0,"status":0,"isHidden":0}`,
+		`{"parentId":0,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":"Folder","sortOrder":0,"status":0,"isHidden":0}`,
+		`{"parentId":"1","menuType":"page","code":"reports:list","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":0,"status":1,"isHidden":0}`,
+		`{"parentId":null,"menuType":null,"code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"status":1,"isHidden":0}`,
+		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":null,"status":1,"isHidden":0}`,
+		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"status":2,"isHidden":0}`,
+		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"status":1,"isHidden":2}`,
+		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"status":1,"isHidden":0,"unknown":true}`,
+		`{"parentId":null,"menuType":"directory","code":"reports","i18nKey":"reports.root","path":null,"componentPath":null,"icon":null,"sortOrder":0,"status":1,"isHidden":0,"msg":"old"}`,
 		valid + ` {}`,
 	}
 	for index, body := range invalidBodies {
@@ -138,12 +138,12 @@ func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 	}
 	assertMutationData(t, recorder, map[string]float64{"id": 7})
 
-	recorder = serveMenuRequest(t, service, http.MethodPatch, "/api/admin/v1/permission/menu/7/status", []byte(`{"isEnabled":0}`))
+	recorder = serveMenuRequest(t, service, http.MethodPatch, "/api/admin/v1/permission/menu/7/status", []byte(`{"status":0}`))
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
 	if service.statusID != 7 || service.statusValue != yesno.No {
 		t.Fatalf("status = id %d value %d", service.statusID, service.statusValue)
 	}
-	assertMutationData(t, recorder, map[string]float64{"id": 7, "isEnabled": 0})
+	assertMutationData(t, recorder, map[string]float64{"id": 7, "status": 0})
 
 	recorder = serveMenuRequest(t, service, http.MethodDelete, "/api/admin/v1/permission/menu/7", nil)
 	assertMenuEnvelope(t, recorder, http.StatusOK, 0)
@@ -160,9 +160,9 @@ func TestMenuHandlerUpdateStatusAndDeleteUseExactContracts(t *testing.T) {
 		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/0", body: updateBody},
 		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/7", body: []byte(`{"parentId":1,"menuType":"page","code":"forbidden","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
 		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/7", body: []byte(`{"platformId":2,"parentId":1,"menuType":"page","name":"报表列表","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0}`)},
-		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/7", body: []byte(`{"parentId":1,"menuType":"page","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0,"isEnabled":1}`)},
-		{method: http.MethodPatch, path: "/api/admin/v1/permission/menu/7/status", body: []byte(`{"isEnabled":2}`)},
-		{method: http.MethodPatch, path: "/api/admin/v1/permission/menu/7/status", body: []byte(`{"isEnabled":0,"other":true}`)},
+		{method: http.MethodPut, path: "/api/admin/v1/permission/menu/7", body: []byte(`{"parentId":1,"menuType":"page","i18nKey":"reports.list","path":"/reports","componentPath":"reports","icon":null,"sortOrder":10,"isHidden":0,"status":1}`)},
+		{method: http.MethodPatch, path: "/api/admin/v1/permission/menu/7/status", body: []byte(`{"status":2}`)},
+		{method: http.MethodPatch, path: "/api/admin/v1/permission/menu/7/status", body: []byte(`{"status":0,"other":true}`)},
 		{method: http.MethodDelete, path: "/api/admin/v1/permission/menu/7", body: []byte(`{}`)},
 	}
 	for index, request := range invalid {

@@ -44,7 +44,7 @@ func TestRepositoryFiltersOrdersLocksAndRollsBackPlatforms(t *testing.T) {
 		t.Fatal(err)
 	}
 	enabled := yesno.Yes
-	query := authplatform.ListQuery{Page: 1, PageSize: 20, Keyword: fmt.Sprintf("%d", now.UnixNano()), IsEnabled: &enabled}
+	query := authplatform.ListQuery{Page: 1, PageSize: 20, Keyword: fmt.Sprintf("%d", now.UnixNano()), Status: &enabled}
 	total, err := repository.Count(ctx, query)
 	if err != nil {
 		t.Fatal(err)
@@ -79,7 +79,7 @@ func TestRepositoryFiltersOrdersLocksAndRollsBackPlatforms(t *testing.T) {
 		t.Fatalf("Transaction() error = %v", err)
 	}
 	found, err = repository.FindPolicy(ctx, first.Code)
-	if err != nil || found.IsEnabled != yesno.Yes {
+	if err != nil || found.Status != yesno.Yes {
 		t.Fatalf("rolled back platform = %+v,%v", found, err)
 	}
 }
@@ -173,7 +173,7 @@ func testPlatform(code, name string, now time.Time) authplatform.Platform {
 		AccessTTLSeconds: 900, RefreshTTLSeconds: 1209600,
 		SessionCacheTTLSeconds: 1800, AccessCacheTTLSeconds: 1800,
 		BindDevice: yesno.No, BindIP: yesno.No, MaxSessions: 1,
-		AllowRegister: yesno.Yes, IsEnabled: yesno.Yes, IsBuiltin: yesno.No,
+		AllowRegister: yesno.Yes, Status: yesno.Yes, IsBuiltin: yesno.No,
 		CreatedAt: now, UpdatedAt: now,
 	}
 }
@@ -264,7 +264,7 @@ func createPlatformUser(t *testing.T, db *gorm.DB, ctx context.Context, prefix s
 	unique := time.Now().UnixNano()
 	created := user.User{
 		Username: fmt.Sprintf("%s_%d", prefix, unique), Email: fmt.Sprintf("%s_%d@example.com", prefix, unique),
-		PasswordHash: "hash", IsEnabled: yesno.Yes,
+		PasswordHash: "hash", Status: yesno.Yes,
 	}
 	if err := db.WithContext(ctx).Create(&created).Error; err != nil {
 		t.Fatal(err)

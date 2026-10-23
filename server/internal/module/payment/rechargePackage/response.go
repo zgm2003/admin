@@ -26,7 +26,7 @@ type SafeValue struct {
 	Amount       string       `json:"amount"`
 	Badge        *string      `json:"badge"`
 	SortOrder    int32        `json:"sortOrder"`
-	IsEnabled    yesno.Value  `json:"isEnabled"`
+	Status    yesno.Value  `json:"status"`
 	Actions      Actions      `json:"actions"`
 	Presentation Presentation `json:"presentation"`
 	CreatedAt    time.Time    `json:"createdAt"`
@@ -42,7 +42,7 @@ type AvailablePackage struct {
 }
 
 func safeValue(ctx context.Context, row Model) (SafeValue, error) {
-	if row.ID < 1 || validateName(row.Name) != nil || validateAmountCents(row.AmountCents) != nil || validateFlags(row.IsEnabled) != nil {
+	if row.ID < 1 || validateName(row.Name) != nil || validateAmountCents(row.AmountCents) != nil || validateFlags(row.Status) != nil {
 		return SafeValue{}, fmt.Errorf("stored recharge package is invalid")
 	}
 	badge, err := normalizeBadge(row.Badge)
@@ -53,13 +53,13 @@ func safeValue(ctx context.Context, row Model) (SafeValue, error) {
 	if err != nil {
 		return SafeValue{}, err
 	}
-	status := option.New(ctx, row.IsEnabled, "停用", "Disabled").Label
-	if row.IsEnabled == yesno.Yes {
-		status = option.New(ctx, row.IsEnabled, "启用", "Enabled").Label
+	status := option.New(ctx, row.Status, "停用", "Disabled").Label
+	if row.Status == yesno.Yes {
+		status = option.New(ctx, row.Status, "启用", "Enabled").Label
 	}
 	return SafeValue{
 		ID: row.ID, Name: row.Name, Amount: amount, Badge: badge,
-		SortOrder: row.SortOrder, IsEnabled: row.IsEnabled,
+		SortOrder: row.SortOrder, Status: row.Status,
 		Actions:      Actions{Update: true, Status: true, Delete: true},
 		Presentation: Presentation{Status: status}, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}, nil

@@ -68,7 +68,7 @@ func (r *Repository) Update(ctx context.Context, value *Model, expected int64, n
 			"region":                value.Region,
 			"endpoint":              value.Endpoint,
 			"ttl_minutes":           value.TTLMinutes,
-			"is_enabled":            value.IsEnabled,
+			"status":            value.Status,
 			"updated_at":            now,
 		})
 		if query.Error != nil {
@@ -100,7 +100,7 @@ func (r *Repository) Delete(ctx context.Context, id int64, expected int64, now t
 			return false, err
 		}
 		query := tx.WithContext(ctx).Model(&Model{}).Where("id = ? AND deleted_at IS NULL", id).Updates(map[string]any{
-			"deleted_at": now, "updated_at": now, "is_enabled": yesno.No,
+			"deleted_at": now, "updated_at": now, "status": yesno.No,
 		})
 		if query.Error != nil {
 			return false, query.Error
@@ -156,7 +156,7 @@ func sameConfig(left, right Model) bool {
 	return left.SecretIDCiphertext == right.SecretIDCiphertext && left.SecretKeyCiphertext == right.SecretKeyCiphertext &&
 		left.SecretIDHint == right.SecretIDHint && left.SecretKeyHint == right.SecretKeyHint &&
 		left.SDKAppID == right.SDKAppID && left.SignName == right.SignName && left.Region == right.Region &&
-		equalOptionalText(left.Endpoint, right.Endpoint) && left.TTLMinutes == right.TTLMinutes && left.IsEnabled == right.IsEnabled
+		equalOptionalText(left.Endpoint, right.Endpoint) && left.TTLMinutes == right.TTLMinutes && left.Status == right.Status
 }
 
 func equalOptionalText(left, right *string) bool {

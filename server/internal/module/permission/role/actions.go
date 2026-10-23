@@ -30,9 +30,9 @@ func roleActions(ctx context.Context, item ListItem) (Actions, ActionLabels) {
 		}
 		return zh
 	}
-	actions := Actions{Update: !IsSystemCode(item.Code), Status: item.Code != CodeSuperAdmin && !(item.IsDefault == yesno.Yes && item.IsEnabled == yesno.Yes), SetDefault: item.Code != CodeSuperAdmin && item.IsDefault != yesno.Yes && item.IsEnabled == yesno.Yes, Delete: !IsSystemCode(item.Code) && item.IsDefault != yesno.Yes && item.UserCount == 0, Authorize: item.Code != CodeSuperAdmin}
+	actions := Actions{Update: !IsSystemCode(item.Code), Status: item.Code != CodeSuperAdmin && !(item.IsDefault == yesno.Yes && item.Status == yesno.Yes), SetDefault: item.Code != CodeSuperAdmin && item.IsDefault != yesno.Yes && item.Status == yesno.Yes, Delete: !IsSystemCode(item.Code) && item.IsDefault != yesno.Yes && item.UserCount == 0, Authorize: item.Code != CodeSuperAdmin}
 	labels := ActionLabels{Update: label("编辑", "Edit"), Status: label("启用", "Enable"), SetDefault: label("设为默认", "Set as default"), Delete: label("删除", "Delete"), Authorize: label("授权", "Authorize")}
-	if item.IsEnabled == yesno.Yes {
+	if item.Status == yesno.Yes {
 		labels.Status = label("禁用", "Disable")
 	}
 	if IsSystemCode(item.Code) {
@@ -45,14 +45,14 @@ func roleActions(ctx context.Context, item ListItem) (Actions, ActionLabels) {
 		labels.Authorize = label("超级管理员拥有全部权限，无需授权", "Super administrators already have all permissions")
 	} else {
 		if item.IsDefault == yesno.Yes {
-			if item.IsEnabled == yesno.Yes {
+			if item.Status == yesno.Yes {
 				labels.Status = label("默认角色不可禁用", "The default role cannot be disabled")
 			}
 			labels.SetDefault = label("当前已是默认角色", "This is already the default role")
 			if !IsSystemCode(item.Code) {
 				labels.Delete = label("默认角色不可删除", "The default role cannot be deleted")
 			}
-		} else if item.IsEnabled == yesno.No {
+		} else if item.Status == yesno.No {
 			labels.SetDefault = label("禁用角色不能设为默认", "Disabled roles cannot be the default role")
 		}
 		if !IsSystemCode(item.Code) && item.IsDefault != yesno.Yes && item.UserCount > 0 {

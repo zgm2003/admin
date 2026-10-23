@@ -15,7 +15,7 @@ func TestAuthenticationStateKeys(t *testing.T) {
 
 func TestNormalizeMutationFactsRejectsConflictsAndSortsKeys(t *testing.T) {
 	facts, err := normalizeMutationFacts(MutationFacts{
-		Users:    []UserFact{{UserID: 9, Generation: "user-nine", IsEnabled: true}, {UserID: 2, Generation: "user-two", IsEnabled: true}},
+		Users:    []UserFact{{UserID: 9, Generation: "user-nine", Status: true}, {UserID: 2, Generation: "user-two", Status: true}},
 		Sessions: []SessionsFact{{Platform: "app", UserID: 9, Generation: "app-nine"}, {Platform: "admin", UserID: 2, Generation: "admin-two"}},
 	})
 	if err != nil {
@@ -29,8 +29,8 @@ func TestNormalizeMutationFactsRejectsConflictsAndSortsKeys(t *testing.T) {
 	}
 
 	_, err = normalizeMutationFacts(MutationFacts{Users: []UserFact{
-		{UserID: 7, Generation: "first", IsEnabled: true},
-		{UserID: 7, Generation: "second", IsEnabled: true},
+		{UserID: 7, Generation: "first", Status: true},
+		{UserID: 7, Generation: "second", Status: true},
 	}})
 	if err == nil {
 		t.Fatal("conflicting duplicate user facts were accepted")

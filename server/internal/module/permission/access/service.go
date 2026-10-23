@@ -236,7 +236,7 @@ func buildSnapshot(source Source) (Snapshot, error) {
 		if item.MenuType != MenuDirectory && item.MenuType != MenuPage && item.MenuType != MenuAction {
 			return Snapshot{}, fmt.Errorf("menu %d has invalid type %q", item.ID, item.MenuType)
 		}
-		if item.IsEnabled != yesno.Yes {
+		if item.Status != yesno.Yes {
 			return Snapshot{}, fmt.Errorf("menu %d is not enabled", item.ID)
 		}
 		menusByID[item.ID] = item

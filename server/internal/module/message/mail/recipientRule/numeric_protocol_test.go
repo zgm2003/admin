@@ -43,8 +43,8 @@ func TestRecipientRuleModelUsesNumericZeroBasedEnums(t *testing.T) {
 
 func TestRecipientRuleHandlersRequireStrictNumericEnumsAndPresence(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	valid := `{"scope":0,"pattern":"user@example.com","action":0,"name":"rule","remark":"","isEnabled":0}`
-	validDomain := `{"scope":1,"pattern":"example.com","action":1,"name":"rule","remark":"","isEnabled":1}`
+	valid := `{"scope":0,"pattern":"user@example.com","action":0,"name":"rule","remark":"","status":0}`
+	validDomain := `{"scope":1,"pattern":"example.com","action":1,"name":"rule","remark":"","status":1}`
 	invalid := []string{
 		strings.Replace(valid, `"scope":0`, `"scope":"email"`, 1),
 		strings.Replace(valid, `"scope":0`, `"scope":"0"`, 1),
@@ -55,11 +55,11 @@ func TestRecipientRuleHandlersRequireStrictNumericEnumsAndPresence(t *testing.T)
 		strings.Replace(valid, `"action":0`, `"action":false`, 1),
 		strings.Replace(valid, `"scope":0,`, "", 1),
 		strings.Replace(valid, `"action":0,`, "", 1),
-		strings.Replace(valid, `,"isEnabled":0`, "", 1),
+		strings.Replace(valid, `,"status":0`, "", 1),
 		strings.Replace(valid, `"scope":0`, `"scope":null`, 1),
 		strings.Replace(valid, `"action":0`, `"action":null`, 1),
-		strings.Replace(valid, `"isEnabled":0`, `"isEnabled":null`, 1),
-		strings.Replace(valid, `"isEnabled":0`, `"isEnabled":2`, 1),
+		strings.Replace(valid, `"status":0`, `"status":null`, 1),
+		strings.Replace(valid, `"status":0`, `"status":2`, 1),
 	}
 	for _, method := range []string{http.MethodPost, http.MethodPut} {
 		router := gin.New()

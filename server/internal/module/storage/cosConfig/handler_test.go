@@ -29,7 +29,7 @@ type configHTTPService struct {
 func (s *configHTTPService) List(_ context.Context, query ListQuery) (pagination.Result[SafeValue], error) {
 	s.listQuery = query
 	endpoint := "https://cos.example.com"
-	return pagination.Result[SafeValue]{List: []SafeValue{{ID: 1, Name: "Main", AppID: "1250000000", Bucket: "assets", Region: "ap-guangzhou", Endpoint: &endpoint, IsEnabled: yesno.Yes, HasCredentials: true, CreatedAt: time.Unix(1, 0).UTC(), UpdatedAt: time.Unix(2, 0).UTC()}}, Total: 1, Page: query.Page, PageSize: query.PageSize}, nil
+	return pagination.Result[SafeValue]{List: []SafeValue{{ID: 1, Name: "Main", AppID: "1250000000", Bucket: "assets", Region: "ap-guangzhou", Endpoint: &endpoint, Status: yesno.Yes, HasCredentials: true, CreatedAt: time.Unix(1, 0).UTC(), UpdatedAt: time.Unix(2, 0).UTC()}}, Total: 1, Page: query.Page, PageSize: query.PageSize}, nil
 }
 func (*configHTTPService) Get(context.Context, int64) (SafeValue, error) {
 	return SafeValue{ID: 1, Name: "Main", HasCredentials: true}, nil
@@ -69,8 +69,8 @@ func TestRoutesUseExactCOSConfigPermissions(t *testing.T) {
 func TestHandlersUseStrictDTOsAndNeverReturnCredentials(t *testing.T) {
 	service, router := configRouter(t)
 	recorder := httptest.NewRecorder()
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/cosconfig?page=1&pageSize=20&keyword=main&isEnabled=1", nil))
-	if recorder.Code != http.StatusOK || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 || service.listQuery.IsEnabled == nil || *service.listQuery.IsEnabled != yesno.Yes {
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/admin/v1/storage/cosconfig?page=1&pageSize=20&keyword=main&status=1", nil))
+	if recorder.Code != http.StatusOK || service.listQuery.Page != 1 || service.listQuery.PageSize != 20 || service.listQuery.Status == nil || *service.listQuery.Status != yesno.Yes {
 		t.Fatalf("list status=%d query=%+v body=%s", recorder.Code, service.listQuery, recorder.Body)
 	}
 	for _, forbidden := range []string{"secretId", "secretKey", "ciphertext"} {
@@ -79,7 +79,7 @@ func TestHandlersUseStrictDTOsAndNeverReturnCredentials(t *testing.T) {
 		}
 	}
 
-	validCreate := `{"name":" Main ","appId":"1250000000","secretId":"sid","secretKey":"skey","bucket":"assets","region":"ap-guangzhou","endpoint":"https://cos.example.com","bucketDomain":"https://cdn.example.com","isEnabled":1,"remark":"primary"}`
+	validCreate := `{"name":" Main ","appId":"1250000000","secretId":"sid","secretKey":"skey","bucket":"assets","region":"ap-guangzhou","endpoint":"https://cos.example.com","bucketDomain":"https://cdn.example.com","status":1,"remark":"primary"}`
 	recorder = performConfigJSON(router, http.MethodPost, "/api/admin/v1/storage/cosconfig", validCreate)
 	if recorder.Code != http.StatusCreated || service.createCalls != 1 || recorder.Body.String() != `{"code":0,"data":{"id":9},"message":"ok"}` {
 		t.Fatalf("create status=%d calls=%d body=%s", recorder.Code, service.createCalls, recorder.Body)
@@ -88,7 +88,7 @@ func TestHandlersUseStrictDTOsAndNeverReturnCredentials(t *testing.T) {
 		`{"name":"Main"}`,
 		strings.TrimSuffix(validCreate, "}") + `,"unknown":1}`,
 		strings.Replace(validCreate, `"name":" Main "`, `"name":"Main","name":"Other"`, 1),
-		strings.Replace(validCreate, `"isEnabled":1`, `"isEnabled":2`, 1),
+		strings.Replace(validCreate, `"status":1`, `"status":2`, 1),
 		strings.Replace(validCreate, `"endpoint":"https://cos.example.com"`, `"endpoint":"ftp://cos.example.com"`, 1),
 		strings.Replace(validCreate, `"secretKey":"skey"`, `"secretKey":""`, 1),
 	} {

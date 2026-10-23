@@ -174,9 +174,9 @@ const { t } = useI18n()
             </el-form-item>
           </el-col>
           <el-col v-if="dialogMode === 'create'" :xs="8" :sm="8" :lg="8">
-            <el-form-item :label="t('permission.authPlatform.isEnabled')">
+            <el-form-item :label="t('permission.authPlatform.status')">
               <el-switch
-                v-model="form.isEnabled"
+                v-model="form.status"
                 :active-value="YesNo.Yes"
                 :inactive-value="YesNo.No"
               />

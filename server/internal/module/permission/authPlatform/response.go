@@ -14,7 +14,7 @@ type idResponse struct {
 
 type statusResponse struct {
 	ID        int64 `json:"id"`
-	IsEnabled int16 `json:"isEnabled"`
+	Status int16 `json:"status"`
 }
 
 type publicPolicyResponse struct {
@@ -47,7 +47,7 @@ type listItemResponse struct {
 	BindIP                 int16                `json:"bindIP"`
 	MaxSessions            int16                `json:"maxSessions"`
 	AllowRegister          int16                `json:"allowRegister"`
-	IsEnabled              int16                `json:"isEnabled"`
+	Status              int16                `json:"status"`
 	IsBuiltin              int16                `json:"isBuiltin"`
 	CreatedAt              string               `json:"createdAt"`
 	UpdatedAt              string               `json:"updatedAt"`
@@ -78,7 +78,7 @@ func newListResponse(ctx context.Context, items []ListItem, total int64, page, p
 			AccessTTLSeconds: value.AccessTTLSeconds, RefreshTTLSeconds: value.RefreshTTLSeconds,
 			SessionCacheTTLSeconds: value.SessionCacheTTLSeconds, AccessCacheTTLSeconds: value.AccessCacheTTLSeconds,
 			BindDevice: int16(value.BindDevice), BindIP: int16(value.BindIP), MaxSessions: value.MaxSessions,
-			AllowRegister: int16(value.AllowRegister), IsEnabled: int16(value.IsEnabled), IsBuiltin: int16(value.IsBuiltin),
+			AllowRegister: int16(value.AllowRegister), Status: int16(value.Status), IsBuiltin: int16(value.IsBuiltin),
 			CreatedAt: value.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: value.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		})
 	}

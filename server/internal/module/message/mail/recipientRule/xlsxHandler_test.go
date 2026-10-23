@@ -50,8 +50,8 @@ func TestXlsxPreviewSeparatesRawTextFromNumericData(t *testing.T) {
 		}
 	}
 	for index, want := range map[int]Input{
-		0: {Scope: ScopeEmail, Pattern: "user@example.com", Action: ActionDeny, Name: "名称", Remark: " 原备注 ", IsEnabled: 0},
-		2: {Scope: ScopeDomain, Pattern: "example.org", Action: ActionAllow, Name: "域名规则", Remark: "", IsEnabled: 1},
+		0: {Scope: ScopeEmail, Pattern: "user@example.com", Action: ActionDeny, Name: "名称", Remark: " 原备注 ", Status: 0},
+		2: {Scope: ScopeDomain, Pattern: "example.org", Action: ActionAllow, Name: "域名规则", Remark: "", Status: 1},
 	} {
 		var data Input
 		if err := json.Unmarshal(result.Rows[index]["data"], &data); err != nil || data != want {

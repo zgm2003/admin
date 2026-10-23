@@ -24,7 +24,7 @@ const options: api.RechargePackageOptions = {
     { value: 0, label: '停用' },
     { value: 1, label: '启用' },
   ],
-  defaults: { sortOrder: 0, isEnabled: 0 },
+  defaults: { sortOrder: 0, status: 0 },
   limits: {
     name: 128,
     badge: 32,
@@ -41,7 +41,7 @@ const row: api.RechargePackage = {
   amount: '10.00',
   badge: null,
   sortOrder: 0,
-  isEnabled: 0,
+  status: 0,
   actions: { update: true, status: true, delete: true },
   presentation: { status: '停用' },
   createdAt: '2026-10-17T00:00:00Z',
@@ -178,7 +178,7 @@ it.each([
   ['en-US', 1, 'Disable'],
 ] as const)(
   'shows the next status action in %s when the package is enabled=%s',
-  async (language, isEnabled, expectedLabel) => {
+  async (language, status, expectedLabel) => {
     setLocale(language)
     usePermissionStore(pinia).applySnapshot({
       roleCodes: [],
@@ -189,8 +189,8 @@ it.each([
       list: [
         {
           ...row,
-          isEnabled,
-          presentation: { status: isEnabled === 1 ? '启用' : '停用' },
+          status,
+          presentation: { status: status === 1 ? '启用' : '停用' },
         },
       ],
       total: 1,
@@ -225,7 +225,7 @@ it('uses a bounded input-number and submits a precise money string on create', a
     amount: '10.01',
     badge: null,
     sortOrder: 0,
-    isEnabled: 0,
+    status: 0,
   })
   expect(api.getRechargePackages).toHaveBeenCalledTimes(2)
   expect(document.body.textContent).toContain('已保存')

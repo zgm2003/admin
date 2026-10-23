@@ -27,7 +27,7 @@ type CreateInput struct {
 	Icon          *string
 	Remark        *string
 	SortOrder     int
-	IsEnabled     yesno.Value
+	Status     yesno.Value
 	IsHidden      yesno.Value
 }
 
@@ -59,7 +59,7 @@ type ManagedMenu struct {
 	Icon          *string
 	Remark        *string
 	SortOrder     int
-	IsEnabled     yesno.Value
+	Status     yesno.Value
 	IsHidden      yesno.Value
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
@@ -182,7 +182,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		created := Menu{
 			PlatformID: normalized.PlatformID, ParentID: normalized.ParentID, MenuType: normalized.MenuType, Name: normalized.Name, Code: normalized.Code,
 			I18nKey: normalized.I18nKey, Path: normalized.Path, ComponentPath: normalized.ComponentPath,
-			Icon: normalized.Icon, Remark: normalized.Remark, SortOrder: normalized.SortOrder, IsEnabled: normalized.IsEnabled, IsHidden: normalized.IsHidden,
+			Icon: normalized.Icon, Remark: normalized.Remark, SortOrder: normalized.SortOrder, Status: normalized.Status, IsHidden: normalized.IsHidden,
 		}
 		if err := repository.Create(mutationCtx, &created); err != nil {
 			return false, mapServiceRepositoryError(err, normalized.Code, stringValue(normalized.Path))
@@ -288,7 +288,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 		if id < 1 {
 			return menuNotFound(fmt.Errorf("menu id %d is invalid", id))
 		}
-		return menuInvalidFields(fmt.Errorf("is_enabled value %d is invalid", value))
+		return menuInvalidFields(fmt.Errorf("status value %d is invalid", value))
 	}
 	err := s.mutateMenuPlatform(ctx, 0, id, func(mutationCtx context.Context, repository *Repository, menus []Menu, operationTime time.Time) (bool, error) {
 		index, err := buildMenuIndex(menus)
@@ -302,7 +302,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 		if IsProtectedCode(target.Code) && value != yesno.Yes {
 			return false, menuProtected(target.Code, fmt.Errorf("protected menu cannot be disabled"))
 		}
-		if target.IsEnabled == value {
+		if target.Status == value {
 			return false, nil
 		}
 		if value == yesno.Yes {
@@ -311,7 +311,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, value yesno.Value)
 				return false, mapTreeMutationError(err)
 			}
 			for _, ancestorID := range ancestors {
-				if index.byID[ancestorID].IsEnabled != yesno.Yes {
+				if index.byID[ancestorID].Status != yesno.Yes {
 					return false, menuParentDisabled(target.Code, fmt.Errorf("ancestor %s is disabled", index.byID[ancestorID].Code))
 				}
 			}
@@ -465,14 +465,14 @@ func validateCreateParent(index menuIndex, input CreateInput) error {
 }
 
 func validateCreateEnabledParentChain(index menuIndex, input CreateInput) error {
-	if input.IsEnabled != yesno.Yes || input.ParentID == nil {
+	if input.Status != yesno.Yes || input.ParentID == nil {
 		return nil
 	}
 	parent, exists := index.byID[*input.ParentID]
 	if !exists {
 		return menuInvalidParent(fmt.Errorf("parent is missing"))
 	}
-	if parent.IsEnabled != yesno.Yes {
+	if parent.Status != yesno.Yes {
 		return menuParentDisabled(input.Code, fmt.Errorf("parent %s is disabled", parent.Code))
 	}
 	ancestors, err := index.ancestors(parent.ID)
@@ -480,7 +480,7 @@ func validateCreateEnabledParentChain(index menuIndex, input CreateInput) error 
 		return menuTreeInvalid(err)
 	}
 	for _, ancestorID := range ancestors {
-		if index.byID[ancestorID].IsEnabled != yesno.Yes {
+		if index.byID[ancestorID].Status != yesno.Yes {
 			return menuParentDisabled(input.Code, fmt.Errorf("ancestor %s is disabled", index.byID[ancestorID].Code))
 		}
 	}

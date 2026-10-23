@@ -124,7 +124,7 @@ defineExpose({ validate: () => formRef.value?.validate() })
             </el-form-item>
             <el-form-item :label="t('common.status')">
               <el-radio-group
-                v-model="form.isEnabled"
+                v-model="form.status"
                 data-testid="storage-rule-status"
                 :disabled="props.editing && !props.canUpdateStatus"
               >
