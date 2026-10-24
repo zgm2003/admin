@@ -187,7 +187,7 @@ export const enUS = {
   'payment.config.sellerId': 'Bound merchant account (PID)',
   'payment.config.currentVersion': 'Credential version',
   'payment.config.payMethods': 'Pay methods',
-  'payment.config.notifyUrl': 'Callback URL template',
+  'payment.config.notifyUrl': 'Callback URL',
   'payment.config.privateKey': 'Application private key',
   'payment.config.appCertPEM': 'Application certificate',
   'payment.config.alipayCertPEM': 'Alipay certificate',
@@ -221,7 +221,7 @@ export const enUS = {
   'payment.config.tooLong': 'Value is too long',
   'payment.config.identityRule': 'Enter the numeric identity without removing leading zeros.',
   'payment.config.notifyRule':
-    'Enter the complete HTTPS callback URL template: https://HOST{template}, replacing HOST with the backend public domain.',
+    'Enter a complete HTTPS callback URL with the backend public domain and correct callback path, without credentials, query parameters, or fragments.',
   'payment.config.retainHint':
     'Leave credentials blank to retain existing content. Edit name and sort order separately.',
   'payment.config.importCertificate': 'Import certificate file',
@@ -230,7 +230,11 @@ export const enUS = {
     'Use a nonempty CRT/PEM certificate file with complete PEM content, up to {max} bytes.',
   'payment.config.importFailed': 'Could not read the certificate file. Select it again.',
   'payment.config.notifyHint':
-    'Replace HOST with the backend public domain and keep the callback path. The complete URL is generated when saved.',
+    'Enter the complete HTTPS callback address, for example https://your-domain/api/admin/v1/payment/callback/alipay. The configuration ID and version are appended automatically.',
+  'payment.config.notifyVersionHint':
+    'You can keep the current callback URL. The version segment is updated automatically when new credentials are saved.',
+  'payment.config.notifyPlaceholder':
+    'e.g. https://your-domain/api/admin/v1/payment/callback/alipay',
   'payment.config.noList': 'You do not have permission to list configurations.',
   'payment.config.deleteConfirm': 'Delete channel “{name}”? Historical credentials are retained.',
   'confirm.title': 'Confirm action',

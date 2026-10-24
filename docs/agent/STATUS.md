@@ -1,5 +1,13 @@
 # 项目状态
 
+## 支付配置回调地址展示与输入修正（2026-10-24，代码与定向验证完成）
+
+- 根因：数据库实际保存的是完整地址（当前真实配置为 `https://zgm2003.cn/api/admin/v1/payment/callback/alipay/1/1`），前端更新凭据时却读取了仅供内部生成用的模板字段，导致界面显示 `{configId}/{version}`。
+- 已修正：字段统一显示为“回调地址”；新建填写完整 HTTPS 入口 `/api/admin/v1/payment/callback/alipay`，服务端按新配置编号和版本自动生成实际地址；更新凭据直接显示当前完整地址并兼容保存，旧模板字段从管理 DTO/选项中移除。真实回调路由仍为 `/api/admin/v1/payment/callback/alipay/:configId/:version`。
+- 回调处理已具备：POST 表单验签、配置身份/商户身份/订单号/金额/状态校验，事件幂等落库，成功后事务内确认订单、钱包和流水；重复通知只重放结果，异常返回失败让通道重试。未做真实支付宝支付和公网可达性验收。
+- 实际通过：`go test -p 1 ./internal/module/payment/config -run '^TestCallbackAddressLifecycleOnCurrentSchema$' -count=1 -timeout=90s`，使用 current.sql 的目标表/约束/触发器在真实 PostgreSQL 隔离 schema 验证新建地址绑定、原地址保存无变更、凭据换版自动生成新地址、换域名、旧版本保持不变与错误配置编号/版本拒绝；配置、回调、支付宝三包 `go test -short -p 1 ... -count=1 -timeout=2m`、相同三包 `go vet -p 1` 和 `go build -p 1 ./cmd/api ./cmd/worker` 通过；shared/i18n 定向测试与 vet 通过。前端 `pnpm typecheck` 通过；`pnpm vitest run tests/views/payment/config/index.test.ts tests/api/payment/config.test.ts --pool=threads --maxWorkers=1 -t 'callback|certificate|localized placeholders|credential replacement'` 为 8 项通过、25 项未选择；受影响文件 Prettier/ESLint 与 `git diff --check` 通过。
+- 未完成的全量范围：完整配置页面测试仍有 2 个既有英文状态文案断言失败（实际文案为 Enable/Disable）；原配置历史迁移集成夹具仍引用 is_enabled，完整运行被该旧夹具阻塞，本次新集成测试直接依据当前结构隔离验证，不改写历史 SQL。未运行全仓测试、前端生产构建、真实登录浏览器或真实支付/公网回调验收。真实配置仅只读核对，无数据库迁移、凭据/订单修改、缓存清理、服务启停或 Git 提交；维护者自行重启 API 并刷新前端后加载新契约。
+
 ## 支付有效期可配置与到期巡检（2026-10-23，代码、验证和真实迁移完成）
 
 - 已获维护者确认：支付有效期加入系统设置，默认 30 分钟；新订单冻结 expires_at，已有订单到期时间不变；到期检查不再被到期前的查单排期推迟，通道失败仍退避。

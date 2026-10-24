@@ -183,7 +183,7 @@ export const zhCN = {
   'payment.config.sellerId': '绑定的商家账号（PID）',
   'payment.config.currentVersion': '凭据版本',
   'payment.config.payMethods': '支付方式',
-  'payment.config.notifyUrl': '回调地址模板',
+  'payment.config.notifyUrl': '回调地址',
   'payment.config.privateKey': '应用私钥',
   'payment.config.appCertPEM': '应用公钥证书',
   'payment.config.alipayCertPEM': '支付宝公钥证书',
@@ -211,14 +211,17 @@ export const zhCN = {
   'payment.config.tooLong': '内容超出长度限制',
   'payment.config.identityRule': '填写数字身份标识，保留前导零',
   'payment.config.notifyRule':
-    '请填写完整的 HTTPS 回调地址模板：https://HOST{template}，并将 HOST 替换为后端公网域名',
+    '请填写完整的 HTTPS 回调地址，使用后端公网域名并保留正确的回调路径，不含账号、查询参数或片段',
   'payment.config.retainHint': '空白私钥或证书表示保留当前内容；名称与排序请在编辑中修改',
   'payment.config.importCertificate': '导入证书文件',
   'payment.config.importing': '正在读取证书',
   'payment.config.importInvalid': '证书文件须为非空 CRT/PEM，包含完整证书内容且不超过 {max} 字节',
   'payment.config.importFailed': '证书文件读取失败，请重新选择',
   'payment.config.notifyHint':
-    '只需将 HOST 替换为后端公网域名，保留后面的回调路径；保存时自动生成完整地址',
+    '请输入完整的 HTTPS 回调地址，例如 https://你的域名/api/admin/v1/payment/callback/alipay，系统会自动追加配置编号和版本',
+  'payment.config.notifyVersionHint':
+    '当前回调地址可直接保留；保存新凭据版本时系统会自动更新版本号',
+  'payment.config.notifyPlaceholder': '例如：https://你的域名/api/admin/v1/payment/callback/alipay',
   'payment.config.noList': '当前没有配置列表查询权限',
   'payment.config.deleteConfirm': '确定删除渠道“{name}”？历史凭据版本会保留',
   'confirm.title': '操作确认',

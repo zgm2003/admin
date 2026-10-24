@@ -34,8 +34,6 @@ const row: api.PaymentConfig = {
   sortOrder: 0,
   status: 0,
   notifyUrl: 'https://pay.example.test/api/admin/v1/payment/callback/alipay/7/1',
-  notifyUrlTemplate:
-    'https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}',
   payMethods: [1, 2],
   credentialConfigured: true,
   certificates: {
@@ -85,7 +83,7 @@ const options: api.PaymentConfigOptions = {
     payMethods: [1, 2],
     sortOrder: 0,
     status: 0,
-    notifyUrl: 'https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}',
+    notifyUrl: '',
   },
   limits: {
     name: 128,
@@ -96,7 +94,7 @@ const options: api.PaymentConfigOptions = {
     sortMinimum: -2147483648,
     sortMaximum: 2147483647,
   },
-  notifyPathTemplate: '/api/admin/v1/payment/callback/alipay/{configId}/{version}',
+  notifyPath: '/api/admin/v1/payment/callback/alipay',
 }
 let wrapper: VueWrapper | undefined
 beforeEach(() => {
@@ -321,13 +319,14 @@ it('renders localized placeholders for payment identifiers and credential inputs
   await w.get('[data-testid="payment-config-create"]').trigger('click')
   await flushPromises()
   const notifyInput = w.get<HTMLInputElement>('input[data-testid="payment-config-notify-url"]')
-  expect(notifyInput.element.value).toBe(
-    'https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}',
-  )
-  await notifyInput.setValue(row.notifyUrlTemplate)
+  expect(notifyInput.element.value).toBe('')
+  expect(notifyInput.attributes('placeholder')).toContain('/api/admin/v1/payment/callback/alipay')
+  await notifyInput.setValue('https://pay.example.test/api/admin/v1/payment/callback/alipay')
   setLocale('en-US')
   await flushPromises()
-  expect(notifyInput.element.value).toBe(row.notifyUrlTemplate)
+  expect(notifyInput.element.value).toBe(
+    'https://pay.example.test/api/admin/v1/payment/callback/alipay',
+  )
   setLocale('zh-CN')
   await flushPromises()
   expect(w.find('[data-testid="payment-config-code"]').exists()).toBe(false)
@@ -392,18 +391,23 @@ it('keeps a failed save editable without repeating the request error inside the 
   await flushPromises()
   expect(api.updatePaymentConfig).toHaveBeenCalledTimes(2)
 })
-it('validates the server-provided HTTPS callback template before submitting credentials', async () => {
+it('shows the actual callback address and rejects placeholder or malformed addresses', async () => {
   permissions(['payment:config:list', 'payment:config:update'])
   const w = await page()
   await w.get('[data-testid="payment-config-version"]').trigger('click')
   await flushPromises()
   const input = w.get('input[data-testid="payment-config-notify-url"]')
-  expect((input.element as HTMLInputElement).value).toBe(row.notifyUrlTemplate)
+  expect((input.element as HTMLInputElement).value).toBe(row.notifyUrl)
+  expect(w.text()).toContain('回调地址')
+  expect(w.text()).not.toContain('回调地址模板')
   for (const invalid of [
     'http://abc',
     'https://pay.example.test',
     'https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}',
-    row.notifyUrlTemplate + '?token=secret',
+    'https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}',
+    'https://pay.example.test/api/admin/v1/payment/callback/alipay/7/0',
+    row.notifyUrl + '#',
+    row.notifyUrl + '?token=secret',
   ]) {
     await input.setValue(invalid)
     await w.get('[data-testid="payment-config-save"]').trigger('click')
@@ -412,10 +416,10 @@ it('validates the server-provided HTTPS callback template before submitting cred
     await vi.waitFor(() => {
       const message = w.get('.el-form-item__error').text()
       expect(message).toContain('HTTPS')
-      expect(message).toContain('{configId}/{version}')
+      expect(message).not.toContain('{configId}')
     })
   }
-  await input.setValue(row.notifyUrlTemplate)
+  await input.setValue(row.notifyUrl)
   vi.mocked(api.publishPaymentConfigVersion).mockResolvedValue({})
   await w.get('[data-testid="payment-config-save"]').trigger('click')
   await flushPromises()
@@ -519,7 +523,9 @@ it.each(['create', 'version'] as const)(
       await w.get('[data-testid="payment-config-app-id"]').setValue('20260001')
       await w.get('[data-testid="payment-config-seller-id"]').setValue('20880001')
       await w.get('[data-testid="payment-config-private-key"]').setValue('local-fixture-key')
-      await w.get('[data-testid="payment-config-notify-url"]').setValue(row.notifyUrlTemplate)
+      await w
+        .get('[data-testid="payment-config-notify-url"]')
+        .setValue('https://pay.example.test/api/admin/v1/payment/callback/alipay')
     }
     const certificates = {
       appCertPEM: '-----BEGIN CERTIFICATE-----\nYXBw\n-----END CERTIFICATE-----',
@@ -552,7 +558,10 @@ it.each(['create', 'version'] as const)(
     const credentials = {
       ...certificates,
       privateKey: mode === 'create' ? 'local-fixture-key' : null,
-      notifyUrl: row.notifyUrlTemplate,
+      notifyUrl:
+        mode === 'version'
+          ? row.notifyUrl
+          : 'https://pay.example.test/api/admin/v1/payment/callback/alipay',
       payMethods: [1, 2],
     }
     if (mode === 'create') {
@@ -593,7 +602,7 @@ it('reimporting a single certificate replaces the previous bundle instead of ret
     appCertPEM: null,
     alipayCertPEM: replacement,
     rootCertPEM: null,
-    notifyUrl: row.notifyUrlTemplate,
+    notifyUrl: row.notifyUrl,
     payMethods: [1, 2],
   })
 })

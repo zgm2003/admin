@@ -209,7 +209,7 @@ func TestServiceCredentialSafetyAndVersionLifecycle(t *testing.T) {
 	if err = s.Update(ctx, id, MetadataInput{in.Name, 0}); err != nil {
 		t.Fatal(err)
 	}
-	v := VersionInput{NotifyURL: in.NotifyURL, PayMethods: in.PayMethods}
+	v := VersionInput{NotifyURL: fmt.Sprintf("https://pay.example.test/api/admin/v1/payment/callback/alipay/%d/1", id), PayMethods: in.PayMethods}
 	if err = s.PublishVersion(ctx, id, v); err != nil {
 		t.Fatal(err)
 	}

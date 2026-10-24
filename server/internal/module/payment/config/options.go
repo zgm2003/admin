@@ -21,18 +21,18 @@ type Defaults struct {
 	Provider    payment.Provider    `json:"provider"`
 	Environment payment.Environment `json:"environment"`
 	PayMethods  []payment.PayMethod `json:"payMethods"`
-	Status   yesno.Value         `json:"status"`
+	Status      yesno.Value         `json:"status"`
 	SortOrder   int32               `json:"sortOrder"`
 	NotifyURL   string              `json:"notifyUrl"`
 }
 type Options struct {
-	Providers          []option.Option[payment.Provider]    `json:"providers"`
-	Environments       []option.Option[payment.Environment] `json:"environments"`
-	PayMethods         []option.Option[payment.PayMethod]   `json:"payMethods"`
-	Statuses           []option.Option[yesno.Value]         `json:"statuses"`
-	Defaults           Defaults                             `json:"defaults"`
-	Limits             Limits                               `json:"limits"`
-	NotifyPathTemplate string                               `json:"notifyPathTemplate"`
+	Providers    []option.Option[payment.Provider]    `json:"providers"`
+	Environments []option.Option[payment.Environment] `json:"environments"`
+	PayMethods   []option.Option[payment.PayMethod]   `json:"payMethods"`
+	Statuses     []option.Option[yesno.Value]         `json:"statuses"`
+	Defaults     Defaults                             `json:"defaults"`
+	Limits       Limits                               `json:"limits"`
+	NotifyPath   string                               `json:"notifyPath"`
 }
 
 func (s *Service) Options(ctx context.Context) (Options, error) {
@@ -57,13 +57,13 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 		},
 		Defaults: Defaults{
 			Provider: 1, Environment: 1, PayMethods: []payment.PayMethod{1, 2},
-			NotifyURL: "https://HOST" + NotifyPathTemplate,
+			NotifyURL: "",
 		},
 		Limits: Limits{
 			Name: 128, Identity: 64, NotifyURL: 2048,
 			CertificateBytes: alipay.MaxCertificateBytes, PrivateKeyBytes: alipay.MaxPrivateKeyBytes,
 			SortMinimum: -2147483648, SortMaximum: 2147483647,
 		},
-		NotifyPathTemplate: NotifyPathTemplate,
+		NotifyPath: NotifyPath,
 	}, nil
 }

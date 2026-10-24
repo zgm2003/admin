@@ -23,7 +23,6 @@ export interface PaymentConfig {
   sortOrder: number
   status: YesNo
   notifyUrl: string
-  notifyUrlTemplate: string
   payMethods: number[]
   credentialConfigured: boolean
   certificates: { app: CertificateInfo; alipay: CertificateInfo; roots: CertificateInfo[] }
@@ -63,7 +62,7 @@ export interface PaymentConfigOptions {
     sortMinimum: number
     sortMaximum: number
   }
-  notifyPathTemplate: string
+  notifyPath: string
 }
 export interface CreatePaymentConfigInput {
   name: string
@@ -127,10 +126,9 @@ export function updatePaymentConfigStatus(
   id: number,
   status: YesNo,
 ): Promise<{ id: number; status: YesNo }> {
-  return request.patch<{ id: number; status: YesNo }, { status: YesNo }>(
-    `${base}/${id}/status`,
-    { status },
-  )
+  return request.patch<{ id: number; status: YesNo }, { status: YesNo }>(`${base}/${id}/status`, {
+    status,
+  })
 }
 export function deletePaymentConfig(id: number): Promise<Record<string, never>> {
   return request.delete<Record<string, never>>(`${base}/${id}`)

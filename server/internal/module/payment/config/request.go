@@ -17,10 +17,11 @@ import (
 
 const (
 	MaxSnapshotBytes   = 256 * 1024
+	NotifyPath         = "/api/admin/v1/payment/callback/alipay"
 	NotifyPathTemplate = "/api/admin/v1/payment/callback/alipay/{configId}/{version}"
 )
 
-var errNotifyURLInvalid = errors.New("notifyUrl must use HTTPS and the exact callback template")
+var errNotifyURLInvalid = errors.New("notifyUrl must use HTTPS and the exact callback path")
 
 type CreateInput struct {
 	Name, AppID, SellerID                                         string
@@ -29,7 +30,7 @@ type CreateInput struct {
 	PrivateKey, AppCertPEM, AlipayCertPEM, RootCertPEM, NotifyURL string
 	PayMethods                                                    []payment.PayMethod
 	SortOrder                                                     int32
-	Status                                                     yesno.Value
+	Status                                                        yesno.Value
 }
 type MetadataInput struct {
 	Name      string
@@ -43,7 +44,7 @@ type VersionInput struct {
 type ListQuery struct {
 	Page, PageSize int
 	Keyword        string
-	Status      *yesno.Value
+	Status         *yesno.Value
 }
 
 var identityPattern = regexp.MustCompile(`^[0-9]{1,64}$`)
@@ -71,12 +72,20 @@ func resolveNotifyURL(template string, id, version int64) (string, error) {
 	if id < 1 || version < 1 || len(template) > 2048 || strings.TrimSpace(template) != template {
 		return "", errNotifyURLInvalid
 	}
-	raw := strings.ReplaceAll(strings.ReplaceAll(template, "{configId}", strconv.FormatInt(id, 10)), "{version}", strconv.FormatInt(version, 10))
-	u, err := url.Parse(raw)
-	if err == nil && strings.EqualFold(u.Hostname(), "HOST") {
-		return "", errNotifyURLInvalid
+	if !strings.Contains(template, "{configId}") && !strings.Contains(template, "{version}") {
+		u, err := parseNotifyURL(template)
+		if err != nil || u.Path != NotifyPath {
+			return "", errNotifyURLInvalid
+		}
+		u.Path = fmt.Sprintf("%s/%d/%d", NotifyPath, id, version)
+		if len(u.String()) > 2048 {
+			return "", errNotifyURLInvalid
+		}
+		return u.String(), nil
 	}
-	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" || !strings.HasSuffix(template, NotifyPathTemplate) || u.Path != fmt.Sprintf("/api/admin/v1/payment/callback/alipay/%d/%d", id, version) {
+	raw := strings.ReplaceAll(strings.ReplaceAll(template, "{configId}", strconv.FormatInt(id, 10)), "{version}", strconv.FormatInt(version, 10))
+	u, err := parseNotifyURL(raw)
+	if err != nil || !strings.HasSuffix(template, NotifyPathTemplate) || u.Path != fmt.Sprintf("%s/%d/%d", NotifyPath, id, version) {
 		return "", errNotifyURLInvalid
 	}
 	return u.String(), nil
@@ -94,6 +103,45 @@ func notifyTemplate(raw string, id, version int64) (string, error) {
 	return template, nil
 }
 
+func validateVersionNotifyURL(raw string) error {
+	if strings.Contains(raw, "{configId}") || strings.Contains(raw, "{version}") {
+		_, err := resolveNotifyURL(raw, 1, 1)
+		return err
+	}
+	u, err := parseNotifyURL(raw)
+	if err != nil {
+		return errNotifyURLInvalid
+	}
+	parts := strings.Split(strings.TrimPrefix(u.Path, NotifyPath+"/"), "/")
+	if len(parts) != 2 || !strings.HasPrefix(u.Path, NotifyPath+"/") {
+		return errNotifyURLInvalid
+	}
+	for _, part := range parts {
+		value, parseErr := strconv.ParseInt(part, 10, 64)
+		if parseErr != nil || value < 1 || strconv.FormatInt(value, 10) != part {
+			return errNotifyURLInvalid
+		}
+	}
+	return nil
+}
+
+func parseNotifyURL(raw string) (*url.URL, error) {
+	if len(raw) > 2048 || strings.TrimSpace(raw) != raw || strings.ContainsAny(raw, "?#") {
+		return nil, errNotifyURLInvalid
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || strings.EqualFold(u.Hostname(), "HOST") || u.User != nil || u.RawPath != "" || u.Opaque != "" || strings.HasSuffix(u.Host, ":") || strings.ContainsAny(u.Host, "\\/\t\r\n @*") {
+		return nil, errNotifyURLInvalid
+	}
+	if port := u.Port(); port != "" {
+		value, err := strconv.Atoi(port)
+		if err != nil || value < 1 || value > 65535 {
+			return nil, errNotifyURLInvalid
+		}
+	}
+	return u, nil
+}
+
 type createRequest struct {
 	Name          *string              `json:"name"`
 	Provider      *payment.Provider    `json:"provider"`
@@ -107,7 +155,7 @@ type createRequest struct {
 	NotifyURL     *string              `json:"notifyUrl"`
 	PayMethods    []payment.PayMethod  `json:"payMethods"`
 	SortOrder     *int32               `json:"sortOrder"`
-	Status     *yesno.Value         `json:"status"`
+	Status        *yesno.Value         `json:"status"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
@@ -181,7 +229,7 @@ func (r versionRequest) input() (VersionInput, error) {
 		return v, fmt.Errorf("notifyUrl required")
 	}
 	v.NotifyURL = *r.NotifyURL
-	if _, err = resolveNotifyURL(v.NotifyURL, 1, 1); err != nil {
+	if err = validateVersionNotifyURL(v.NotifyURL); err != nil {
 		return v, err
 	}
 	v.PayMethods, err = payment.NormalizePayMethods(r.PayMethods)

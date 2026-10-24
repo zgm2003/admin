@@ -116,24 +116,32 @@ const rules = computed<FormRules<ConfigForm>>(() => {
       required,
       {
         validator: (_rule, value: unknown, callback) => {
-          const template = props.options.notifyPathTemplate
-          const message = () => new Error(t('payment.config.notifyRule', { template }))
-          if (typeof value !== 'string' || value.trim() !== value || !value.endsWith(template)) {
+          const message = () => new Error(t('payment.config.notifyRule'))
+          if (typeof value !== 'string' || value.trim() !== value) {
             callback(message())
             return
           }
           try {
-            const path = template.replace('{configId}', '1').replace('{version}', '1')
-            const url = new URL(value.replace('{configId}', '1').replace('{version}', '1'))
+            const url = new URL(value)
+            const path = props.options.notifyPath
+            const coordinates = url.pathname.startsWith(path + '/')
+              ? url.pathname.slice(path.length + 1).split('/')
+              : []
+            const validPath =
+              props.mode === 'create'
+                ? url.pathname === path
+                : coordinates.length === 2 &&
+                  coordinates.every((part) => /^[1-9][0-9]*$/.test(part))
             if (
               !value.startsWith('https://') ||
+              url.protocol !== 'https:' ||
               url.hostname === '' ||
               url.hostname.toLowerCase() === 'host' ||
               url.username !== '' ||
               url.password !== '' ||
               value.includes('?') ||
               value.includes('#') ||
-              url.pathname !== path
+              !validPath
             ) {
               callback(message())
               return
@@ -272,10 +280,18 @@ async function save() {
           ><el-input
             v-model="form.notifyUrl"
             :maxlength="options.limits.notifyUrl"
-            :placeholder="options.defaults.notifyUrl"
+            :placeholder="t('payment.config.notifyPlaceholder')"
             data-testid="payment-config-notify-url"
         /></el-form-item>
-        <p class="payment-config-form__hint">{{ t('payment.config.notifyHint') }}</p>
+        <p class="payment-config-form__hint">
+          {{
+            t(
+              props.mode === 'version'
+                ? 'payment.config.notifyVersionHint'
+                : 'payment.config.notifyHint',
+            )
+          }}
+        </p>
         <el-form-item
           v-for="field in credentialFields"
           :key="field"

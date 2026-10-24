@@ -165,7 +165,7 @@ function openEdit(row: PaymentConfig, mode: 'edit' | 'version'): void {
     sellerId: row.sellerId,
     sortOrder: row.sortOrder,
     status: row.status,
-    notifyUrl: row.notifyUrlTemplate,
+    notifyUrl: row.notifyUrl,
     payMethods: [...row.payMethods],
   }
   editingID.value = row.id
@@ -260,11 +260,7 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
             ? t('payment.config.deleteConfirm', { name: row.name })
             : t('confirm.status', {
                 name: row.name,
-                status: t(
-                  nextStatus === YesNo.Yes
-                    ? 'common.enable'
-                    : 'common.disable',
-                ),
+                status: t(nextStatus === YesNo.Yes ? 'common.enable' : 'common.disable'),
               }),
           t('confirm.title'),
           { type: 'warning' },
@@ -358,9 +354,7 @@ onBeforeUnmount(() => {
         ></template
       >
       <template #toolbar-right>
-        <el-button v-if="optionsError" @click="reloadOptions">{{
-          t('common.retry')
-        }}</el-button>
+        <el-button v-if="optionsError" @click="reloadOptions">{{ t('common.retry') }}</el-button>
       </template>
       <template #cell-identity="{ row }: { row: PaymentConfig }">
         <strong>{{ row.name }}</strong>
@@ -428,9 +422,7 @@ onBeforeUnmount(() => {
           :disabled="busyID !== null"
           data-testid="payment-config-status"
           @click="act(row, 'status')"
-          >{{
-            row.status === YesNo.Yes ? t('common.disable') : t('common.enable')
-          }}</el-button
+          >{{ row.status === YesNo.Yes ? t('common.disable') : t('common.enable') }}</el-button
         >
         <el-button
           v-if="canTest && row.actions.test"

@@ -31,9 +31,8 @@ type SafeValue struct {
 	SellerID             string                    `json:"sellerId"`
 	CurrentVersion       int64                     `json:"currentVersion"`
 	SortOrder            int32                     `json:"sortOrder"`
-	Status            yesno.Value               `json:"status"`
+	Status               yesno.Value               `json:"status"`
 	NotifyURL            string                    `json:"notifyUrl"`
-	NotifyURLTemplate    string                    `json:"notifyUrlTemplate"`
 	PayMethods           []payment.PayMethod       `json:"payMethods"`
 	CredentialConfigured bool                      `json:"credentialConfigured"`
 	Certificates         alipay.CertificateSummary `json:"certificates"`
@@ -49,7 +48,7 @@ func safeValue(ctx context.Context, c Current) (SafeValue, error) {
 	if err != nil {
 		return SafeValue{}, err
 	}
-	template, err := notifyTemplate(v.NotifyURL, m.ID, v.Version)
+	_, err = notifyTemplate(v.NotifyURL, m.ID, v.Version)
 	if err != nil {
 		return SafeValue{}, err
 	}
@@ -74,5 +73,5 @@ func safeValue(ctx context.Context, c Current) (SafeValue, error) {
 	if m.Status == 1 {
 		status = option.New(ctx, m.Status, "启用", "Enabled").Label
 	}
-	return SafeValue{ID: m.ID, Name: m.Name, Provider: m.Provider, Environment: m.Environment, AppID: m.AppID, SellerID: m.SellerID, CurrentVersion: m.CurrentVersion, SortOrder: m.SortOrder, Status: m.Status, NotifyURL: v.NotifyURL, NotifyURLTemplate: template, PayMethods: append([]payment.PayMethod(nil), v.PayMethods...), CredentialConfigured: v.PrivateKeyCiphertext != "", Certificates: certs, Actions: Actions{Update: true, Status: true, Delete: true, Test: true}, Presentation: Presentation{provider, environment, methods, status}, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
+	return SafeValue{ID: m.ID, Name: m.Name, Provider: m.Provider, Environment: m.Environment, AppID: m.AppID, SellerID: m.SellerID, CurrentVersion: m.CurrentVersion, SortOrder: m.SortOrder, Status: m.Status, NotifyURL: v.NotifyURL, PayMethods: append([]payment.PayMethod(nil), v.PayMethods...), CredentialConfigured: v.PrivateKeyCiphertext != "", Certificates: certs, Actions: Actions{Update: true, Status: true, Delete: true, Test: true}, Presentation: Presentation{provider, environment, methods, status}, CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt}, nil
 }

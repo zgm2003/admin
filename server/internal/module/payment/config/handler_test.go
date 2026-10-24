@@ -45,8 +45,8 @@ func TestConfigActionRoutesAreIndependent(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Data.Providers) != 1 || out.Data.Providers[0].Value != 1 {
 		t.Fatal("options advertised unsupported capability")
 	}
-	if out.Data.Defaults.NotifyURL != "https://HOST/api/admin/v1/payment/callback/alipay/{configId}/{version}" {
-		t.Fatalf("creation options do not prefill callback URL: %q", out.Data.Defaults.NotifyURL)
+	if out.Data.Defaults.NotifyURL != "" || strings.Contains(w.Body.String(), "{configId}") || strings.Contains(w.Body.String(), "{version}") {
+		t.Fatal("options expose placeholders as callback addresses")
 	}
 }
 
@@ -71,7 +71,7 @@ func TestConfigCreateReportsInvalidNotifyURLWithoutEchoingInput(t *testing.T) {
 			request = request.WithContext(i18n.WithLocale(request.Context(), locale))
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, request)
-			assertConfigValidationResponse(t, w, "notifyUrl", "HTTPS", "{configId}/{version}")
+			assertConfigValidationResponse(t, w, "notifyUrl", "HTTPS", "/api/admin/v1/payment/callback/alipay")
 			for _, secret := range []string{"http://abc", "LOCAL_PRIVATE_KEY", "LOCAL_APP_CERT", "LOCAL_ALIPAY_CERT", "LOCAL_ROOT_CERT"} {
 				if strings.Contains(w.Body.String(), secret) {
 					t.Fatal("validation response echoed input")

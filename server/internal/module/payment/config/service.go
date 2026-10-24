@@ -162,13 +162,20 @@ func (s *Service) PublishVersion(ctx context.Context, id int64, in VersionInput)
 	if err != nil {
 		return invalid(err)
 	}
-	if _, err = resolveNotifyURL(in.NotifyURL, id, 1); err != nil {
+	if err = validateVersionNotifyURL(in.NotifyURL); err != nil {
 		return invalid(err)
 	}
 	return s.mutate(ctx, func(work context.Context, base int64) (cache.MutationResult, error) {
 		c, err := s.repository.FindByID(work, id)
 		if err != nil {
 			return cache.MutationResult{}, err
+		}
+		notifyURL := in.NotifyURL
+		if !strings.Contains(notifyURL, "{configId}") && !strings.Contains(notifyURL, "{version}") {
+			notifyURL, err = notifyTemplate(notifyURL, id, c.Credential.Version)
+			if err != nil {
+				return cache.MutationResult{}, invalid(errNotifyURLInvalid)
+			}
 		}
 		cred, err := s.credentials(c)
 		if err != nil {
@@ -197,7 +204,7 @@ func (s *Service) PublishVersion(ctx context.Context, id int64, in VersionInput)
 		v.AppCertPEM = cred.AppCertPEM
 		v.AlipayCertPEM = cred.AlipayCertPEM
 		v.RootCertPEM = cred.RootCertPEM
-		v.NotifyURL = in.NotifyURL
+		v.NotifyURL = notifyURL
 		v.PayMethods = PayMethods(methods)
 		if err := validateVersionSize(v); err != nil {
 			return cache.MutationResult{}, invalid(err)

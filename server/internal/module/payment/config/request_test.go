@@ -61,9 +61,43 @@ func TestNotifyURLRequiresReplacingHostPlaceholder(t *testing.T) {
 		}
 	}
 }
+
+func TestVersionRequestAcceptsResolvedCallbackAddress(t *testing.T) {
+	var r versionRequest
+	raw := `{"privateKey":null,"appCertPEM":null,"alipayCertPEM":null,"rootCertPEM":null,"notifyUrl":"https://pay.example.test/api/admin/v1/payment/callback/alipay/42/3","payMethods":[1]}`
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.input(); err != nil {
+		t.Fatalf("resolved callback address rejected: %v", err)
+	}
+}
+
+func TestCreateAcceptsCallbackEndpointWithoutPlaceholders(t *testing.T) {
+	in := CreateInput{Name: "Local", Provider: 1, Environment: 1, PayMethods: []payment.PayMethod{1}, NotifyURL: "https://pay.example.test/api/admin/v1/payment/callback/alipay"}
+	if err := validateCreate(in); err != nil {
+		t.Fatalf("valid public callback endpoint rejected: %v", err)
+	}
+}
+
+func TestVersionRejectsPlaceholderAndMalformedCallbackAddresses(t *testing.T) {
+	for _, raw := range []string{
+		"https://pay.example.test/api/admin/v1/payment/callback/alipay/42/0",
+		"https://pay.example.test/api/admin/v1/payment/callback/alipay/042/3",
+		"https://pay.example.test/api/admin/v1/payment/callback/alipay/42/03",
+		"https://pay.example.test/api/admin/v1/payment/callback/alipay/42/3#",
+		"https://pay.example.test:65536/api/admin/v1/payment/callback/alipay/42/3",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			if err := validateVersionNotifyURL(raw); err == nil {
+				t.Fatal("invalid callback address accepted")
+			}
+		})
+	}
+}
 func TestCreateRequestNeedsOnlyPaymentIdentityAndCredentials(t *testing.T) {
 	var r createRequest
-	raw := `{"name":"支付宝沙箱","provider":1,"environment":1,"appId":"20260001","sellerId":"20880001","privateKey":"key","appCertPEM":"app","alipayCertPEM":"alipay","rootCertPEM":"root","notifyUrl":"https://pay.example.test/api/admin/v1/payment/callback/alipay/{configId}/{version}","payMethods":[2,1],"sortOrder":0,"status":0}`
+	raw := `{"name":"支付宝沙箱","provider":1,"environment":1,"appId":"20260001","sellerId":"20880001","privateKey":"key","appCertPEM":"app","alipayCertPEM":"alipay","rootCertPEM":"root","notifyUrl":"https://pay.example.test/api/admin/v1/payment/callback/alipay","payMethods":[2,1],"sortOrder":0,"status":0}`
 	if err := json.Unmarshal([]byte(raw), &r); err != nil {
 		t.Fatal(err)
 	}
