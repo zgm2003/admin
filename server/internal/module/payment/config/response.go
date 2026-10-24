@@ -48,8 +48,7 @@ func safeValue(ctx context.Context, c Current) (SafeValue, error) {
 	if err != nil {
 		return SafeValue{}, err
 	}
-	_, err = notifyTemplate(v.NotifyURL, m.ID, v.Version)
-	if err != nil {
+	if _, err := notifyTemplate(v.NotifyURL, m.ID, v.Version); err != nil {
 		return SafeValue{}, err
 	}
 	provider := option.New(ctx, m.Provider, "支付宝", "Alipay").Label

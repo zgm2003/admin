@@ -45,7 +45,7 @@ func TestConfigActionRoutesAreIndependent(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil || len(out.Data.Providers) != 1 || out.Data.Providers[0].Value != 1 {
 		t.Fatal("options advertised unsupported capability")
 	}
-	if out.Data.Defaults.NotifyURL != "" || strings.Contains(w.Body.String(), "{configId}") || strings.Contains(w.Body.String(), "{version}") {
+	if strings.Contains(w.Body.String(), "{configId}") || strings.Contains(w.Body.String(), "{version}") {
 		t.Fatal("options expose placeholders as callback addresses")
 	}
 }

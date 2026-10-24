@@ -260,7 +260,9 @@ async function act(row: PaymentConfig, action: 'status' | 'delete' | 'test'): Pr
             ? t('payment.config.deleteConfirm', { name: row.name })
             : t('confirm.status', {
                 name: row.name,
-                status: t(nextStatus === YesNo.Yes ? 'common.enable' : 'common.disable'),
+                status:
+                  options.value?.statuses.find((option) => option.value === nextStatus)?.label ??
+                  String(nextStatus),
               }),
           t('confirm.title'),
           { type: 'warning' },

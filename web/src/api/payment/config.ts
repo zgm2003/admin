@@ -51,7 +51,6 @@ export interface PaymentConfigOptions {
     payMethods: number[]
     status: YesNo
     sortOrder: number
-    notifyUrl: string
   }
   limits: {
     name: number

@@ -23,7 +23,6 @@ type Defaults struct {
 	PayMethods  []payment.PayMethod `json:"payMethods"`
 	Status      yesno.Value         `json:"status"`
 	SortOrder   int32               `json:"sortOrder"`
-	NotifyURL   string              `json:"notifyUrl"`
 }
 type Options struct {
 	Providers    []option.Option[payment.Provider]    `json:"providers"`
@@ -57,7 +56,6 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 		},
 		Defaults: Defaults{
 			Provider: 1, Environment: 1, PayMethods: []payment.PayMethod{1, 2},
-			NotifyURL: "",
 		},
 		Limits: Limits{
 			Name: 128, Identity: 64, NotifyURL: 2048,

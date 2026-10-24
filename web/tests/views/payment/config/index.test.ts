@@ -83,7 +83,6 @@ const options: api.PaymentConfigOptions = {
     payMethods: [1, 2],
     sortOrder: 0,
     status: 0,
-    notifyUrl: '',
   },
   limits: {
     name: 128,
@@ -120,6 +119,16 @@ function permissions(codes: string[]) {
   usePermissionStore(pinia).applySnapshot({ roleCodes: [], menuTree: [], permissionCodes: codes })
 }
 async function page() {
+  vi.mocked(api.getPaymentConfigOptions).mockResolvedValue({
+    ...options,
+    statuses:
+      appI18n.global.locale.value === 'en-US'
+        ? [
+            { value: 0, label: 'Disabled' },
+            { value: 1, label: 'Enabled' },
+          ]
+        : options.statuses,
+  })
   wrapper = mount(Page, { global: { plugins: [ElementPlus, pinia, appI18n] } })
   await flushPromises()
   return wrapper
