@@ -277,11 +277,23 @@ func run(logger *slog.Logger) error {
 		return err
 	}
 	aiDefinitions, err := scheduler.AITaskDefinitions(scheduler.AITaskExecutors{
-		RunExecute: aiRunExecute, MediaPoll: func(ctx context.Context, _ scheduler.ExecutionContext) error { return aiMediaService.PollOne(ctx) }, MediaImport: func(ctx context.Context, _ scheduler.ExecutionContext) error { return aiMediaService.ImportOne(ctx) },
+		RunExecute: aiRunExecute, MediaPoll: func(ctx context.Context, ec scheduler.ExecutionContext) error {
+			return aiMediaService.PollOne(ctx, ec.Payload)
+		}, MediaImport: func(ctx context.Context, ec scheduler.ExecutionContext) error {
+			return aiMediaService.ImportOne(ctx, ec.Payload)
+		},
 		UsageSettle: aiUsageSettle, RunRecover: aiRunRecover, RunEventCleanup: aiEventCleanup,
 	}, 5*time.Minute, 5*time.Minute)
 	if err != nil {
 		return err
+	}
+	for index := range aiDefinitions {
+		switch aiDefinitions[index].Type {
+		case "ai.run.execute":
+			aiDefinitions[index].TimeoutForPayload = aiRunWorker.TimeoutForPayload
+		case "ai.media.import":
+			aiDefinitions[index].TimeoutForPayload = aiMediaService.ImportTimeoutForPayload
+		}
 	}
 	definitions := append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), aiDefinitions...)
 	definitions = append(definitions, notificationDefinition, paymentDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))

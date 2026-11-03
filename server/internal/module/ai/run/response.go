@@ -19,7 +19,7 @@ type Response struct {
 	UsageStatus       int16      `json:"usageStatus"`
 	BillingStatus     int16      `json:"billingStatus"`
 	TransferStatus    int16      `json:"transferStatus"`
-	EstimatedUnits    int64      `json:"estimatedUnits"`
+	EstimatedUnits    int64      `json:"estimatedUnits,string"`
 	AcceptedAt        time.Time  `json:"acceptedAt"`
 	FinishedAt        *time.Time `json:"finishedAt"`
 	ErrorCode         *string    `json:"errorCode"`

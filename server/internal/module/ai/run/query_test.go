@@ -36,3 +36,21 @@ func TestQueryProjectionNeverExportsSecrets(t *testing.T) {
 		t.Fatal(string(b))
 	}
 }
+
+func TestRunRecordOptionsDescribeUnknownResultsAndIncompleteUsage(t *testing.T) {
+	for _, language := range []string{"zh-CN", "en-US"} {
+		options := StaticOptions(language)
+		for key, count := range map[string]int{"requestStatuses": 5, "toolCallStatuses": 5, "requestUsageStatuses": 3, "usageCompleteness": 2} {
+			rows, ok := options[key].([]EnumOption)
+			if !ok || len(rows) != count {
+				t.Errorf("%s %s lacks complete record states: %+v", language, key, options[key])
+				continue
+			}
+			for i, row := range rows {
+				if row.Value != i || row.Label == "" {
+					t.Errorf("%s %s has invalid state %+v", language, key, row)
+				}
+			}
+		}
+	}
+}

@@ -14,7 +14,7 @@ func TestFileUploadOptionsMatchBusinessPurpose(t *testing.T) {
 	otherPlatformID := insertPlatform(t, db, ctx, "other", yesno.Yes)
 	configID := insertConfig(t, db, ctx, "main", yesno.Yes, "")
 	service := NewService(NewRepository(db), nil, nil, nil, nil)
-	ruleID, err := service.Create(ctx, validCreate(platformID, configID, []string{"avatar", "file", "setting"}, yesno.Yes))
+	ruleID, err := service.Create(ctx, validCreate(platformID, configID, []string{"avatar", "file", "setting", "ai/input"}, yesno.Yes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,6 +22,8 @@ func TestFileUploadOptionsMatchBusinessPurpose(t *testing.T) {
 		wantCode := "file"
 		if purpose == "avatar" {
 			wantCode = "avatar"
+		} else if purpose == "ai/input" {
+			wantCode = "ai/input"
 		}
 		rows, err := service.FileUploadOptions(ctx, platformID, purpose)
 		if err != nil || len(rows) != 1 {
@@ -41,6 +43,23 @@ func TestFileUploadOptionsMatchBusinessPurpose(t *testing.T) {
 	rows, err = service.FileUploadOptions(ctx, platformID, "")
 	if err != nil || rows == nil || len(rows) != 0 {
 		t.Fatalf("disabled options = %+v, %v", rows, err)
+	}
+}
+
+func TestAIInputUploadOptionsRequireSamePlatformCode(t *testing.T) {
+	db, ctx := openRuleDatabase(t)
+	platformID := insertPlatform(t, db, ctx, "admin", yesno.Yes)
+	otherPlatformID := insertPlatform(t, db, ctx, "other", yesno.Yes)
+	configID := insertConfig(t, db, ctx, "main", yesno.Yes, "")
+	service := NewService(NewRepository(db), nil, nil, nil, nil)
+	if _, err := service.Create(ctx, validCreate(platformID, configID, []string{"file"}, yesno.Yes)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Create(ctx, validCreate(otherPlatformID, configID, []string{"ai/input"}, yesno.Yes)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.FileUploadOptions(ctx, platformID, "ai/input"); appCode(err) != apperror.CodeNotFound {
+		t.Fatalf("missing same-platform AI input code error=%v; must not use file or another platform", err)
 	}
 }
 

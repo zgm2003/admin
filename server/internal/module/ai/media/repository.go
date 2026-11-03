@@ -31,14 +31,29 @@ func NewRepository(db *gorm.DB, jobs ...*scheduler.Repository) *Repository {
 }
 
 func (r *Repository) ClaimPoll(ctx context.Context, now time.Time) (Task, bool, error) {
+	return r.claimPoll(ctx, 0, now)
+}
+
+func (r *Repository) ClaimPollByID(ctx context.Context, taskID int64, now time.Time) (Task, bool, error) {
+	if taskID < 1 {
+		return Task{}, false, ErrConflict
+	}
+	return r.claimPoll(ctx, taskID, now)
+}
+
+func (r *Repository) claimPoll(ctx context.Context, taskID int64, now time.Time) (Task, bool, error) {
 	if r == nil || r.db == nil || now.IsZero() {
 		return Task{}, false, ErrUnavailable
 	}
 	var out Task
 	found := false
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("status=? AND (next_poll_at IS NULL OR next_poll_at<=?)", TaskPolling, now).
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+			Where("status=? AND (next_poll_at IS NULL OR next_poll_at<=?)", TaskPolling, now)
+		if taskID > 0 {
+			query = query.Where("id=?", taskID)
+		}
+		if err := query.
 			Order("id").Limit(1).Take(&out).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil
@@ -130,14 +145,29 @@ func (r *Repository) CreateGeneratedFile(ctx context.Context, f *File) error {
 }
 
 func (r *Repository) ClaimImport(ctx context.Context, now time.Time) (File, bool, error) {
+	return r.claimImport(ctx, 0, now)
+}
+
+func (r *Repository) ClaimImportByID(ctx context.Context, fileID int64, now time.Time) (File, bool, error) {
+	if fileID < 1 {
+		return File{}, false, ErrConflict
+	}
+	return r.claimImport(ctx, fileID, now)
+}
+
+func (r *Repository) claimImport(ctx context.Context, fileID int64, now time.Time) (File, bool, error) {
 	if r == nil || r.db == nil || now.IsZero() {
 		return File{}, false, ErrUnavailable
 	}
 	var out File
 	found := false
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("transfer_status IN (?,?,?) AND (next_transfer_at IS NULL OR next_transfer_at<=?)", TransferQueued, TransferRetry, Transfering, now).
+		query := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
+			Where("transfer_status IN (?,?,?) AND (next_transfer_at IS NULL OR next_transfer_at<=?)", TransferQueued, TransferRetry, Transfering, now)
+		if fileID > 0 {
+			query = query.Where("id=?", fileID)
+		}
+		if err := query.
 			Order("id").Limit(1).Take(&out).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil
@@ -162,8 +192,20 @@ func (r *Repository) ClaimImport(ctx context.Context, now time.Time) (File, bool
 	return out, found, err
 }
 
-func (r *Repository) FinishImport(ctx context.Context, id, storageFileID int64, status int16, errorCode, errorMessage string, next *time.Time, now time.Time, mimeType *string, size *int64, attempts ...int) error {
-	if id < 1 || storageFileID < 0 || now.IsZero() {
+func (r *Repository) FindImport(ctx context.Context, fileID int64) (File, bool, error) {
+	var row File
+	if r == nil || r.db == nil || fileID < 1 {
+		return row, false, ErrUnavailable
+	}
+	err := r.db.WithContext(ctx).First(&row, fileID).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return row, false, nil
+	}
+	return row, err == nil, err
+}
+
+func (r *Repository) FinishImport(ctx context.Context, id, storageFileID int64, status int16, errorCode, errorMessage string, next *time.Time, now time.Time, mimeType *string, size *int64, attempt int) error {
+	if id < 1 || storageFileID < 0 || now.IsZero() || attempt < 1 {
 		return ErrConflict
 	}
 	values := map[string]any{"transfer_status": status, "storage_file_id": nil, "next_transfer_at": next, "updated_at": now}
@@ -187,10 +229,7 @@ func (r *Repository) FinishImport(ctx context.Context, id, storageFileID int64, 
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id=? AND transfer_status=?", id, Transfering).First(&file).Error; err != nil {
 			return err
 		}
-		query := tx.Model(&File{}).Where("id=? AND transfer_status=?", id, Transfering)
-		if len(attempts) > 0 {
-			query = query.Where("transfer_attempts=?", attempts[0])
-		}
+		query := tx.Model(&File{}).Where("id=? AND transfer_status=? AND transfer_attempts=?", id, Transfering, attempt)
 		out := query.Updates(values)
 		if out.Error != nil {
 			return out.Error

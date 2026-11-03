@@ -287,4 +287,3 @@ func nativeToolResult(protocol int16, id string, result json.RawMessage) json.Ra
 }
 
 var _ Executor = (*TextEngine)(nil)
-var _ = errors.Is

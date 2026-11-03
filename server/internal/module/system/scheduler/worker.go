@@ -55,13 +55,27 @@ func (e *Executor) Execute(ctx context.Context, envelope JobEnvelope) error {
 	if job.AttemptCount+1 != envelope.Attempt || job.PublishToken != envelope.DispatchToken {
 		return fmt.Errorf("stale scheduler delivery: %w", asynq.SkipRetry)
 	}
+	definition, ok := e.catalog.Lookup(job.TaskType)
+	if ok {
+		if err := e.catalog.ValidatePayload(job.TaskType, job.Payload); err != nil {
+			definition.TimeoutForPayload = nil
+		} else if definition.TimeoutForPayload != nil {
+			timeout, resolveErr := definition.TimeoutForPayload(ctx, job.Payload, e.now().UTC())
+			if resolveErr != nil || timeout <= 0 {
+				if resolveErr == nil {
+					resolveErr = ErrInvalidTaskDefinition
+				}
+				return fmt.Errorf("resolve scheduler job timeout: %w", resolveErr)
+			}
+			definition.Timeout = timeout
+		}
+	}
 	token := newToken()
 	now := e.now().UTC()
 	run, claimed, err := e.repository.ClaimRun(ctx, job.ID, envelope.Attempt, envelope.DispatchToken, e.workerID, token, now, e.lease)
 	if err != nil {
 		return err
 	}
-	definition, ok := e.catalog.Lookup(claimed.TaskType)
 	if !ok {
 		return e.finishFailure(ctx, claimed, run, token, "unknown-task-type", nil, now)
 	}

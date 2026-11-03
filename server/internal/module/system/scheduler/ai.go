@@ -1,10 +1,20 @@
 package scheduler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
 )
+
+// AIManagementDefinitions lets the API describe and manage the same tasks as
+// the Worker, without assembling provider or media executors in the API.
+func AIManagementDefinitions() ([]TaskDefinition, error) {
+	unavailable := func(context.Context, ExecutionContext) error {
+		return errors.New("AI tasks execute only in the Worker")
+	}
+	return AITaskDefinitions(AITaskExecutors{unavailable, unavailable, unavailable, unavailable, unavailable, unavailable}, 5*time.Minute, 5*time.Minute)
+}
 
 // AITaskExecutors is the explicit worker wiring contract. The scheduler does
 // not discover handlers by name; main supplies each business function.

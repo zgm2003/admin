@@ -10,7 +10,7 @@ export interface RunItem {
   usageStatus: number
   billingStatus: number
   transferStatus: number
-  estimatedUnits: number
+  estimatedUnits: string
   acceptedAt: string
   finishedAt: string | null
   errorCode: string | null
@@ -75,7 +75,7 @@ export interface RunCharge {
   currency: string
   priceVersionId: string
   multiplierPpm: number
-  actualUnits: number | null
+  actualUnits: string | null
   usageComplete: number
   settledAt: string | null
   transactionId: string | null
@@ -91,11 +91,18 @@ export interface RunChargeItem {
   quantity: string
   unitQuantity: string
   unit: string
-  billingUnitPriceUnits: number
+  billingUnitPriceUnits: string
   multiplierPpm: number
-  amountUnits: number
+  amountUnits: string
 }
-export type RunRecord = RunRequest | RunToolCall | RunCharge | RunChargeItem
+export interface RunRecordMap {
+  request: RunRequest
+  'tool-call': RunToolCall
+  'usage-charge': RunCharge
+  'usage-charge-item': RunChargeItem
+}
+export type RunRecordKind = keyof RunRecordMap
+export type RunRecord = RunRecordMap[RunRecordKind]
 export interface RunOptions {
   operations: BackendOption<string>[]
   executionStatuses: BackendOption<number>[]
@@ -103,6 +110,10 @@ export interface RunOptions {
   billingStatuses: BackendOption<number>[]
   transferStatuses: BackendOption<number>[]
   mediaTransferStatuses: BackendOption<number>[]
+  requestStatuses: BackendOption<number>[]
+  toolCallStatuses: BackendOption<number>[]
+  requestUsageStatuses: BackendOption<number>[]
+  usageCompleteness: BackendOption<number>[]
   constraints: {
     defaultLimit: number
     maxLimit: number
@@ -160,13 +171,15 @@ export function listRunEvents(id: string, params: { afterSequence?: number; limi
 export function listRunMedia(id: string, params: CursorInput = {}, management = false) {
   return request.get<CursorPage<RunMedia>>(`${management ? admin : own}/${id}/media`, { params })
 }
-export function listRunRecords(
+export function listRunRecords<Kind extends RunRecordKind>(
   id: string,
-  kind: 'request' | 'tool-call' | 'usage-charge' | 'usage-charge-item',
+  kind: Kind,
   params: CursorInput = {},
   management = true,
 ) {
-  return request.get<CursorPage<RunRecord>>(`${management ? admin : own}/${id}/${kind}`, { params })
+  return request.get<CursorPage<RunRecordMap[Kind]>>(`${management ? admin : own}/${id}/${kind}`, {
+    params,
+  })
 }
 export function cancelRun(id: string) {
   return request.post<{ accepted: boolean }>(`${own}/${id}/cancel`, {})

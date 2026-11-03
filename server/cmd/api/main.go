@@ -498,7 +498,7 @@ func run(logger *slog.Logger) error {
 		return permissionnotification.NewRepository(db)
 	})
 	notificationTaskService := notificationtask.NewService(notificationTaskRepository)
-	schedulerCatalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(nil, nil, nil), notificationDefinition, scheduler.PaymentReconcileDefinition(nil), storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
+	schedulerCatalog, err := buildAPISchedulerCatalog(fileService)
 	if err != nil {
 		return err
 	}

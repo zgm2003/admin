@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n'
 import AppPage from '@/components/AppPage/index.vue'
 import AppTable from '@/components/AppTable/index.vue'
 import AppDialog from '@/components/AppDialog/index.vue'
+import RunRecordTable from '@/views/ai/components/RunRecordTable/index.vue'
 import type { TableColumn } from '@/components/AppTable'
+import type { BackendOption } from '@/types/option'
 import { usePermissionStore } from '@/store/permission'
 import {
   getRun,
@@ -18,7 +20,11 @@ import {
   type RunDetail,
   type RunFilter,
   type RunOptions,
-  type RunRecord,
+  type RunRecordKind,
+  type RunRequest,
+  type RunToolCall,
+  type RunCharge,
+  type RunChargeItem,
   type RunMedia,
   type RunSummary,
 } from '@/api/ai/run'
@@ -42,8 +48,12 @@ const detail = ref<RunDetail | null>(null),
   visible = ref(false),
   detailLoading = ref(false),
   detailFailed = ref(false)
-const section = ref<'request' | 'tool-call' | 'usage-charge' | 'usage-charge-item'>('request'),
-  records = ref<RunRecord[]>([]),
+const section = ref<RunRecordKind>('request'),
+  requests = ref<RunRequest[]>([]),
+  tools = ref<RunToolCall[]>([]),
+  charges = ref<RunCharge[]>([]),
+  chargeItems = ref<RunChargeItem[]>([]),
+  recordLoading = ref(false),
   media = ref<RunMedia[]>([]),
   recordNext = ref(''),
   recordMore = ref(false),
@@ -54,18 +64,32 @@ const preview = ref(''),
   previewVisible = ref(false)
 let sequence = 0,
   detailSequence = 0
+function statusLabel(items: BackendOption<number>[] | undefined, value: number): string {
+  return items?.find((item) => item.value === value)?.label ?? String(value)
+}
 const columns = computed<TableColumn<RunItem>[]>(() => [
   { prop: 'id', label: t('aiRun.id'), minWidth: 100 },
   { prop: 'operation', label: t('aiRun.operation'), minWidth: 150 },
   {
     prop: 'executionStatus',
     label: t('aiRun.executionStatus'),
-    formatter: (_r, v) =>
-      options.value?.executionStatuses.find((o) => o.value === v)?.label ?? String(v),
+    formatter: (_r, value) => statusLabel(options.value?.executionStatuses, Number(value)),
   },
-  { prop: 'usageStatus', label: t('aiRun.usageStatus') },
-  { prop: 'billingStatus', label: t('aiRun.billingStatus') },
-  { prop: 'transferStatus', label: t('aiRun.transferStatus') },
+  {
+    prop: 'usageStatus',
+    label: t('aiRun.usageStatus'),
+    formatter: (_r, value) => statusLabel(options.value?.usageStatuses, Number(value)),
+  },
+  {
+    prop: 'billingStatus',
+    label: t('aiRun.billingStatus'),
+    formatter: (_r, value) => statusLabel(options.value?.billingStatuses, Number(value)),
+  },
+  {
+    prop: 'transferStatus',
+    label: t('aiRun.transferStatus'),
+    formatter: (_r, value) => statusLabel(options.value?.transferStatuses, Number(value)),
+  },
   { prop: 'estimatedUnits', label: t('aiRun.estimatedUnits') },
   { prop: 'acceptedAt', label: t('aiRun.acceptedAt'), minWidth: 180 },
   { key: 'actions', label: t('common.actions'), width: 100 },
@@ -111,7 +135,7 @@ async function open(row: RunItem) {
   const current = ++detailSequence
   visible.value = true
   detail.value = null
-  records.value = []
+  clearRecords()
   media.value = []
   detailLoading.value = true
   detailFailed.value = false
@@ -130,18 +154,57 @@ async function loadRecords(append = false) {
   if (!detail.value) return
   const id = detail.value.id,
     kind = section.value
+  const query = { limit: 20, beforeId: append ? recordNext.value : undefined }
+  const current = () => id === detail.value?.id && kind === section.value
+  recordLoading.value = true
   try {
-    const result = await listRunRecords(id, kind, {
-      limit: 20,
-      beforeId: append ? recordNext.value : undefined,
-    })
-    if (id !== detail.value?.id || kind !== section.value) return
-    records.value = append ? [...records.value, ...result.list] : result.list
-    recordNext.value = result.nextBeforeId
-    recordMore.value = result.hasMore
+    switch (kind) {
+      case 'request': {
+        const result = await listRunRecords(id, kind, query)
+        if (!current()) return
+        requests.value = append ? [...requests.value, ...result.list] : result.list
+        recordNext.value = result.nextBeforeId
+        recordMore.value = result.hasMore
+        break
+      }
+      case 'tool-call': {
+        const result = await listRunRecords(id, kind, query)
+        if (!current()) return
+        tools.value = append ? [...tools.value, ...result.list] : result.list
+        recordNext.value = result.nextBeforeId
+        recordMore.value = result.hasMore
+        break
+      }
+      case 'usage-charge': {
+        const result = await listRunRecords(id, kind, query)
+        if (!current()) return
+        charges.value = append ? [...charges.value, ...result.list] : result.list
+        recordNext.value = result.nextBeforeId
+        recordMore.value = result.hasMore
+        break
+      }
+      case 'usage-charge-item': {
+        const result = await listRunRecords(id, kind, query)
+        if (!current()) return
+        chargeItems.value = append ? [...chargeItems.value, ...result.list] : result.list
+        recordNext.value = result.nextBeforeId
+        recordMore.value = result.hasMore
+        break
+      }
+    }
   } catch {
-    detailFailed.value = true
+    if (current()) detailFailed.value = true
+  } finally {
+    if (current()) recordLoading.value = false
   }
+}
+function clearRecords() {
+  requests.value = []
+  tools.value = []
+  charges.value = []
+  chargeItems.value = []
+  recordNext.value = ''
+  recordMore.value = false
 }
 async function loadMedia(append = false) {
   if (!detail.value) return
@@ -189,7 +252,7 @@ async function loadOptions() {
 }
 watch(locale, () => void loadOptions())
 watch(section, () => {
-  records.value = []
+  clearRecords()
   void loadRecords()
 })
 watch(visible, (v) => {
@@ -306,23 +369,28 @@ onMounted(() => {
             ><el-radio-button value="usage-charge-item">{{
               t('aiRun.chargeItems')
             }}</el-radio-button
-            ><el-radio-button value="usage-charge-item">{{
-              t('aiRun.chargeItems')
-            }}</el-radio-button
             ><el-radio-button value="usage-charge">{{
               t('aiRun.charges')
             }}</el-radio-button></el-radio-group
           >
-          <pre v-for="record in records" :key="record.id">{{
-            JSON.stringify(record, null, 2)
-          }}</pre>
-          <el-button v-if="recordMore" @click="loadRecords(true)">{{
+          <RunRecordTable
+            :kind="section"
+            :requests="requests"
+            :tools="tools"
+            :charges="charges"
+            :charge-items="chargeItems"
+            :options="options"
+            :loading="recordLoading"
+            @refresh="loadRecords()"
+          />
+          <el-button v-if="recordMore" :loading="recordLoading" @click="loadRecords(true)">{{
             t('aiChat.loadMore')
           }}</el-button>
           <h4>{{ t('aiRun.media') }}</h4>
           <article v-for="item in media" :key="item.id">
             <p>
-              {{ item.id }} · {{ item.mimeType }} · {{ item.transferStatus }}
+              {{ item.id }} · {{ item.mimeType }} ·
+              {{ statusLabel(options?.mediaTransferStatuses, item.transferStatus) }}
               {{ item.errorMessage }}
             </p>
             <el-button :disabled="!item.canPreview" @click="showMedia(item)">{{

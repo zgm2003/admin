@@ -4,8 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import AppPage from '@/components/AppPage/index.vue'
 import AppDialog from '@/components/AppDialog/index.vue'
+import RunRecordTable from '@/views/ai/components/RunRecordTable/index.vue'
 import FileSelectDialog from '@/components/FileSelectDialog/index.vue'
 import type { StorageFile } from '@/api/storage/file'
+import type { BackendOption } from '@/types/option'
 import { usePermissionStore } from '@/store/permission'
 import {
   createConversation,
@@ -34,7 +36,8 @@ import {
   type RunEvent,
   type RunMedia,
   type RunOptions,
-  type RunRecord,
+  type RunCharge,
+  type RunChargeItem,
   type CreateRunInput,
 } from '@/api/ai/run'
 const { t, locale } = useI18n(),
@@ -80,8 +83,8 @@ const conversationNext = ref(''),
   messageSequence = ref(0),
   mediaNext = ref(''),
   mediaMore = ref(false)
-const charges = ref<RunRecord[]>([]),
-  chargeItems = ref<RunRecord[]>([]),
+const charges = ref<RunCharge[]>([]),
+  chargeItems = ref<RunChargeItem[]>([]),
   chargeNext = ref(''),
   chargeMore = ref(false),
   chargeItemNext = ref(''),
@@ -97,6 +100,12 @@ const operations = computed(() => {
     .filter((o) => allowed.includes(o.value))
     .map((o) => ({ ...o, disabled: o.value === 'video.generate' }))
 })
+const showVideoDisabledNotice = computed(() =>
+  operations.value.some((item) => item.value === 'video.generate' && item.disabled),
+)
+function statusLabel(items: BackendOption<number>[] | undefined, value: number): string {
+  return items?.find((item) => item.value === value)?.label ?? String(value)
+}
 const parameterOptions = computed(() =>
   (currentAgent.value?.parameterOptions ?? []).filter((item) => item.operation === operation.value),
 )
@@ -316,22 +325,20 @@ async function loadCharges(items = false, append = false) {
   if (!activeRun.value || !canDetail.value) return
   const id = activeRun.value.id
   try {
-    const result = await listRunRecords(
-      id,
-      items ? 'usage-charge-item' : 'usage-charge',
-      {
-        limit: 20,
-        beforeId: append ? (items ? chargeItemNext.value : chargeNext.value) : undefined,
-      },
-      false,
-    )
-    if (activeRun.value?.id !== id) return
-    const target = items ? chargeItems : charges
-    target.value = append ? [...target.value, ...result.list] : result.list
+    const query = {
+      limit: 20,
+      beforeId: append ? (items ? chargeItemNext.value : chargeNext.value) : undefined,
+    }
     if (items) {
+      const result = await listRunRecords(id, 'usage-charge-item', query, false)
+      if (activeRun.value?.id !== id) return
+      chargeItems.value = append ? [...chargeItems.value, ...result.list] : result.list
       chargeItemNext.value = result.nextBeforeId
       chargeItemMore.value = result.hasMore
     } else {
+      const result = await listRunRecords(id, 'usage-charge', query, false)
+      if (activeRun.value?.id !== id) return
+      charges.value = append ? [...charges.value, ...result.list] : result.list
       chargeNext.value = result.nextBeforeId
       chargeMore.value = result.hasMore
     }
@@ -533,7 +540,8 @@ onBeforeUnmount(() => {
         <h3>{{ t('aiChat.history') }}</h3>
         <article v-for="run in history" :key="run.id">
           <el-button :disabled="!canDetail" link @click="restore(run)"
-            >{{ run.id }} · {{ run.operation }} · {{ run.executionStatus }}</el-button
+            >{{ run.id }} · {{ run.operation }} ·
+            {{ statusLabel(options?.executionStatuses, run.executionStatus) }}</el-button
           >
         </article>
         <el-button v-if="historyMore" @click="loadHistory(true)">{{
@@ -568,7 +576,7 @@ onBeforeUnmount(() => {
           :options="operations"
           :placeholder="t('aiRun.operation')"
         />
-        <p>{{ t('aiChat.videoDisabled') }}</p>
+        <p v-if="showVideoDisabledNotice">{{ t('aiChat.videoDisabled') }}</p>
         <div class="ai-chat__parameters">
           <label v-for="param in parameterOptions" :key="param.key"
             >{{ param.label
@@ -606,12 +614,18 @@ onBeforeUnmount(() => {
           {{ t('aiChat.selectConversation') }}
         </p>
         <section v-if="activeRun">
-          <h4>{{ activeRun.id }} · {{ activeRun.executionStatus }}</h4>
+          <h4>
+            {{ activeRun.id }} ·
+            {{ statusLabel(options?.executionStatuses, activeRun.executionStatus) }}
+          </h4>
           <p>
             {{ t('aiRun.estimatedUnits') }}: {{ activeRun.estimatedUnits }} ·
-            {{ t('aiRun.usageStatus') }}: {{ activeRun.usageStatus }} ·
-            {{ t('aiRun.billingStatus') }}: {{ activeRun.billingStatus }} ·
-            {{ t('aiRun.transferStatus') }}: {{ activeRun.transferStatus }}
+            {{ t('aiRun.usageStatus') }}:
+            {{ statusLabel(options?.usageStatuses, activeRun.usageStatus) }} ·
+            {{ t('aiRun.billingStatus') }}:
+            {{ statusLabel(options?.billingStatuses, activeRun.billingStatus) }} ·
+            {{ t('aiRun.transferStatus') }}:
+            {{ statusLabel(options?.transferStatuses, activeRun.transferStatus) }}
           </p>
           <p>{{ activeRun.errorCode }} {{ activeRun.errorMessage }}</p>
           <el-alert
@@ -640,14 +654,22 @@ onBeforeUnmount(() => {
             >{{ t('aiChat.retryTransfer') }}</el-button
           ><el-button @click="restore(activeRun)">{{ t('aiRun.refresh') }}</el-button>
           <h4>{{ t('aiRun.charges') }}</h4>
-          <pre v-for="charge in charges" :key="charge.id">{{
-            JSON.stringify(charge, null, 2)
-          }}</pre>
+          <RunRecordTable
+            kind="usage-charge"
+            :charges="charges"
+            :options="options"
+            @refresh="loadCharges()"
+          />
           <el-button v-if="chargeMore" @click="loadCharges(false, true)">{{
             t('aiChat.loadMore')
           }}</el-button>
           <h4>{{ t('aiRun.chargeItems') }}</h4>
-          <pre v-for="item in chargeItems" :key="item.id">{{ JSON.stringify(item, null, 2) }}</pre>
+          <RunRecordTable
+            kind="usage-charge-item"
+            :charge-items="chargeItems"
+            :options="options"
+            @refresh="loadCharges(true)"
+          />
           <el-button v-if="chargeItemMore" @click="loadCharges(true, true)">{{
             t('aiChat.loadMore')
           }}</el-button>

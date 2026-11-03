@@ -98,11 +98,7 @@ func (e *Engine) Execute(ctx context.Context, input airun.Model) error {
 	return e.repository.FinishMedia(finalize, row.ID, token, status, code, e.now().UTC())
 }
 
-func (e *Engine) generate(ctx context.Context, row airun.Model, token string, transferContexts ...context.Context) string {
-	mediaCtx := ctx
-	if len(transferContexts) > 0 {
-		mediaCtx = transferContexts[0]
-	}
+func (e *Engine) generate(ctx context.Context, row airun.Model, token string, mediaCtx context.Context) string {
 	var snapshot airun.RuntimeSnapshot
 	var config airun.RuntimeConfig
 	var policy airun.Policy

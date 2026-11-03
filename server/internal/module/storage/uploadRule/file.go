@@ -38,9 +38,9 @@ func (s *Service) FileUploadOptions(ctx context.Context, platformID int64, purpo
 	// 编码是调用场景的后端契约，不是让文件库用户选择的存储配置。
 	code := "file"
 	switch purpose {
-	case "", "ai/input":
-	case "avatar":
-		code = "avatar"
+	case "":
+	case "avatar", "ai/input":
+		code = purpose
 	default:
 		return nil, apperror.InvalidRequest(errors.New("unsupported file upload purpose"))
 	}
@@ -50,6 +50,9 @@ func (s *Service) FileUploadOptions(ctx context.Context, platformID int64, purpo
 	rows, err := s.repository.FileUploadOptions(ctx, platformID, code)
 	if err != nil {
 		return nil, err
+	}
+	if purpose == "ai/input" && len(rows) == 0 {
+		return nil, apperror.NotFound(errors.New("AI input upload rule is not configured for this platform"))
 	}
 	out := make([]FileUploadOption, 0, len(rows))
 	for _, row := range rows {

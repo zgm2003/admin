@@ -148,7 +148,7 @@ type ChargeResponse struct {
 	Currency       string     `json:"currency"`
 	PriceVersionID string     `json:"priceVersionId"`
 	MultiplierPPM  int64      `json:"multiplierPpm"`
-	ActualUnits    *int64     `json:"actualUnits"`
+	ActualUnits    *int64     `json:"actualUnits,string"`
 	UsageComplete  int16      `json:"usageComplete"`
 	SettledAt      *time.Time `json:"settledAt"`
 	TransactionID  *string    `json:"transactionId"`
@@ -164,9 +164,9 @@ type ChargeItemResponse struct {
 	Quantity              string          `json:"quantity"`
 	UnitQuantity          string          `json:"unitQuantity"`
 	Unit                  string          `json:"unit"`
-	BillingUnitPriceUnits int64           `json:"billingUnitPriceUnits"`
+	BillingUnitPriceUnits int64           `json:"billingUnitPriceUnits,string"`
 	MultiplierPPM         int64           `json:"multiplierPpm"`
-	AmountUnits           int64           `json:"amountUnits"`
+	AmountUnits           int64           `json:"amountUnits,string"`
 }
 type MediaResponse struct {
 	ErrorCode        *string `json:"errorCode"`

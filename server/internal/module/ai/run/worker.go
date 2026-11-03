@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
+	"time"
 )
 
 type Executor interface {
@@ -23,24 +25,78 @@ func (w *Worker) Execute(ctx context.Context, payload json.RawMessage) error {
 	if w == nil || w.Loader == nil || w.Executor == nil {
 		return errors.New("AI run worker is not configured")
 	}
+	runID, err := parseRunID(payload)
+	if err != nil {
+		return errors.New("AI run payload is invalid")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	row, err := w.Loader.Find(ctx, runID)
+	if err != nil {
+		return err
+	}
+	return w.Executor.Execute(ctx, row)
+}
+
+func (w *Worker) TimeoutForPayload(ctx context.Context, payload json.RawMessage, now time.Time) (time.Duration, error) {
+	const finishWindow = 30 * time.Second
+	if w == nil || w.Loader == nil {
+		return 0, errors.New("AI run worker is not configured")
+	}
+	runID, err := parseRunID(payload)
+	if err != nil {
+		return finishWindow, nil
+	}
+	row, err := w.Loader.Find(ctx, runID)
+	if err != nil {
+		return 0, err
+	}
+	if row.ExecutionStatus != 0 || row.DeadlineAt.IsZero() || !row.DeadlineAt.After(now) {
+		return finishWindow, nil
+	}
+	var transfer time.Duration
+	switch row.Operation {
+	case "image.generate", "image.edit", "audio.speech", "audio.transcribe", "video.generate":
+		var policy struct {
+			TransferTimeoutSeconds int64 `json:"transferTimeoutSeconds"`
+		}
+		if json.Unmarshal(row.PolicySnapshot, &policy) == nil && policy.TransferTimeoutSeconds > 0 && policy.TransferTimeoutSeconds <= math.MaxInt64/int64(time.Second) {
+			transfer = time.Duration(policy.TransferTimeoutSeconds) * time.Second
+		}
+	}
+	return remainingBudget(row.DeadlineAt, now, transfer, finishWindow), nil
+}
+
+func parseRunID(payload json.RawMessage) (int64, error) {
 	var p struct {
 		RunID int64 `json:"runId"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(payload))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&p); err != nil || p.RunID < 1 {
-		return errors.New("AI run payload is invalid")
+		return 0, errors.New("AI run payload is invalid")
 	}
 	var extra any
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
-		return errors.New("AI run payload is invalid")
+		return 0, errors.New("AI run payload is invalid")
 	}
-	if err := ctx.Err(); err != nil {
-		return err
+	return p.RunID, nil
+}
+
+func remainingBudget(deadline time.Time, now time.Time, extension, finishWindow time.Duration) time.Duration {
+	if !deadline.After(now) {
+		return finishWindow
 	}
-	row, err := w.Loader.Find(ctx, p.RunID)
-	if err != nil {
-		return err
+	remaining := deadline.Sub(now)
+	if extension > 0 {
+		if remaining > time.Duration(math.MaxInt64)-extension {
+			return time.Duration(math.MaxInt64)
+		}
+		remaining += extension
 	}
-	return w.Executor.Execute(ctx, row)
+	if remaining > time.Duration(math.MaxInt64)-finishWindow {
+		return time.Duration(math.MaxInt64)
+	}
+	return remaining + finishWindow
 }

@@ -49,7 +49,7 @@ func TestAITaskDefinitionsKeepIndependentRetryBoundariesAndNamedExecutors(t *tes
 		timeout  time.Duration
 		builtin  string
 	}{
-		{"ai.run.execute", 1, 330 * time.Second, ""}, {"ai.media.poll", 3, 30 * time.Second, ""}, {"ai.media.import", 3, 210 * time.Second, ""}, {"ai.usage.settle", 10, 30 * time.Second, ""}, {"ai.run.recover", 3, 20 * time.Second, "ai.run.recover"}, {"ai.run.event.cleanup", 3, 30 * time.Second, "ai.run.event.cleanup"},
+		{"ai.run.execute", 1, 330 * time.Second, ""}, {"ai.media.poll", 3, 330 * time.Second, ""}, {"ai.media.import", 3, 210 * time.Second, ""}, {"ai.usage.settle", 10, 30 * time.Second, ""}, {"ai.run.recover", 3, 20 * time.Second, "ai.run.recover"}, {"ai.run.event.cleanup", 3, 30 * time.Second, "ai.run.event.cleanup"},
 	} {
 		definition, ok := catalog.Lookup(tc.task)
 		if !ok || definition.MaxAttempts != tc.attempts || definition.Timeout != tc.timeout || definition.AdminCreatable || definition.BuiltinKey != tc.builtin {

@@ -138,7 +138,7 @@ func (s *Service) saveInlineSpool(ctx context.Context, id auth.Identity, in Inli
 	}
 	finalize, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
-	if err := s.repository.FinishImport(finalize, f.ID, storageID, TransferReady, "", "", nil, s.now().UTC(), &spool.MIME, &spool.SizeBytes); err != nil {
+	if err := s.repository.FinishImport(finalize, f.ID, storageID, TransferReady, "", "", nil, s.now().UTC(), &spool.MIME, &spool.SizeBytes, f.TransferAttempts); err != nil {
 		return 0, err
 	}
 	if s.events != nil {
@@ -187,12 +187,16 @@ func (s *Service) RecoverDue(ctx context.Context, now time.Time, limit int) (int
 	return s.repository.RecoverDue(ctx, now, limit)
 }
 
-func (s *Service) PollOne(ctx context.Context) error {
+func (s *Service) PollOne(ctx context.Context, payload json.RawMessage) error {
 	if err := s.ValidateDependencies(); err != nil {
 		return err
 	}
+	taskID, ok := mediaTaskID(payload)
+	if !ok {
+		return errors.New("AI media poll payload is invalid")
+	}
 	now := s.now().UTC()
-	task, found, err := s.repository.ClaimPoll(ctx, now)
+	task, found, err := s.repository.ClaimPollByID(ctx, taskID, now)
 	if err != nil || !found {
 		return err
 	}
@@ -273,12 +277,16 @@ func (s *Service) createURLFile(ctx context.Context, task Task, runRow airun.Mod
 	return nil
 }
 
-func (s *Service) ImportOne(ctx context.Context) error {
+func (s *Service) ImportOne(ctx context.Context, payload json.RawMessage) error {
 	if err := s.ValidateDependencies(); err != nil {
 		return err
 	}
+	fileID, ok := mediaFileID(payload)
+	if !ok {
+		return errors.New("AI media import payload is invalid")
+	}
 	now := s.now().UTC()
-	file, found, err := s.repository.ClaimImport(ctx, now)
+	file, found, err := s.repository.ClaimImportByID(ctx, fileID, now)
 	if err != nil || !found {
 		return err
 	}
@@ -356,6 +364,63 @@ func (s *Service) ImportOne(ctx context.Context) error {
 		return s.events.MediaUpdated(ctx, runRow.ID, file.ID, storageID, now)
 	}
 	return nil
+}
+
+func (s *Service) ImportTimeoutForPayload(ctx context.Context, payload json.RawMessage, now time.Time) (time.Duration, error) {
+	if s == nil || s.repository == nil {
+		return 0, ErrUnavailable
+	}
+	fileID, ok := mediaFileID(payload)
+	if !ok {
+		return 30 * time.Second, nil
+	}
+	file, found, err := s.repository.FindImport(ctx, fileID)
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 30 * time.Second, nil
+	}
+	return s.importTimeout(file, now)
+}
+
+func (s *Service) importTimeout(file File, now time.Time) (time.Duration, error) {
+	const finishWindow = 30 * time.Second
+	if file.TransferStatus != TransferQueued && file.TransferStatus != TransferRetry && file.TransferStatus != Transfering || file.TransferDeadline == nil {
+		return finishWindow, nil
+	}
+	deadline := *file.TransferDeadline
+	if file.SourceExpiresAt != nil && file.SourceExpiresAt.Before(deadline) {
+		deadline = *file.SourceExpiresAt
+	}
+	if !deadline.After(now) {
+		return finishWindow, nil
+	}
+	remaining := deadline.Sub(now)
+	if remaining > time.Duration(1<<63-1)-finishWindow {
+		return time.Duration(1<<63 - 1), nil
+	}
+	return remaining + finishWindow, nil
+}
+
+func mediaTaskID(payload json.RawMessage) (int64, bool) {
+	var value struct {
+		ID int64 `json:"mediaTaskId"`
+	}
+	if json.Unmarshal(payload, &value) != nil || value.ID < 1 {
+		return 0, false
+	}
+	return value.ID, true
+}
+
+func mediaFileID(payload json.RawMessage) (int64, bool) {
+	var value struct {
+		ID int64 `json:"mediaFileId"`
+	}
+	if json.Unmarshal(payload, &value) != nil || value.ID < 1 {
+		return 0, false
+	}
+	return value.ID, true
 }
 
 func (s *Service) finishPollFailure(ctx context.Context, task Task, code, message string, now time.Time) error {
@@ -496,8 +561,6 @@ func (s *Service) cipherSeal(value string) (string, string, error) {
 	}
 	return sealer.Seal(value)
 }
-
-var _ = os.ErrNotExist
 
 func (s *Service) Retry(ctx context.Context, runID, userID, platformID int64) error {
 	return s.repository.RetryRunImports(ctx, runID, userID, platformID, s.now().UTC())

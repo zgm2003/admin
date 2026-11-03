@@ -52,6 +52,36 @@ func TestExecutorCompletesSuccessfulAttempt(t *testing.T) {
 		t.Fatalf("repository=%+v", repository)
 	}
 }
+
+func TestExecutorUsesPayloadSpecificTimeout(t *testing.T) {
+	now := time.Now().UTC()
+	observed := time.Duration(0)
+	definition := testDefinition("ai.run.execute")
+	definition.TimeoutForPayload = func(_ context.Context, _ json.RawMessage, at time.Time) (time.Duration, error) {
+		if !at.Equal(now) {
+			t.Fatalf("resolver time=%s want=%s", at, now)
+		}
+		return 400 * time.Millisecond, nil
+	}
+	definition.Execute = func(ctx context.Context, _ ExecutionContext) error {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return errors.New("execution has no timeout")
+		}
+		observed = time.Until(deadline)
+		return nil
+	}
+	repository := &executionRepositoryStub{job: Job{ID: 1, TaskType: "ai.run.execute", Payload: json.RawMessage(`{"runId":1}`), Status: JobQueued, MaxAttempts: 1, PublishToken: "dispatch"}}
+	catalog, _ := NewTaskCatalog(definition)
+	executor := NewExecutor(repository, catalog, "worker-1")
+	executor.now = func() time.Time { return now }
+	if err := executor.Execute(context.Background(), JobEnvelope{SchemaVersion: 1, JobID: 1, Attempt: 1, DispatchToken: "dispatch"}); err != nil {
+		t.Fatal(err)
+	}
+	if observed <= 0 || observed > 400*time.Millisecond {
+		t.Fatalf("execution timeout remaining=%s", observed)
+	}
+}
 func TestExecutorPersistsRetryableFailure(t *testing.T) {
 	now := time.Now().UTC()
 	definition := testDefinition("example")

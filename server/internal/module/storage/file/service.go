@@ -132,7 +132,18 @@ func (s *Service) ImportGeneratedMedia(ctx context.Context, id auth.Identity, in
 		if s.rules == nil {
 			return 0, apperror.DependencyUnavailable(nil)
 		}
-		target, err := s.rules.FindFileUploadTarget(ctx, id.PlatformID, "file")
+		var ruleCode string
+		switch {
+		case strings.HasPrefix(mimeType, "image/"):
+			ruleCode = "ai/image"
+		case strings.HasPrefix(mimeType, "audio/"):
+			ruleCode = "ai/audio"
+		case strings.HasPrefix(mimeType, "video/"):
+			ruleCode = "ai/video"
+		default:
+			return 0, apperror.InvalidRequest(errors.New("unsupported generated media MIME"))
+		}
+		target, err := s.rules.FindFileUploadTarget(ctx, id.PlatformID, ruleCode)
 		if err != nil {
 			return 0, mapError(err)
 		}

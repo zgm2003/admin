@@ -248,5 +248,76 @@ func StaticOptions(language string) map[string]any {
 		}
 		return en
 	}
-	return map[string]any{"operations": []EnumOption{{"text.generate", label("Text", "文字")}, {"image.generate", label("Image generation", "图片生成")}, {"image.edit", label("Image editing", "图片编辑")}, {"audio.speech", label("Speech", "语音生成")}, {"audio.transcribe", label("Transcription", "音频转写")}, {"video.generate", label("Video", "视频")}}, "executionStatuses": []EnumOption{{0, label("Queued", "排队")}, {1, label("Running", "执行中")}, {2, label("Waiting upstream", "等待上游")}, {3, label("Succeeded", "成功")}, {4, label("Failed", "失败")}, {5, label("Canceled", "已取消")}}, "usageStatuses": []EnumOption{{0, label("Unknown", "未知")}, {1, label("Complete", "完整")}, {2, label("Incomplete", "不完整")}}, "billingStatuses": []EnumOption{{0, label("Pending usage", "等待用量")}, {1, label("Pending settlement", "等待结算")}, {2, label("Settled", "已结算")}, {3, label("Retry settlement", "扣款待重试")}, {4, label("Needs review", "待核对")}}, "transferStatuses": []EnumOption{{0, label("No media", "无媒体")}, {1, label("Pending transfer", "待保存")}, {2, label("Transferring", "保存中")}, {3, label("Ready", "全部就绪")}, {4, label("Partially failed", "部分失败")}, {5, label("Failed", "全部失败")}}, "mediaTransferStatuses": []EnumOption{{0, label("Queued", "等待保存")}, {1, label("Transferring", "保存中")}, {2, label("Ready", "已保存")}, {3, label("Retry", "待重试")}, {4, label("Failed", "保存失败")}}, "constraints": map[string]int{"defaultLimit": 20, "maxLimit": 100, "maxHistoryDays": 31, "maxSummaryHours": 24, "maxFiles": 4}}
+	return map[string]any{
+		"operations": []EnumOption{
+			{"text.generate", label("Text", "文字")},
+			{"image.generate", label("Image generation", "图片生成")},
+			{"image.edit", label("Image editing", "图片编辑")},
+			{"audio.speech", label("Speech", "语音生成")},
+			{"audio.transcribe", label("Transcription", "音频转写")},
+			{"video.generate", label("Video", "视频")},
+		},
+		"executionStatuses": []EnumOption{
+			{0, label("Queued", "排队")},
+			{1, label("Running", "执行中")},
+			{2, label("Waiting upstream", "等待上游")},
+			{3, label("Succeeded", "成功")},
+			{4, label("Failed", "失败")},
+			{5, label("Canceled", "已取消")},
+		},
+		"usageStatuses": []EnumOption{
+			{0, label("Unknown", "未知")},
+			{1, label("Complete", "完整")},
+			{2, label("Incomplete", "不完整")},
+		},
+		"billingStatuses": []EnumOption{
+			{0, label("Pending usage", "等待用量")},
+			{1, label("Pending settlement", "等待结算")},
+			{2, label("Settled", "已结算")},
+			{3, label("Retry settlement", "扣款待重试")},
+			{4, label("Needs review", "待核对")},
+		},
+		"transferStatuses": []EnumOption{
+			{0, label("No media", "无媒体")},
+			{1, label("Pending transfer", "待保存")},
+			{2, label("Transferring", "保存中")},
+			{3, label("Ready", "全部就绪")},
+			{4, label("Partially failed", "部分失败")},
+			{5, label("Failed", "全部失败")},
+		},
+		"mediaTransferStatuses": []EnumOption{
+			{0, label("Queued", "等待保存")},
+			{1, label("Transferring", "保存中")},
+			{2, label("Ready", "已保存")},
+			{3, label("Retry", "待重试")},
+			{4, label("Failed", "保存失败")},
+		},
+		"requestStatuses": []EnumOption{
+			{0, label("Not sent", "未发送")},
+			{1, label("Sending", "发送中")},
+			{2, label("Completed", "完成")},
+			{3, label("Failed", "已知失败")},
+			{4, label("Outcome unknown", "结果不明")},
+		},
+		"toolCallStatuses": []EnumOption{
+			{0, label("Pending", "待执行")},
+			{1, label("Running", "执行中")},
+			{2, label("Succeeded", "成功")},
+			{3, label("Failed", "已知失败")},
+			{4, label("Outcome unknown", "结果不明")},
+		},
+		"requestUsageStatuses": []EnumOption{
+			{0, label("Not sent", "尚未发送")},
+			{1, label("Complete", "完整确认")},
+			{2, label("Unknown", "未知")},
+		},
+		"usageCompleteness": []EnumOption{
+			{0, label("Incomplete", "不完整")},
+			{1, label("Complete", "完整")},
+		},
+		"constraints": map[string]int{
+			"defaultLimit": 20, "maxLimit": 100, "maxHistoryDays": 31,
+			"maxSummaryHours": 24, "maxFiles": 4,
+		},
+	}
 }

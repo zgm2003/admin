@@ -4,6 +4,7 @@ import (
 	aimedia "admin/server/internal/module/ai/media"
 	airun "admin/server/internal/module/ai/run"
 	storagefile "admin/server/internal/module/storage/file"
+	"admin/server/internal/module/system/scheduler"
 	"context"
 )
 
@@ -22,3 +23,12 @@ func (a aiMediaAccess) Retry(ctx context.Context, runID, userID, platformID int6
 }
 
 var _ airun.MediaAccess = aiMediaAccess{}
+
+func buildAPISchedulerCatalog(files *storagefile.Service) (scheduler.TaskCatalog, error) {
+	definitions := append(scheduler.BuiltinDefinitions(nil, nil, nil), scheduler.NotificationBatchDefinition(nil), scheduler.PaymentReconcileDefinition(nil), storagefile.CleanupDefinition(files), storagefile.ScanDefinition(files))
+	aiDefinitions, err := scheduler.AIManagementDefinitions()
+	if err != nil {
+		return scheduler.TaskCatalog{}, err
+	}
+	return scheduler.NewTaskCatalog(append(definitions, aiDefinitions...)...)
+}
