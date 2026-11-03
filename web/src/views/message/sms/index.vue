@@ -11,6 +11,7 @@ import {
 } from '@/composables/useMessageAggregateTabs'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import { displayError } from '@/utils/displayError'
 import SmsConfigTab from './config/index.vue'
 import SmsLogTab, { type SmsLogFilter } from './log/index.vue'
 import SmsRateLimitPolicyTab from './rateLimitPolicy/index.vue'
@@ -66,7 +67,7 @@ function blankLogFilter(): SmsLogFilter {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message !== '' ? error.message : t('sms.loadFailed')
+  return displayError(error, t('sms.loadFailed'))
 }
 
 async function loadCatalog(): Promise<void> {

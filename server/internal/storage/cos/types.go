@@ -2,6 +2,7 @@ package cos
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -55,4 +56,19 @@ type ObjectClient interface {
 	CopyObject(context.Context, Credentials, Credentials, CopyRequest) (ObjectInfo, error)
 	DeleteObject(context.Context, Credentials, string) error
 	ReadObject(context.Context, Credentials, string, string, int64) ([]byte, error)
+}
+
+// StreamPutter is an optional extension used by server-side generated-media
+// imports. It deliberately remains separate from ObjectClient so existing
+// upload/test doubles do not need to implement a write path.
+type StreamPutter interface {
+	PutStream(context.Context, Credentials, PutStreamRequest) (ObjectInfo, error)
+}
+
+type PutStreamRequest struct {
+	ObjectKey     string
+	ContentType   string
+	ContentLength int64
+	Body          io.Reader
+	PublicRead    bool
 }

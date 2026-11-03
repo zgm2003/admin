@@ -31,7 +31,7 @@ func (f *fakeTransactionRepository) List(ctx context.Context, query ListQuery) (
 func TestServiceGetProjectsSignedBalanceBeforeAndDecimalStrings(t *testing.T) {
 	repo := &fakeTransactionRepository{value: Model{
 		ID: 12, TransactionNo: "PT2026101500000000000000000001", UserID: 7, PlatformID: 2,
-		AmountUnits: 3_000_000, BalanceAfterUnits: -700_000_000, OrderID: ptrInt64(99),
+		AmountUnits: 3_000_000, BalanceBeforeUnits: -703_000_000, Direction: DirectionCredit, BalanceAfterUnits: -700_000_000, OrderID: ptrInt64(99),
 		CreatedAt: time.Unix(1, 0), UpdatedAt: time.Unix(1, 0),
 	}}
 	got, err := NewService(repo).Get(context.Background(), 12)
@@ -46,7 +46,7 @@ func TestServiceGetProjectsSignedBalanceBeforeAndDecimalStrings(t *testing.T) {
 func TestServiceRejectsOverflowingBalanceBefore(t *testing.T) {
 	baseline := Model{
 		ID: 1, TransactionNo: "PToverflowfixture", UserID: 7, PlatformID: 2,
-		AmountUnits: 1, BalanceAfterUnits: math.MinInt64 + 1, OrderID: ptrInt64(9),
+		Direction: DirectionCredit, AmountUnits: 1, BalanceBeforeUnits: math.MinInt64, BalanceAfterUnits: math.MinInt64 + 1, OrderID: ptrInt64(9),
 		Username: "named-user", PlatformCode: "fixture-platform", CreatedAt: time.Unix(1, 0), UpdatedAt: time.Unix(1, 0),
 	}
 	got, err := NewService(&fakeTransactionRepository{value: baseline}).Get(context.Background(), 1)
@@ -62,7 +62,7 @@ func TestServiceRejectsOverflowingBalanceBefore(t *testing.T) {
 			row.AmountUnits, row.BalanceAfterUnits = boundary.amount, boundary.after
 			_, err := NewService(&fakeTransactionRepository{value: row}).Get(context.Background(), 1)
 			cause := errors.Unwrap(err)
-			if cause == nil || cause.Error() != "stored payment transaction balance before overflows" {
+			if cause == nil || cause.Error() != "payment transaction balance mismatch" {
 				t.Fatalf("arithmetic boundary must fail specifically on overflow: row=%+v err=%v cause=%v", row, err, cause)
 			}
 		})

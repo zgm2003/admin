@@ -11,6 +11,7 @@ const (
 
 func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {
 	group := routes.Group("/payment/transaction")
+	group.GET("/options", authenticate, handler.Options)
 	group.GET("", authenticate, requirePermission(PermissionList), handler.List)
 	group.GET("/:id", authenticate, requirePermission(PermissionDetail), handler.Get)
 

@@ -38,6 +38,37 @@ func TestGenerateObjectKeyIsSelfDescribingAndRoundTrips(t *testing.T) {
 	}
 }
 
+func TestGenerateStableObjectKeyIsDeterministic(t *testing.T) {
+	now := time.Date(2026, 9, 17, 13, 45, 1, 0, time.UTC)
+	coordinates := Coordinates{PlatformID: 1, RuleID: 20, CosConfigID: 10, Version: 3}
+	first, err := GenerateStable("ai", coordinates, "png", "request-key:0", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := GenerateStable("ai", coordinates, "png", "request-key:0", now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("stable keys differ: %q != %q", first, second)
+	}
+	if _, err := Parse(first); err != nil {
+		t.Fatal(err)
+	}
+	if first == mustStable(t, "ai", coordinates, "png", "request-key:1", now) {
+		t.Fatal("different seed reused key")
+	}
+}
+
+func mustStable(t *testing.T, code string, coordinates Coordinates, ext, seed string, now time.Time) string {
+	t.Helper()
+	value, err := GenerateStable(code, coordinates, ext, seed, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
 func TestGenerateObjectKeyRejectsInvalidInput(t *testing.T) {
 	now := time.Now().UTC()
 	valid := Coordinates{PlatformID: 1, RuleID: 1, CosConfigID: 1, Version: 1}

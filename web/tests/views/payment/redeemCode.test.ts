@@ -24,7 +24,10 @@ vi.mock('@/api/payment/redeemCode', () => ({
   redeemWalletCode: vi.fn(),
 }))
 vi.mock('@/api/payment/wallet', () => ({ getMyWallet: vi.fn() }))
-vi.mock('@/api/payment/transaction', () => ({ getMyTransactions: vi.fn() }))
+vi.mock('@/api/payment/transaction', () => ({
+  getMyTransactions: vi.fn(),
+  getTransactionOptions: vi.fn(),
+}))
 
 const row = {
   id: 1,
@@ -95,6 +98,17 @@ beforeEach(() => {
     hasWallet: true,
     currency: 'CNY',
     balance: '-7',
+  })
+  vi.mocked(transactionApi.getTransactionOptions).mockResolvedValue({
+    directions: [
+      { value: 1, label: '收入' },
+      { value: 2, label: '支出' },
+    ],
+    sourceTypes: [
+      { value: 1, label: '订单' },
+      { value: 2, label: '兑换码' },
+      { value: 3, label: 'AI 使用' },
+    ],
   })
   vi.mocked(transactionApi.getMyTransactions).mockResolvedValue({
     list: [],

@@ -2,6 +2,7 @@ package objectkey
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"regexp"
@@ -78,6 +79,25 @@ func Generate(code string, coordinates Coordinates, extension string, now time.T
 		strings.Trim(code, "/"), internalObjectMarker, objectKeyVersionSegment,
 		coordinates.PlatformID, coordinates.RuleID, coordinates.CosConfigID, coordinates.Version,
 		utc.Year(), utc.Month(), utc.Day(), random, extension), nil
+}
+
+// GenerateStable produces the same v2 key for the same idempotency seed and
+// physical coordinates. It is used by server-side imports so a retry cannot
+// create a second object after a database/network boundary failure.
+func GenerateStable(code string, coordinates Coordinates, extension, seed string, now time.Time) (string, error) {
+	if !ValidCode(code) || coordinates.PlatformID < 1 || coordinates.RuleID < 1 || coordinates.CosConfigID < 1 || coordinates.Version < 1 || strings.TrimSpace(seed) == "" {
+		return "", fmt.Errorf("%w: stable key input is invalid", ErrInvalid)
+	}
+	extension = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(extension)), ".")
+	if !extensionPattern.MatchString(extension) {
+		return "", fmt.Errorf("%w: extension is invalid", ErrInvalid)
+	}
+	hash := sha256.Sum256([]byte(seed))
+	utc := now.UTC()
+	return fmt.Sprintf("%s/%s/%s/p%d/r%d/c%d/v%d/%04d/%02d/%02d/%x.%s",
+		strings.Trim(code, "/"), internalObjectMarker, objectKeyVersionSegment,
+		coordinates.PlatformID, coordinates.RuleID, coordinates.CosConfigID, coordinates.Version,
+		utc.Year(), utc.Month(), utc.Day(), hash[:16], extension), nil
 }
 
 // Parse 严格解析 v2 key：只用 key 中的坐标，不用 code 推断路由。

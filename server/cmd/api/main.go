@@ -14,6 +14,15 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
+	aiagent "admin/server/internal/module/ai/agent"
+	aiconversation "admin/server/internal/module/ai/conversation"
+	aimedia "admin/server/internal/module/ai/media"
+	aiofficialmodel "admin/server/internal/module/ai/officialModel"
+	"admin/server/internal/module/ai/provider"
+	aiprovidermodel "admin/server/internal/module/ai/provider/model"
+	airun "admin/server/internal/module/ai/run"
+	runevent "admin/server/internal/module/ai/run/event"
+	aitool "admin/server/internal/module/ai/tool"
 	authcaptcha "admin/server/internal/module/auth/captcha"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
@@ -78,6 +87,12 @@ import (
 )
 
 type routerDependencies struct {
+	AIProvider         *provider.Handler
+	AIOfficialModel    *aiofficialmodel.Handler
+	AIAgent            *aiagent.Handler
+	AITool             *aitool.Handler
+	AIRun              *airun.Handler
+	AIChat             *aiconversation.Handler
 	PaymentConfig      *paymentconfig.Handler
 	PaymentPackage     *rechargepackage.Handler
 	PaymentOrder       *paymentorder.Handler
@@ -426,7 +441,52 @@ func run(logger *slog.Logger) error {
 	notificationRepository := notification.NewRepository(postgres.GORM, realtimeRepository)
 	notificationService := notification.NewService(notificationRepository, settingService)
 	schedulerRepository := scheduler.NewRepository(postgres.GORM)
+	aiRuntimeRepository := airun.NewRuntimeRepository(postgres.GORM)
+	aiRuntime := airun.NewRuntime(aiRuntimeRepository, redisClient, configGenerationRepository, configGenerationStore)
+	providerCipher, err := provider.NewCipher(settings.AppSecret, "provider-v1")
+	if err != nil {
+		return err
+	}
+	toolCipher, err := aitool.NewCipher(settings.AppSecret, "tool-v1")
+	if err != nil {
+		return err
+	}
+	providerRepository := provider.NewRepository(postgres.GORM)
+	providerService := provider.NewService(providerRepository, providerCipher, aiRuntime)
+	providerModelRepository := aiprovidermodel.NewRepository(postgres.GORM)
+	providerModelService := aiprovidermodel.NewService(providerModelRepository, aiRuntime)
+	providerModelMaintenance := aiprovidermodel.NewModelService(aiprovidermodel.NewModelRepository(postgres.GORM))
+	providerModelMaintenance.SetRuntimeCoordinator(aiRuntime)
+	officialRepository := aiofficialmodel.NewRepository(postgres.GORM)
+	officialService := aiofficialmodel.NewService(officialRepository)
+	catalogService := provider.NewCatalogService(providerRepository, providerCipher, provider.OpenAIModelsClient{Client: http.DefaultClient})
+	priceSync := provider.NewPriceSyncService(providerRepository, provider.OpenAISource{Client: http.DefaultClient}, providerModelService)
+	agentRepository := aiagent.NewRepository(postgres.GORM)
+	agentService := aiagent.NewService(agentRepository, aiRuntimeRepository, aiRuntime)
+	toolRepository := aitool.NewRepository(postgres.GORM)
+	toolService := aitool.NewService(toolRepository, aiRuntime)
+	toolService.SetCipher(toolCipher)
+	providerHandler := provider.NewHandler(providerService, providerModelMaintenance, catalogService, priceSync, providerModelService)
+	officialHandler := aiofficialmodel.NewHandler(officialService)
+	agentHandler := aiagent.NewHandler(agentService)
+	toolHandler := aitool.NewHandler(toolService)
+	aiRunRepository := airun.NewRepository(postgres.GORM, paymentwallet.NewRepository(postgres.GORM), schedulerRepository)
+	aiRunRepository.SetEvents(runevent.NewRepository(postgres.GORM, realtimeRepository))
+	aiRunService := airun.NewService(aiRunRepository, aiRuntime)
+	aiRunService.SetAdmission(airun.NewPolicyReader(settingService), airun.NewGate(redisClient, aiRunRepository))
+	aiRunHandler := airun.NewHandler(aiRunService)
+	aiQueries := airun.NewQueryService(airun.NewQueryRepository(postgres.GORM))
+	aiQueries.SetSummaryRedis(redisClient.UniversalClient())
+	aiRunHandler.SetQueries(aiQueries)
+	aiConversationRepository := aiconversation.NewRepository(postgres.GORM)
+	aiRunRepository.SetConversations(aiConversationRepository)
+	aiConversationService := aiconversation.NewService(aiConversationRepository)
+	aiConversationService.SetAgentResolver(aiRuntime.ConversationAgent)
+	aiConversationHandler := aiconversation.NewHandler(aiConversationService)
 	fileService := storagefile.NewService(storagefile.NewRepository(postgres.GORM, schedulerRepository), keys, cosClient, cosConfigService, uploadRuleService)
+	aiRunService.SetFileValidator(fileService)
+	aiTransferRetry := aimedia.NewTransferRetryService(aimedia.NewRepository(postgres.GORM, schedulerRepository))
+	aiRunHandler.SetMediaAccess(aiMediaAccess{files: fileService, retry: aiTransferRetry})
 	uploadRuleService.SetFileRegistrar(fileService)
 	profileService.SetAvatarCopier(fileService)
 	notificationDefinition := scheduler.NotificationBatchDefinition(nil)
@@ -477,16 +537,22 @@ func run(logger *slog.Logger) error {
 	operationLogEnqueuer := operationlog.NewQueueEnqueuer(queueClient)
 	authenticate := auth.Authenticate(authService)
 	router := buildRouter(routerDependencies{
-		CORSOrigin:     settings.CORSOrigin,
-		TrustedProxies: settings.TrustedProxies,
-		Logger:         logger,
-		Health:         health.NewHandler(healthService),
-		Auth:           auth.NewHandler(authService, settings.Auth.CookieSecure),
-		Captcha:        authcaptcha.NewHandler(captchaService),
-		AuthPlatform:   authplatform.NewHandler(authPlatformService),
-		Permission:     permission.NewHandler(permissionService),
-		Menu:           menu.NewHandler(menuService),
-		Role:           role.NewHandler(roleService),
+		AIProvider:      providerHandler,
+		AIOfficialModel: officialHandler,
+		AIAgent:         agentHandler,
+		AITool:          toolHandler,
+		AIRun:           aiRunHandler,
+		AIChat:          aiConversationHandler,
+		CORSOrigin:      settings.CORSOrigin,
+		TrustedProxies:  settings.TrustedProxies,
+		Logger:          logger,
+		Health:          health.NewHandler(healthService),
+		Auth:            auth.NewHandler(authService, settings.Auth.CookieSecure),
+		Captcha:         authcaptcha.NewHandler(captchaService),
+		AuthPlatform:    authplatform.NewHandler(authPlatformService),
+		Permission:      permission.NewHandler(permissionService),
+		Menu:            menu.NewHandler(menuService),
+		Role:            role.NewHandler(roleService),
 		User: account.NewHandler(userService, func(context *gin.Context) (int64, bool) {
 			identity, ok := auth.IdentityFromContext(context)
 			return identity.UserID, ok
@@ -653,6 +719,24 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	if dependencies.Realtime != nil {
 		realtime.RegisterAdminRoutes(adminRoutes, router, dependencies.Realtime, dependencies.AuthOrigin, dependencies.Authenticate)
+	}
+	if dependencies.AIProvider != nil {
+		provider.RegisterAdminRoutes(adminRoutes, dependencies.AIProvider, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIOfficialModel != nil {
+		aiofficialmodel.RegisterAdminRoutes(adminRoutes, dependencies.AIOfficialModel, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIAgent != nil {
+		aiagent.RegisterAdminRoutes(adminRoutes, dependencies.AIAgent, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AITool != nil {
+		aitool.RegisterAdminRoutes(adminRoutes, dependencies.AITool, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIRun != nil {
+		airun.RegisterAdminRoutes(adminRoutes, dependencies.AIRun, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIChat != nil {
+		aiconversation.RegisterAdminRoutes(adminRoutes, dependencies.AIChat, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.Notification != nil {
 		notification.RegisterAdminRoutes(adminRoutes, dependencies.Notification, dependencies.Authenticate, dependencies.RequirePermission)

@@ -1,5 +1,214 @@
 # 项目状态
 
+
+### AI 收尾实现与验证（2026-11-03，以本节为准）
+
+- 维护者要求持续完成；沿用当前功能分支和未提交改动，不操作 Git 历史、不执行正式业务库迁移、不启停服务、不调用付费 OpenAI 或真实 COS。此前复核列出的缺口已进入本轮修复；以下按实际代码和验证记录更新，不能将下方旧批次记录当作当前待办。
+- 计费已按冻结 operation/usage key/selector/quality/size 唯一选档；必要计量缺失时保留未知事实，不按零收费。Run 总额统一舍入后稳定分摊，结算前独立重建必要维度、实际数量、费率和规范化 usage 摘要，拒绝部分或篡改账单。音频按真实 token/时长/Unicode 字符计量，不叠加估算分钟价。
+- 未知副作用按租约和请求事实恢复，未知消费继续占用 reservation 并阻止后续消费；Claim 原子校验排队时限、取消和 Run deadline。已知费用失败与 durable retry 同事务，自动最多十次，耗尽保留 retryPending；新增具名 `ai-usage-reconcile`、`ai-usage-settle` 维护入口，默认预览，显式 apply，不改历史执行终态、不接受手工金额覆盖。
+- 媒体来源加密持久化；请求结果、usage、媒体事实和初始导入任务原子提交。转存冻结截止/物理对象键，持久重试与 claim 回收，不因跨午夜或配置切换重复 Put。输入文件冻结 owner/platform/ETag/大小/MIME 并受限读取；文件删除/清理检查 AI 媒体及头像引用。
+- 管理 Run 查询、本人 Chat 查询与权限分离；已补列表筛选、事件、请求/工具/费用/媒体游标分页、摘要缓存、取消和转存重试。工作台已接文字/图片生成编辑/语音生成转写、附件及会话维护；文本上下文来自持久化消息，真正 SSE 流合批写事件，刷新不重发生成。
+- 共享 outbox 背压由 Redis 全局有界容量观测传播；Worker 持续刷新，流输出按共享压力降频，过期观测拒绝继续写。事件清理只删旧的终态、已结算、已发布事件，每批 1000；事件断档返回 `resetReason=EVENTS_EXPIRED` 和最新序号，前端已接清空暂存文本并恢复持久消息/结果。
+- 2026-11-03 实测：`go test -p 1 ./internal/module/ai/...` 全部通过；`go test -short -p 1` 的 storage/payment/scheduler/realtime/两个维护命令全部通过；`go vet` AI/入口和前端 `typecheck`、`build`、architecture、AI/payment 定向 61 项均通过。`storage/file` 全集成在拆分测试 SQL 后通过。
+- 前端全量 Vitest 曾完整运行 140 文件、1282 用例，132 文件/1265 用例通过，8 文件/17 用例失败，退出码 1；支付相关失败已在定向 61 项复跑中通过，但全量需由维护者重新执行确认，其余失败需继续基线归因。
+- 仍未执行：正式 core/seed/payment/menu 迁移与业务库快照刷新、真实供应商生成/COS 验收、浏览器端到端验收和目标规模吞吐压测。视频新建按当前设计禁用，保留具名协议与历史恢复；不能把此状态称为四媒体真实供应商验收完成。隔离 schema 验证不等于业务库已迁移。
+## AI 当前工作：基础实现、资金流水与 Core 维护交付已落地，业务库未迁移（2026-10-28）
+
+### Run 准入与一致配置快照（2026-10-28，继续实施）
+
+- 正在继续已确认的整体方案；沿用功能分支和现有未提交改动，没有提交、迁移业务库、启停服务或发起付费调用。
+- `ai/run` 已加入钱包短事务准入、跨平台同用户在途统计、同请求键重放与冲突、稳定 execute Job 和配置快照；
+  先锁钱包后重查幂等键，避免同请求并发 INSERT 冲突，预留不直接扣款。未知用量继续阻止新消费。
+- 已加入 26 项工程 Policy 的 generation-aware setting reader、Redis 用户/全局原子双桶及跨实例容量 leader；
+  缺失、损坏、过期容量和 Redis 失败闭合，不逐请求查询配置或退回本地值。
+- `Runtime` 正在接入 `ai.runtime/global` 代际快照和 token mutation lease；快照为完整当前绑定、冻结凭据/价格/工具版本，
+  未来价格边界截断 TTL，工具切片及 JSON 深拷贝，旧 Run 不读取当前指针。
+- 已实际通过 Run 准入/幂等/并发/跨平台未知用量 PostgreSQL 隔离测试、Policy/Gate 定向测试、
+  双 Redis client 热读/配置 mutation/坏状态拒绝测试；新增 RuntimeRepository 的价格时间边界集成测试仍在验证。
+- Provider/价格和 Agent/Tool 的维护接口及前端仍在分工收口；Run 执行、对话/事件、媒体/COS、main 显式装配、
+  六页全量验收与容量目标尚未完成。此记录不代表 11 任务整体完成。
+
+### AI 整体实施（2026-10-28，持续执行）
+
+- 维护者要求“做完为止”，后续按已确认 11 任务持续推进，不再以单个切片完成作为整体结束。
+- 已在当前工作区新建功能分支 `feat/ai-module-20261028`，完整保留已有未提交内容；不自动 commit、合并、推送或真实迁移。
+- 分工：Provider/标准模型/价格版本、Agent/Tool、Scheduler/Realtime 各自限定文件所有权并行实现；根代理负责 Run/账务/媒体整合与最终验证。
+  已确认的 21 表 SQL 是共同契约，接口先对齐后装配，不互相改写共享文件。所有行为切片保留失败测试→最小实现→通过。
+- Ruling: 沿用当前含前序未提交实现的工作区并切功能分支，不新建空 worktree 或自动提交迁移改动；避免丢失既有工作。
+- Ruling: 并行仅限互不重叠的模块文件，跨模块装配、公共合同和最终检查由根代理串行收口；Admin API 泛型遵循 AGENTS.md，
+  不采用 CRUD Skill 旧版逐接口 DTO parser 指示；本文件仍为唯一长期进度入口。
+- 业务库写入、停服、付费上游及真实 COS 验收仍按计划单列维护授权，不以“做完”推定这些外部动作的许可。
+
+### Core 维护交付（2026-10-28，代码与隔离验证完成）
+
+- 本轮继续已批准计划，目标为工程策略 seed、`ai.runtime/global` generation/outbox 和 core 维护 runner；
+  保留21表结构SQL及既有指纹，将 seed 放入 `2026-10-28-ai-core-seed.sql`，runner 在同一事务依次执行两份SQL。
+- 涉及 AI、system setting/config cache、Scheduler；没有新HTTP端点或权限变更。先核对真实库，只在隔离 schema 做写入测试；
+  业务库迁移、服务启停、付费调用与Git提交仍不在本轮自动操作范围。工作区已有上一轮改动全部保留。
+- 已新增 `docs/database/2026-10-28-ai-core-seed.sql`：幂等写入 26 个 `ai.run`/`ai.media` 工程策略，首次变更只推进
+  `system.setting/global` 一代并写对应 outbox；共享结构/generation、AI runtime 同代 outbox、AI setting 约束、调度器约束和唯一/外键
+  事实缺失或漂移时在同一事务拒绝。已有管理值不覆盖，策略值统一由数据库约束为正整数、有效内置数字配置；不写供应商、凭据、模型或价格。
+- 同一 seed 初始化 `ai.runtime/global` 的 generation=1/outbox=1，并登记两个停用的具名周期任务：`ai.run.recover` 每分钟、
+  `ai.run.event.cleanup` 每日 03:00（Asia/Shanghai，`next_run_at` 为空）；Worker 具名处理器装配完成前不会自动启用。
+  任务、配置和 generation 重放会逐项核验，不重置已发布 outbox 或管理员修改的设置；不清 Redis。
+- 新增 `docs/database/2026-10-28-ai-core-seed.ps1`：显式 `-ServicesStopped`，检查无其他客户端，先 custom-format 全库备份并
+  `pg_restore --list` 验证，再以同一 `psql --single-transaction --file=ai-core.sql --file=ai-core-seed.sql` 执行；审计保存
+  两份 SHA-256、前后事实、备份摘要和阶段，区分 `not_started`/`rolled_back`/`unknown`/`committed`，不记录 DSN，
+  PostgreSQL 连接/客户端错误不冒称回滚。失败保留备份和审计，提交后核验失败明确提示保持停服。
+- 新增 `server/internal/module/ai/core_seed_migration_test.go`、`core_runner_test.go`：真实 PostgreSQL 隔离 schema 覆盖首次/重放、
+  管理值保留、generation/outbox、调度任务、策略非法编辑、共享表结构/索引/约束/外键漂移、组合事务回滚、core 指纹不变，
+  runner 备份/归档/事务/未知提交/提交后校验/幂等复跑九条路径，以及从 runner AST 提取只读事实函数对真实隔离 PostgreSQL 的核验。
+- 本轮通过：`go test -p 1 ./internal/module/ai/... -count=1 -timeout=4m`；`go test -short -p 1 ./internal/module/payment/... -count=1 -timeout=3m`；
+  `go vet ./internal/module/ai/... ./internal/module/payment/...`；`go build ./cmd/api ./cmd/worker`；`git diff --check`。
+  扩大/并行验证时曾出现 PostgreSQL 操作及脚本只读核验子进程超时，随后串行定向复跑和完整 AI 包复跑均退出 0；未修改共享超时配置。
+- 业务库仍仅做只读核对，未执行 core SQL/seed、未刷新 `current.sql`、未启用 AI 调度、未启停服务、未调用付费供应商、未上传 COS、未提交 Git。
+- 当前只交付 core 维护切片，未将 11 任务整体标记完成；下一步为 Provider/模型目录/美元参考价同步与人民币售价版本服务，
+  后续继续 Agent/Tool、Run/Worker、媒体/COS、六页/RBAC 和容量验收。菜单迁移、AI 静态 task catalog/真实处理器与启用仍待各自切片闭合。
+
+### 资金流水扩展切片（2026-10-28，继续实施）
+
+- 新增 `docs/database/2026-10-28-ai-payment.sql` 与同名 `.ps1`：旧流水按 numeric 校验回填收入方向和真实入账前余额；
+  新增 AI charge 来源、来源 XOR/方向关联、numeric 余额守恒和 AI 来源唯一外键。首次及重复执行均对照 PostgreSQL
+  解析后的列、约束、索引、外键和不可变触发器核验，拒绝同名弱约束、部分结构、禁用/空实现/列限定 UPDATE 保护。
+- 维护 runner 要求显式停服声明、无其他客户端、完整备份和归档可读性检查；记录文件摘要、迁移前后事实、阶段、
+  失败时间与复跑结果。区分 `not_started`、`rolled_back`、`unknown`、`committed`；连接/客户端错误不得冒称已回滚。
+  不记录 DSN/密钥，不清 Redis，不修改配置 generation/outbox 或菜单；本轮仅验证脚本，未对业务库运行 runner。
+- `payment/transaction` 增加 Direction、持久化 BalanceBeforeUnits、AIUsageChargeID，统一校验正金额、方向/来源与
+  int64 算术；DTO 直接使用持久化 before，不再从 after-amount 反推。管理/本人列表支持 direction/sourceType，静态
+  options 只依赖语言与代码、零 PostgreSQL/Redis 查询。沿用既有页面/读取权限，无新增公开扣款入口。
+- `payment/wallet` 增加仅用于已准入请求结算的 `DebitTx`：钱包行锁、正金额、int64 下溢检查、允许扣负；
+  `payment/order`、`payment/redeemCode` 显式写收入方向及 CreditTx 返回的 before，重放继续核对不可变账务事实。
+- 前端 `payment/transaction`、`payment/myWallet` 同步 DTO、方向/来源筛选和双语展示，候选与文案消费后端 options，
+  未知值保留原值；不新增菜单或越过钱包准入实现生成入口。
+- 实际通过：`go test -short -p 1 ./internal/module/ai/... ./internal/module/payment/... -count=1 -timeout=3m`；
+  `go vet ./internal/module/ai/... ./internal/module/payment/...`；`go build ./cmd/api ./cmd/worker`；
+  前端三文件25项定向 Vitest、`pnpm typecheck`、`pnpm build`（保留既有大 chunk 警告），以及 `git diff --check`。
+- 真实 PostgreSQL 隔离验证覆盖 AI core 与 payment 迁移组合、首次/重放、非法来源/负数金额/算术溢出、不可变事实、
+  触发器漂移和失败回滚；列限定触发器问题已实际红灯复现后补保护。完整迁移测试曾通过，后续扩大复跑有连接、
+  CREATE SCHEMA 或查询超时，未改共享连接/超时配置或把环境失败冒称全绿；失败的 wrong_source_check 定向复跑已通过。
+  runner 的7种受控成功/失败路径（含未知提交、备份失败审计）通过，未进行真实业务库备份/恢复演练。
+- 新增兑换码真实 PostgreSQL 隔离测试并通过：负余额入账 before/credit、本人重复兑换、他人重放拒绝、四路并发同码
+  仅一笔入账；钱包并发 Credit/Debit、负余额/下溢/取消回滚与订单入账/幂等另有定向隔离验证。
+- 最后串行执行 `go test -p 1 ./internal/module/payment/transaction -run '^TestAILedgerMigrationRejectsDriftOnReplay$/^wrong_source_check$' -count=1 -timeout=1m`、
+  `go test -p 1 ./internal/module/payment/order -run '^TestConfirm' -count=1 -timeout=3m`、
+  `go test -p 1 ./internal/module/payment/wallet -run '^TestDebitTx' -count=1 -timeout=2m`，同一命令链退出码 0。
+  已按精确名称清理本批超时遗留的6个隔离测试 schema；再次以只读事务核对 `public` AI 表数量和 AI 流水新增列数量均为0，
+  `test_ai_ledger_*` 无残留。未运行全仓库 Go/Vitest、多实例压测、浏览器手工验收或真实维护窗口备份/恢复。
+- 本段资金切片结束时尚未交付：core 策略/缓存/调度 seed 与维护 runner、菜单迁移和 AI 的 Provider/价格同步/Agent/Tool/Run/Worker/前端。
+  Core 维护交付现见上方本轮记录。本批不是11任务整体完成。正式执行仍须单独确认停旧写入、备份和维护窗口；旧程序不兼容新流水列。
+  未执行 AI 业务表迁移、真实扣费/付费生成、COS 上传、服务启停或 Git 提交，`current.sql` 未刷新。
+
+### 首批交接复核（2026-10-28，资金扩展前）
+
+- 重新执行 `cd D:\admin\server; go test -p 1 ./internal/module/ai/... -count=1 -timeout=3m`：`internal/module/ai` 与
+  `internal/module/ai/usage` 全部通过；随后 `go vet ./internal/module/ai/...`、`go build ./cmd/api ./cmd/worker`
+  和 `git diff --check` 均以退出码 0 完成。
+- 以 `POSTGRES_DSN` 连接业务库执行 `BEGIN READ ONLY` 结构核对：`transaction_read_only=on`；
+  `payment_transaction` 仍只有旧的 10 列、充值方向约束和两条不可变触发器，尚未加入 `direction`、
+  `balance_before_units` 或 `ai_usage_charge_id`；`public` AI 表数量仍为 0。未写入或变更业务库。
+- 交接时 AI 合同、Run 快照保护和精确计费计算已具备定向测试；资金扩展的后续实际产出见上方本轮条目，
+  不能将任一切片通过视为 AI 模块整体完成。
+
+### 首批基础实现记录（2026-10-28，此前批次）
+
+- 维护者已认可整体方向，并确认：管理员切换 Agent 当前供应商只影响新 Run；排队、执行、恢复中的已有 Run 继续原供应商及冻结版本，不自动故障切换。
+- 首期具名供应商确定为 OpenAI；已实际获取官方 GET /models 说明和 Pricing Markdown（HTTP 200）：模型目录没有价格字段，
+  报价使用固定官方文档源，不杜撰价格 API。HTML 获取曾 403、后续 Markdown 重取曾超时；失败闭合和来源审计已写入设计。
+- 范围保持 Admin 6 页、38 action、21 张 AI 表、统一 Run/计费/媒体链路与 payment_transaction 扩展；不涉及 Canvas。
+- 已将设计更新为 v1.2，并创建本次本地计划 `docs/local-work/ai-module-implementation-plan.md`（Git 忽略、不提交）。
+  计划共11任务，覆盖21表/三份幂等迁移、Provider/价格、Agent/Tool、账本、Run、工具循环、双租约/实时恢复、媒体/COS、六页/RBAC及容量验收。
+- 额外收口：人民币价保留按完整计价身份匹配，单位/计价数量变化需重新确认；来源档位、估算每张与token单价不能混淆。
+- 实施验收条件：每个任务有定向失败测试→实现→通过，配置/计费/任务/权限随切片闭合；真实迁移与付费上游仍单列授权和验收。
+- 文档收口后按维护者“继续”开始局部实现；以下为本批实际产出，不表示11任务或整个AI模块已完成。
+- 方案执行已在原工作区开始：新增 `server/internal/module/ai/contract.go` 与 `contract_test.go`，先覆盖 Operation、TextProtocol、RunStatus、PriceStatus 和严格 JSON object/array 形状；TDD 红灯（缺少契约类型）后补最小实现，`cd D:\admin\server; go test ./internal/module/ai -count=1` 通过。
+- 已新增 `docs/database/2026-10-28-ai-core.sql` 的21表结构首版和 `ai/schema_test.go`，在真实 PostgreSQL 隔离测试 schema 验证首次创建、重复执行结构摘要不变、结构漂移拒绝、凭据版本不可变、美元来源只读、人民币预览可改/发布后不可改、直接插入已发布价格拒绝、NaN价格/数量拒绝、Run快照不可改、终态不可重启和启用Agent当前绑定有效性。
+- 已新增 `ai/usage/calculator.go` 与测试：人民币整数units/精确有理数、token/图片/小数时长、倍率、Run总额只向上取整一次、按余数和itemKey稳定分摊；覆盖空输入/非法小数/重复项/负价/零单价/零数量/溢出和超过float精确范围的数量。此计算器尚未接入余额扣款或公开API。
+- 实际通过：`cd D:\admin\server; go test -p 1 ./internal/module/ai/... -count=1 -timeout=3m`（含真实PostgreSQL隔离用例）、`go vet ./internal/module/ai/...`、`go build ./cmd/api ./cmd/worker`，新Go文件gofmt及 `git diff --check`。先出现缺文件/类型与保护缺失的红灯，再补实现通过；连接曾发生超时，缩小探针后重跑原配置最终通过，未因此修改共享连接配置。
+- 业务库仅做 `BEGIN READ ONLY` 结构核对；完成后再次确认 `public` 的AI表仍为0。隔离测试schema已清理（包含首次超时留下的本批schema）；未执行真实业务表迁移、充值/扣费、菜单seed、真实OpenAI生成或COS上传，未启停服务或提交Git。
+- 首批结束时尚未完成：core的策略/缓存/调度seed与维护runner、payment流水扩展和menu迁移；资金扩展现见上方本轮记录，其余仍待后续任务。core SQL目前是已做隔离验证的结构首版，不作为已具备生产维护窗口执行条件的整体交付。
+
+## AI 定价评审修订（2026-10-28，文档已更新，待整体评审）
+
+- 维护者确认：供应商美元参考价只读同步；新计费项的人民币售价先复制同计价单位美元数值，管理页可手动修改人民币售价。
+  后续同步保留已有人民币价，不强制美元/人民币长期 1:1、不使用真实汇率，不修改充值入账规则。
+- 价格归供应商模型，表名调整为 `ai_provider_model_price_version`、`ai_provider_model_price_rate`；保留标准模型目录与只读价格聚合展示。
+  LLM 按输入/缓存输入/输出 token 分项，图片按质量/尺寸与实际生成张数计费；实际收费使用人民币售价和 Agent 倍率。
+- 同步形成预览、确认后生效；美元来源不可人工改写，人民币改价追加版本，旧 Run/历史账单不回算。独立权限调整为
+  `ai:provider:syncPrice`、`ai:provider:updatePrice`，普通编辑/模型目录同步不能绕过；总表数和菜单节点数不因本次定价修订增加。
+- 已修改 `ai-module-design.md` v1.1，并同步 `ai-module-inventory.md` 的当前目标说明；旧项目表名及既有盘点事实保留。
+- 本次仅修订 Markdown，未编写运行时代码、执行 DDL/seed、连接或写业务库、调用真实供应商报价/生成、启停服务或提交 Git。
+- 此条原待澄清的供应商切换语义已由维护者再次确认，见上方“AI 当前工作”；定价修订事实保留。
+
+## Admin AI 最终设计稿（2026-10-28，文档完成，待维护者评审）
+
+> 定价以上方评审修订与最终设计稿 v1.1 为准；下方盘点中的旧价格候选不作为当前实施依据。
+
+- 目标文档：`docs/agent/ai-module-design.md`。已收敛 1 个 AI 目录、6 个页面、38 个隐藏 action（共 45 个节点），
+  以及 21 张新 AI 表的字段/约束/索引、现有 `payment_transaction` 消费方向/扣前余额/AI 来源扩展；钱包结构不变。
+- 统一文字/图片/视频/音频 Run，默认 Responses；Agent 支持多个供应商模型绑定但每次仅用当前项，失败即 Run 失败，
+  管理员手动切换只影响新 Run；提示词直接维护在 Agent 并冻结快照，不做独立 Prompt 库、Content/RAG 或 Canvas。
+- 方案覆盖本人钱包准入/在途/允许已准入请求扣负、精确分项计费、幂等结算、未知用量核对、真实工具执行、媒体转存和失败恢复。
+  队列复用 Scheduler，长期任务新增 Job token 续约，实时事件复用 realtime.AppendTx/outbox；不另造余额缓存或调度系统。
+- 存储需补服务端有界 spool/流式导入、实际大小/MIME 校验、独立转存截止、引用/清理保护、安全音视频 inline；
+  COS 配置全局共享，Admin 复用当前启用上传规则增加 AI 用途，不创建第二条启用规则。
+- 价格从供应商实际支持的报价接口同步，只读保存美元参考价；人民币售价新项同数值初始化、管理页可改、再次同步保留旧值。
+  同步只产生预览，确认生效后版本不可变；不使用真实汇率或伪造供应商不存在的报价接口。
+- 已执行真实 `admin.public` 只读结构查询，transaction_read_only=on；AI 表/菜单均为 0，核对钱包、流水、存储字段与约束。
+  已进行菜单/Schema/运行时三路只读评审并修正权限旁路、输入媒体来源、转存顺序/截止、双租约和恢复预算等问题。
+- 验证：`git diff --check` 与显式 Markdown/表数/逐表章节/页面/action/链接/空白一致性检查。未执行 AI DDL、seed、生成消费、
+  COS 上传或代码测试/构建/压测；没有运行时代码改动、服务启停、Git 提交或业务库写入。
+- 下一步：维护者评审最终 MD；通过后再制定实施计划和 TDD 切片。执行迁移需另获明确授权，不因文档完成自行启动实施。
+
+## AI 模块启动前盘点（2026-10-28，盘点文档完成；Admin 范围澄清中）
+
+> 以下保留前期盘点过程；目标方案与当前交付状态以上方最终设计稿条目为准。
+
+- 已只读核对当前 `D:\admin`、旧 `admin_back_go`、旧 `admin_front_ts`、Canvas 和
+  `D:\github-project\sub2api`，新增事实清单 `docs/agent/ai-module-inventory.md`；本轮未改运行时代码、数据库、
+  菜单、权限或 Canvas，未提交 Git。
+- 旧 Admin AI 为 1 个目录、7 个历史页面；旧结构为 33 张 `ai_*` 表和 3 张钱包表。当前项目尚无 AI 后端模块、Admin
+  AI View/API 或 API/Worker AI 装配；候选单数菜单和 page/action 权限尚未写入数据库。
+- 维护者已明确：本期只在 Admin 系统内部建设 AI，Canvas 暂不改动、不接入；不以 Canvas 页面、配置替换或用户侧
+  接口联调作为本期交付项。Admin 消费入口确认纳入文字、图片、视频、音频四类能力，统一 Run 与计费事实。
+- 媒体保存已确认：生成的图片、视频、音频统一转存现有 COS，复用存储域文件记录，AI 关联 Run、媒体元数据与对象坐标，
+  不长期依赖上游临时链接。目标草案区分生成与转存状态；转存可独立重试，不重新生成、不重复扣费，保留已发生的上游用量。
+- 首期 Provider/协议范围已确认：以 OpenAI 兼容为主，**默认使用 Responses API** 编排 Agent 对话与工具；
+  Chat Completions 保留为可显式配置的兼容协议，支持自定义 Base URL；Images/Audio 按对应能力接口调用，视频采用独立异步适配。
+  Provider/Model 的协议与工具能力需显式核对，不静默降级协议；不把普通文本接口视作视频兼容保证。
+- 已核对 sub2api 的真实边界：准入阈值、固定费用全额检查、变动费用首笔在途预留、并发预留、事务扣费幂等和缓存失效。
+  维护者接受参考其余额消费机制，不再要求另定固定最大透支金额；允许已准入请求据实结算成负数，余额不足后拒绝新请求，
+  不把“小负数”写成源码保证。实现继续使用当前整数 units，估算参数、金额换算和依赖故障策略在具体设计中明确，
+  不直接复制浮点美元或故障兜底实现。
+- 资金方向暂保持候选方案：`payment_transaction.amount_units` 继续正数，新增 `direction + source/AI charge`，
+  不复制旧钱包的非负 CHECK；正式迁移前需冻结来源 XOR、唯一幂等键、溢出约束、负余额结算和历史查询兼容。
+- 菜单生成入口暂按推荐草案收敛为 1 个「AI 工作台」页面，内设文字/图片/视频/音频页签，与 Provider、Official Model、Agent、
+  Tool、Run 共 6 个 Admin 页面；Context/RAG 页面明确排除，最终 page/action 组合仍待确认。
+- 计费方式已确认：按实际用量结算，模型价格 × token/媒体用量 × Agent 倍率；Run 结束结算，沿用 sub2api 的准入、在途
+  预留、事务幂等和允许已准入请求负余额的机制。`ai_usage_charge_items` 需要保留 token/媒体维度、价格快照、倍率和结算状态。
+- 官方模型菜单已确认保留：负责标准模型身份与能力；不允许修改供应商官方美元报价。供应商模型拥有美元报价同步和内部
+  人民币售价，Agent 绑定实际供应商模型并设置倍率，应用只选择 Agent。官方模型页只读聚合展示价格事实。
+- 供应商模型价格更新已确认：同步只读保存美元参考价；新计费项人民币初价复制同单位美元数值，管理页可手动调整并确认发布；
+  再次同步保留已有人民币售价。价格采用版本和生效时间，已结算 Run 永远使用原内部人民币价格快照，不因后续调价重算历史消费。
+- Admin AI 消费归属已确认：扣当前登录操作者自己的 `payment_wallet`，管理员同样遵守余额准入和结算规则；Run 保存操作者快照，
+  管理监控可按授权查看，但不能把他人的消费记到当前管理员钱包。
+- 工作台调用方式已确认：应用只能选择 Agent，不能直接选择 Provider/Model；Provider 先配置，Agent 再绑定多个供应商及其模型、提示词、
+  Tool 和倍率，工作台只展示可用 Agent。Run 必须保存 Agent 及其模型配置快照。
+- 系统提示词归属已确认：直接在 Agent 配置内维护，Run 保存实际使用内容的快照，修改 Agent 不回写历史 Run；本期不新增独立
+  Prompt 库、菜单、管理 API 或提示词库表，不迁移旧 `ai_prompts`，Canvas Prompt 库服务端化也不在本期范围。
+- Agent 多供应商策略已确认：一个 Agent 可以配置多个供应商及其模型绑定，每次仅使用当前选定的一个，工作台仍只选择 Agent。
+  模型调用失败即 Run 失败，不自动切换或负载均衡；管理员在 Agent 内手动切换当前绑定，不修改供应商全局启停状态。
+  Run 冻结创建时选定的绑定，各轮工具循环使用同一供应商/模型/协议；管理员切换仅影响新 Run，已发生用量保留并据实结算。
+- Tool 范围已确认：支持真实 HTTP 和内置工具调用，Agent 可绑定执行；记录参数、结果、超时、错误和调用审计；本期不开放任意
+  代码或命令执行。下一步收口：最终 page/action 组合、媒体任务与统计事实的表结构。
+- Responses 工具循环已补入目标草案：模型请求工具、服务端执行并回传结果、模型继续生成；同一 Run 记录各轮模型用量和工具调用，
+  去重汇总后结束结算，失败/取消仍保留已发生费用。工具循环限制、有副作用调用幂等和恢复细节在正式设计中冻结。
+- Context/RAG 已明确不做：不做文档上传、切片、向量检索、Embedding/Rerank、会话记忆工程，不引入 `ai_context_*` 表或向量库。
+  不再追问固定最大透支金额；整体设计确认前不开始 AI 代码、DDL、菜单 seed 或权限迁移。
+- 验证：已运行 `git diff --check`，另显式检查两份文档的默认协议、尾随空格与代码围栏（覆盖未跟踪文档）；
+  已读取 OpenAI 官方 Function calling 指南（HTTP 200），核对工具循环与调用结果关联，仅做文档检查、未请求模型。
+  已做源码和静态结构核对，未运行完整 Go/Vitest/build；
+  sub2api 单测尝试受其 `go.mod` 要求 Go 1.27.3、当前本机 Go 1.26.5 阻塞，未宣称测试通过。
+
 ## 支付配置回调地址展示与输入修正（2026-10-24，代码与定向验证完成）
 
 - 根因：数据库实际保存的是完整地址（当前真实配置为 `https://zgm2003.cn/api/admin/v1/payment/callback/alipay/1/1`），前端更新凭据时却读取了仅供内部生成用的模板字段，导致界面显示 `{configId}/{version}`。

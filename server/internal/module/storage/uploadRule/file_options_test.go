@@ -18,7 +18,7 @@ func TestFileUploadOptionsMatchBusinessPurpose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, purpose := range []string{"", "avatar"} {
+	for _, purpose := range []string{"", "avatar", "ai/input"} {
 		wantCode := "file"
 		if purpose == "avatar" {
 			wantCode = "avatar"

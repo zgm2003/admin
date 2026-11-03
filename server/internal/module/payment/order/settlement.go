@@ -149,6 +149,9 @@ func (r *Repository) Confirm(ctx context.Context, payment ConfirmedPayment, call
 
 		existing, findErr := r.transactions.FindByOrderTx(ctx, tx, order.ID)
 		if findErr == nil {
+			if existing.Validate() != nil || existing.Direction != transactionmodule.DirectionCredit {
+				return ErrSettlementInvariant
+			}
 			if existing.UserID != order.UserID || existing.PlatformID != order.PlatformID || existing.AmountUnits != units || existing.OrderID == nil || *existing.OrderID != order.ID {
 				return ErrSettlementInvariant
 			}
@@ -165,7 +168,7 @@ func (r *Repository) Confirm(ctx context.Context, payment ConfirmedPayment, call
 			return ErrSettlementInvariant
 		}
 
-		wallet, _, err := r.wallet.CreditTx(ctx, tx, order.UserID, units, now)
+		wallet, before, err := r.wallet.CreditTx(ctx, tx, order.UserID, units, now)
 		if err != nil {
 			if errors.Is(err, walletmodule.ErrBalanceOverflow) {
 				return ErrBalanceOverflow
@@ -173,7 +176,7 @@ func (r *Repository) Confirm(ctx context.Context, payment ConfirmedPayment, call
 			return err
 		}
 		orderID := order.ID
-		transaction := &transactionmodule.Model{UserID: order.UserID, PlatformID: order.PlatformID, AmountUnits: units, BalanceAfterUnits: wallet.BalanceUnits, OrderID: &orderID, CreatedAt: now, UpdatedAt: now}
+		transaction := &transactionmodule.Model{UserID: order.UserID, PlatformID: order.PlatformID, Direction: transactionmodule.DirectionCredit, AmountUnits: units, BalanceBeforeUnits: before, BalanceAfterUnits: wallet.BalanceUnits, OrderID: &orderID, CreatedAt: now, UpdatedAt: now}
 		transaction.TransactionNo, err = transactionmodule.NewTransactionNo()
 		if err != nil {
 			return err

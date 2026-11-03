@@ -38,7 +38,7 @@ func (s *Service) FileUploadOptions(ctx context.Context, platformID int64, purpo
 	// 编码是调用场景的后端契约，不是让文件库用户选择的存储配置。
 	code := "file"
 	switch purpose {
-	case "":
+	case "", "ai/input":
 	case "avatar":
 		code = "avatar"
 	default:

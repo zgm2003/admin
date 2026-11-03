@@ -18,6 +18,7 @@ import {
 import type { RoleListItem, RoleListQuery, RoleFormOptions } from '@/api/permission/role'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import { displayError } from '@/utils/displayError'
 import type { TablePaginationState } from '@/components/AppTable'
 import type { SearchFormModel } from '@/components/AppSearch'
 import RoleFormDialog from './components/RoleFormDialog/index.vue'
@@ -88,8 +89,7 @@ async function loadFormOptions(): Promise<void> {
   try {
     formOptions.value = await getRoleFormOptions()
   } catch (error: unknown) {
-    formOptionsError.value =
-      error instanceof Error && error.message ? error.message : t('appTable.requestFailed')
+    formOptionsError.value = displayError(error, t('appTable.requestFailed'))
   }
 }
 
@@ -103,8 +103,7 @@ async function loadRoles(): Promise<boolean> {
     total.value = result.total
     return true
   } catch (error: unknown) {
-    loadError.value =
-      error instanceof Error && error.message ? error.message : t('appTable.requestFailed')
+    loadError.value = displayError(error, t('appTable.requestFailed'))
     return false
   } finally {
     loading.value = false

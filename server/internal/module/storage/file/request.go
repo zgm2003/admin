@@ -31,7 +31,7 @@ func parseListQuery(v url.Values) (ListQuery, error) {
 	q.Keyword = strings.TrimSpace(v.Get("keyword"))
 	q.Category = v.Get("category")
 	q.Purpose = v.Get("purpose")
-	if q.PageSize > 100 || len(q.Keyword) > 255 || q.Purpose != "" && q.Purpose != "avatar" {
+	if q.PageSize > 100 || len(q.Keyword) > 255 || q.Purpose != "" && q.Purpose != "avatar" && q.Purpose != "ai/input" {
 		return q, errors.New("invalid file filter")
 	}
 	switch q.Category {

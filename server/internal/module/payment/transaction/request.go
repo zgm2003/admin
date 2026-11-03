@@ -13,11 +13,13 @@ type ListQuery struct {
 	UserID         int64
 	PlatformID     int64
 	Personal       bool
+	Direction      Direction
+	SourceType     SourceType
 }
 
 func parseListQuery(values url.Values, userID, platformID int64, personal bool) (ListQuery, error) {
 	for key, entries := range values {
-		if (key != "page" && key != "pageSize") || len(entries) != 1 {
+		if (key != "page" && key != "pageSize" && key != "direction" && key != "sourceType") || len(entries) != 1 {
 			return ListQuery{}, fmt.Errorf("query invalid")
 		}
 	}
@@ -31,12 +33,16 @@ func parseListQuery(values url.Values, userID, platformID int64, personal bool) 
 	if (paging.Page - 1) > int(^uint(0)>>1)/paging.PageSize {
 		return ListQuery{}, fmt.Errorf("query offset overflow")
 	}
-	return ListQuery{Page: paging.Page, PageSize: paging.PageSize, UserID: userID, PlatformID: platformID, Personal: personal}, nil
+	query := ListQuery{Page: paging.Page, PageSize: paging.PageSize, UserID: userID, PlatformID: platformID, Personal: personal}
+	if err := parseFilters(values, &query); err != nil {
+		return ListQuery{}, err
+	}
+	return query, nil
 }
 
 func parseAdminListQuery(values url.Values) (ListQuery, error) {
 	for key, entries := range values {
-		if (key != "page" && key != "pageSize" && key != "userId" && key != "platformId") || len(entries) != 1 {
+		if (key != "page" && key != "pageSize" && key != "userId" && key != "platformId" && key != "direction" && key != "sourceType") || len(entries) != 1 {
 			return ListQuery{}, fmt.Errorf("query invalid")
 		}
 	}
@@ -66,5 +72,34 @@ func parseAdminListQuery(values url.Values) (ListQuery, error) {
 			*target = parsed
 		}
 	}
+	if err := parseFilters(values, &query); err != nil {
+		return ListQuery{}, err
+	}
 	return query, nil
+}
+
+func parseFilters(values url.Values, query *ListQuery) error {
+	if raw, exists := values["direction"]; exists {
+		switch raw[0] {
+		case "1":
+			query.Direction = DirectionCredit
+		case "2":
+			query.Direction = DirectionDebit
+		default:
+			return fmt.Errorf("direction invalid")
+		}
+	}
+	if raw, exists := values["sourceType"]; exists {
+		switch raw[0] {
+		case "1":
+			query.SourceType = SourcePayment
+		case "2":
+			query.SourceType = SourceRedeemCode
+		case "3":
+			query.SourceType = SourceAI
+		default:
+			return fmt.Errorf("sourceType invalid")
+		}
+	}
+	return nil
 }

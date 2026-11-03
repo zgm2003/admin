@@ -8,11 +8,20 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 import { enUS } from './messages/en-US'
 import { zhCN, type AppMessageKey } from './messages/zh-CN'
+import { enUS as aiAgentEnUS, zhCN as aiAgentZhCN } from './messages/aiAgent'
+import { enUS as aiToolEnUS, zhCN as aiToolZhCN } from './messages/aiTool'
+import { enUS as aiProviderEnUS, zhCN as aiProviderZhCN } from './messages/aiProvider'
+import { enUS as aiOfficialModelEnUS, zhCN as aiOfficialModelZhCN } from './messages/aiOfficialModel'
+import { enUS as aiChatEnUS, zhCN as aiChatZhCN } from './messages/aiChat'
+import { enUS as aiRunEnUS, zhCN as aiRunZhCN } from './messages/aiRun'
+
+const appZhCN = { ...zhCN, ...aiAgentZhCN, ...aiToolZhCN, ...aiProviderZhCN, ...aiOfficialModelZhCN, ...aiChatZhCN, ...aiRunZhCN } as const
+const appEnUS = { ...enUS, ...aiAgentEnUS, ...aiToolEnUS, ...aiProviderEnUS, ...aiOfficialModelEnUS, ...aiChatEnUS, ...aiRunEnUS } satisfies Record<keyof typeof appZhCN, string>
 
 export type AppLocale = 'zh-CN' | 'en-US'
 export type { AppMessageKey }
 export const localeStorageKey = 'admin:locale'
-const appMessageKeys: ReadonlySet<string> = new Set(Object.keys(zhCN))
+const appMessageKeys: ReadonlySet<string> = new Set(Object.keys(appZhCN))
 
 export function isAppMessageKey(value: string): value is AppMessageKey {
   return appMessageKeys.has(value)
@@ -32,7 +41,7 @@ export const appI18n = createI18n({
   locale: readLocale(),
   fallbackLocale: false,
   flatJson: true,
-  messages: { 'zh-CN': zhCN, 'en-US': enUS },
+  messages: { 'zh-CN': appZhCN, 'en-US': appEnUS },
 })
 
 export function setLocale(locale: AppLocale): void {

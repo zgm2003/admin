@@ -191,6 +191,9 @@ func (r *Repository) Redeem(ctx context.Context, userID, platformID int64, code 
 			if e := tx.Where("redeem_code_id = ?", row.ID).First(&out).Error; e != nil {
 				return e
 			}
+			if out.Validate() != nil || out.Direction != transaction.DirectionCredit {
+				return ErrInvariant
+			}
 			if out.RedeemCodeID == nil || *out.RedeemCodeID != row.ID || out.OrderID != nil || out.UserID != userID || out.AmountUnits != units || out.PlatformID < 1 {
 				return ErrInvariant
 			}
@@ -205,12 +208,12 @@ func (r *Repository) Redeem(ctx context.Context, userID, platformID int64, code 
 		if batch.ExpiresAt != nil && !batch.ExpiresAt.After(now) {
 			return ErrCodeExpired
 		}
-		w, _, e := r.wallet.CreditTx(ctx, tx, userID, units, now)
+		w, before, e := r.wallet.CreditTx(ctx, tx, userID, units, now)
 		if e != nil {
 			return e
 		}
 		rid := row.ID
-		out = transaction.Model{UserID: userID, PlatformID: platformID, AmountUnits: units, BalanceAfterUnits: w.BalanceUnits, RedeemCodeID: &rid, CreatedAt: now, UpdatedAt: now}
+		out = transaction.Model{UserID: userID, PlatformID: platformID, Direction: transaction.DirectionCredit, AmountUnits: units, BalanceBeforeUnits: before, BalanceAfterUnits: w.BalanceUnits, RedeemCodeID: &rid, CreatedAt: now, UpdatedAt: now}
 		out.TransactionNo, e = transaction.NewTransactionNo()
 		if e != nil {
 			return e

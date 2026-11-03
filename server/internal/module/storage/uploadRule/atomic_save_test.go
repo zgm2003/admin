@@ -171,10 +171,12 @@ func TestAtomicUpdateKeepsStrictBodyValidationAndFieldOnlyPermission(t *testing.
 			c.Next()
 		}
 	})
-	for _, key := range []string{"status", "Status", "ISENABLED"} {
-		body := strings.Replace(atomicBody, "status", key, 1)
-		if recorder := ruleJSON(router, http.MethodPut, "/api/admin/v1/storage/uploadrule/7", body); recorder.Code != http.StatusForbidden {
-			t.Fatalf("status key=%s bypassed authorization: %d", key, recorder.Code)
+	for _, test := range []struct{key string;want int}{{"status",http.StatusForbidden},{"Status",http.StatusForbidden},{"ISENABLED",http.StatusBadRequest}} {
+		// The removed isEnabled field is unknown and must fail strict binding;
+		// case variants of the current status field still require status access.
+		body := strings.Replace(atomicBody, "status", test.key, 1)
+		if recorder := ruleJSON(router, http.MethodPut, "/api/admin/v1/storage/uploadrule/7", body); recorder.Code != test.want {
+			t.Fatalf("status key=%s bypassed authorization: %d", test.key, recorder.Code)
 		}
 	}
 	body := strings.Replace(atomicBody, `,"status":1`, "", 1)

@@ -19,3 +19,12 @@ it('keeps the personal transaction projection free of admin fields', async () =>
     params: { page: 1, pageSize: 20, userId: 8 },
   })
 })
+
+it('loads static options and sends direction and source filters unchanged', async () => {
+  await api.getTransactionOptions()
+  expect(request.get).toHaveBeenCalledWith('/api/admin/v1/payment/transaction/options')
+  await api.getMyTransactions({ page: 1, pageSize: 20, direction: 2, sourceType: 3 })
+  expect(request.get).toHaveBeenCalledWith('/api/admin/v1/payment/wallet/transaction', {
+    params: { page: 1, pageSize: 20, direction: 2, sourceType: 3 },
+  })
+})

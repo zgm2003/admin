@@ -10,6 +10,7 @@ import {
 } from '@/composables/useMessageAggregateTabs'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import { displayError } from '@/utils/displayError'
 import type { MailLogFilter } from './log/index.vue'
 import MailConfigTab from './config/index.vue'
 import MailLogTab from './log/index.vue'
@@ -95,7 +96,7 @@ watch(
 )
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : t('mail.loadFailed')
+  return displayError(error, t('mail.loadFailed'))
 }
 
 async function loadConfig(context?: MessageTabLoadContext): Promise<void> {

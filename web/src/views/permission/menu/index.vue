@@ -18,6 +18,7 @@ import { getMenuOptions, type MenuOptions } from '@/api/permission/menuOptions'
 import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import { YesNo } from '@/enums/yesNo'
 import { usePermissionStore } from '@/store/permission'
+import { displayError } from '@/utils/displayError'
 import MenuFormDialog from './components/MenuFormDialog/index.vue'
 import MenuTreeTable from './components/MenuTreeTable/index.vue'
 import type { MenuFormState } from './components/types'
@@ -284,8 +285,7 @@ async function loadMenus(platformID?: number): Promise<void> {
     menus.value = result.menuTree
   } catch (error: unknown) {
     if (accepted())
-      loadError.value =
-        error instanceof Error && error.message ? error.message : t('menu.loadFailed')
+      loadError.value = displayError(error, t('menu.loadFailed'))
   } finally {
     if (request === listRequest) loading.value = false
   }

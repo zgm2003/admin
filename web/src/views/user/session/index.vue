@@ -10,6 +10,7 @@ import type { SessionItem, SessionListQuery, SessionStats, SessionStatus } from 
 import { getSessionOptions } from '@/api/user/sessionOptions'
 import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import { usePermissionStore } from '@/store/permission'
+import { displayError } from '@/utils/displayError'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
@@ -61,7 +62,7 @@ const tableColumns = computed<TableColumn<SessionItem>[]>(() => [
 const canRevoke = computed(() => access.hasPermission('user:session:revoke'))
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message !== '' ? error.message : t('session.loadFailed')
+  return displayError(error, t('session.loadFailed'))
 }
 
 const platformStats = computed(() =>

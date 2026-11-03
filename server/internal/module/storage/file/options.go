@@ -19,7 +19,7 @@ type OptionsResult struct {
 }
 
 func (s *Service) Options(ctx context.Context, id auth.Identity, purpose string) (OptionsResult, error) {
-	if !validIdentity(id) || purpose != "" && purpose != "avatar" {
+	if !validIdentity(id) || purpose != "" && purpose != "avatar" && purpose != "ai/input" {
 		return OptionsResult{}, apperror.InvalidRequest(errors.New("file options invalid"))
 	}
 	rules, e := s.rules.FileUploadOptions(ctx, id.PlatformID, purpose)

@@ -58,6 +58,9 @@ func (s *Service) PersonalList(ctx context.Context, query ListQuery) (pagination
 }
 
 func (s *Service) list(ctx context.Context, query ListQuery) ([]Model, int64, error) {
+	if (query.Direction != 0 && !query.Direction.Valid()) || (query.SourceType != 0 && !query.SourceType.Valid()) {
+		return nil, 0, apperror.InvalidRequest(fmt.Errorf("transaction filter invalid"))
+	}
 	if query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 || (query.Page-1) > int(^uint(0)>>1)/query.PageSize {
 		return nil, 0, apperror.InvalidRequest(fmt.Errorf("pagination invalid"))
 	}

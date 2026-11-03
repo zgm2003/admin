@@ -4,14 +4,20 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import * as redeemApi from '@/api/payment/redeemCode'
-import { getMyTransactions } from '@/api/payment/transaction'
-import type { PersonalTransaction } from '@/api/payment/transaction'
+import { getMyTransactions, getTransactionOptions } from '@/api/payment/transaction'
+import type {
+  PersonalTransaction,
+  PersonalTransactionQuery,
+  TransactionOptions,
+} from '@/api/payment/transaction'
 import { getMyWallet } from '@/api/payment/wallet'
 import type { MyWallet } from '@/api/payment/wallet'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
 import AppDialog from '@/components/AppDialog/index.vue'
+import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 
 const emit = defineEmits<{ recharge: [] }>()
 const { t, locale } = useI18n()
@@ -25,7 +31,40 @@ const walletLoading = ref(false)
 const walletError = ref('')
 const rows = ref<PersonalTransaction[]>([])
 const total = ref(0)
-const query = ref({ page: 1, pageSize: 20 })
+const query = ref<PersonalTransactionQuery>({ page: 1, pageSize: 20 })
+const filters = ref<SearchFormModel<{ direction: number | ''; sourceType: number | '' }>>({
+  direction: '',
+  sourceType: '',
+})
+const {
+  options,
+  error: optionsError,
+  reload: reloadOptions,
+} = useLocalizedOptions<TransactionOptions | null>(getTransactionOptions, () => null)
+const searchFields = computed<SearchField<{ direction: number | ''; sourceType: number | '' }>[]>(
+  () => [
+    {
+      key: 'direction',
+      type: 'select-v2',
+      label: t('payment.transaction.direction'),
+      options: options.value === null ? [] : options.value.directions,
+      resetValue: '',
+      clearable: true,
+      disabled: options.value === null,
+      width: 140,
+    },
+    {
+      key: 'sourceType',
+      type: 'select-v2',
+      label: t('payment.transaction.sourceType'),
+      options: options.value === null ? [] : options.value.sourceTypes,
+      resetValue: '',
+      clearable: true,
+      disabled: options.value === null,
+      width: 140,
+    },
+  ],
+)
 const loading = ref(false)
 const loadError = ref('')
 const redeemVisible = ref(false)
@@ -45,15 +84,25 @@ const pagination = computed<TablePaginationState>(() => ({
 const columns = computed<TableColumn<PersonalTransaction>[]>(() => [
   { prop: 'transactionNo', label: t('payment.transaction.transactionNo'), minWidth: 190 },
   { key: 'sourceType', label: t('payment.transaction.sourceType'), width: 120 },
+  { key: 'direction', label: t('payment.transaction.direction'), width: 100 },
   { prop: 'amount', label: t('payment.transaction.amount'), width: 130 },
   { prop: 'balanceBefore', label: t('payment.transaction.balanceBefore'), width: 140 },
   { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 140 },
   { key: 'createdAt', label: t('common.createdAt'), minWidth: 180 },
 ])
 function transactionSource(value: number): string {
-  if (value === 1) return t('payment.transaction.payment')
-  if (value === 2) return t('payment.transaction.redeemCode')
-  return String(value)
+  return options.value?.sourceTypes.find((item) => item.value === value)?.label ?? String(value)
+}
+function transactionDirection(value: number): string {
+  return options.value?.directions.find((item) => item.value === value)?.label ?? String(value)
+}
+function search(): void {
+  query.value.page = 1
+  void loadTransactions()
+}
+function reset(): void {
+  filters.value = { direction: '', sourceType: '' }
+  search()
 }
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
@@ -83,7 +132,13 @@ async function loadTransactions(): Promise<void> {
   loading.value = true
   loadError.value = ''
   try {
-    const result = await getMyTransactions(query.value)
+    const currentQuery: PersonalTransactionQuery = {
+      page: query.value.page,
+      pageSize: query.value.pageSize,
+    }
+    if (filters.value.direction !== '') currentQuery.direction = filters.value.direction
+    if (filters.value.sourceType !== '') currentQuery.sourceType = filters.value.sourceType
+    const result = await getMyTransactions(currentQuery)
     if (alive && current === sequence && canList.value) {
       rows.value = result.list
       total.value = result.total
@@ -183,9 +238,21 @@ onBeforeUnmount(() => {
         </el-button>
       </div>
     </section>
-    <h2 v-if="canList" class="payment-my-wallet-page__section-title">
-      {{ t('payment.transaction.title') }}
-    </h2>
+    <el-alert
+      v-if="optionsError"
+      :title="t('payment.transaction.optionsFailed')"
+      type="error"
+      :closable="false"
+      ><el-button link @click="reloadOptions">{{ t('common.refresh') }}</el-button></el-alert
+    >
+    <AppSearch
+      v-if="canList"
+      v-model="filters"
+      :fields="searchFields"
+      :query-label="t('common.search')"
+      @query="search"
+      @reset="reset"
+    />
     <AppDialog v-model="redeemVisible" :title="t('payment.redeemCode.redeemTitle')" width="520px">
       <el-form label-position="top" @submit.prevent="redeem">
         <el-form-item :label="t('payment.redeemCode.code')">
@@ -235,11 +302,19 @@ onBeforeUnmount(() => {
       @refresh="loadTransactions"
       @update:pagination="updatePagination"
     >
+      <template #toolbar-left
+        ><h2 class="payment-my-wallet-page__section-title">
+          {{ t('payment.transaction.title') }}
+        </h2></template
+      >
       <template #cell-sourceType="{ row }: { row: PersonalTransaction }">
         <el-tag size="small" effect="plain" type="info">{{
           transactionSource(row.sourceType)
         }}</el-tag>
       </template>
+      <template #cell-direction="{ row }: { row: PersonalTransaction }">{{
+        transactionDirection(row.direction)
+      }}</template>
       <template #cell-createdAt="{ row }: { row: PersonalTransaction }">{{
         formatTime(row.createdAt)
       }}</template>

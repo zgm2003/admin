@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import * as orderApi from '@/api/payment/order'
 import { appI18n, setLocale } from '@/i18n'
 import { usePermissionStore } from '@/store/permission'
-import { getMyTransactions } from '@/api/payment/transaction'
+import { getMyTransactions, getTransactionOptions } from '@/api/payment/transaction'
 import { getMyWallet } from '@/api/payment/wallet'
 import WalletManagement from '@/views/payment/walletPortal/index.vue'
 
@@ -17,12 +17,16 @@ vi.mock('@/api/payment/order', () => ({
   payRecharge: vi.fn(),
 }))
 vi.mock('@/api/payment/wallet', () => ({ getMyWallet: vi.fn() }))
-vi.mock('@/api/payment/transaction', () => ({ getMyTransactions: vi.fn() }))
+vi.mock('@/api/payment/transaction', () => ({
+  getMyTransactions: vi.fn(),
+  getTransactionOptions: vi.fn(),
+}))
 vi.mock('@/api/payment/redeemCode', () => ({ redeemWalletCode: vi.fn() }))
 
 let wrapper: VueWrapper | undefined
 
 beforeEach(() => {
+  vi.mocked(getTransactionOptions).mockResolvedValue({ directions: [], sourceTypes: [] })
   setLocale('zh-CN')
   const pinia = createPinia()
   setActivePinia(pinia)

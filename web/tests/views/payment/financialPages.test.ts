@@ -24,6 +24,7 @@ vi.mock('@/api/payment/transaction', () => ({
   getTransactions: vi.fn(),
   getTransaction: vi.fn(),
   getMyTransactions: vi.fn(),
+  getTransactionOptions: vi.fn(),
 }))
 vi.mock('@/api/payment/order', () => ({
   getOrders: vi.fn(),
@@ -50,6 +51,7 @@ const transaction = {
   id: 3,
   transactionNo: 'PT202610160000000000000001',
   sourceType: 1,
+  direction: 1,
   amount: '10.00',
   balanceBefore: '-20.00',
   balanceAfter: '-10.00',
@@ -73,6 +75,17 @@ let wrappers: VueWrapper[] = []
 beforeEach(() => {
   window.history.replaceState({}, '', '/')
   vi.resetAllMocks()
+  vi.mocked(transactionApi.getTransactionOptions).mockResolvedValue({
+    directions: [
+      { value: 1, label: '收入选项' },
+      { value: 2, label: '消费选项' },
+    ],
+    sourceTypes: [
+      { value: 1, label: '支付选项' },
+      { value: 2, label: '兑换选项' },
+      { value: 3, label: 'AI 结算选项' },
+    ],
+  })
   setLocale('zh-CN')
   usePermissionStore(pinia).reset()
   vi.mocked(walletApi.getWallets).mockResolvedValue({
@@ -167,6 +180,52 @@ it('renders only personal wallet and transaction projections', async () => {
   expect(wrapper.text()).toContain('PT202610160000000000000001')
   expect(wrapper.text()).not.toContain('fixture-user')
   expect(wrapper.text()).not.toContain('用户 ID')
+})
+
+it('renders AI debit direction using backend catalogs on both transaction surfaces', async () => {
+  vi.mocked(transactionApi.getTransactions).mockResolvedValue({
+    list: [
+      {
+        ...transaction,
+        direction: 2,
+        sourceType: 3,
+        userId: 7,
+        username: 'fixture-user',
+        platformId: 1,
+        platformCode: 'admin',
+        orderId: null,
+        aiUsageChargeId: 9,
+      },
+    ],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  })
+  vi.mocked(transactionApi.getMyTransactions).mockResolvedValue({
+    list: [{ ...transaction, direction: 2, sourceType: 3 }],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  })
+  permissions(['payment:transaction:list', 'payment:myWallet:list'])
+  for (const component of [TransactionPage, MyWalletPage]) {
+    const wrapper = await page(component)
+    expect(wrapper.text()).toContain('消费选项')
+    expect(wrapper.text()).toContain('AI 结算选项')
+  }
+})
+
+it('preserves unknown transaction direction and source values', async () => {
+  vi.mocked(transactionApi.getMyTransactions).mockResolvedValue({
+    list: [{ ...transaction, direction: 72, sourceType: 73 }],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  })
+  permissions(['payment:myWallet:list'])
+  const wrapper = await page(MyWalletPage)
+  expect(wrapper.text()).toContain('72')
+  expect(wrapper.text()).toContain('73')
 })
 
 it('keeps the transaction title and right-side refresh in the same toolbar', async () => {

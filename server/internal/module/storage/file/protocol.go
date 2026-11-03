@@ -4,6 +4,7 @@ import (
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/storage/uploadRule"
 	"context"
+	"io"
 	"time"
 )
 
@@ -43,4 +44,15 @@ type UploadRules interface {
 }
 type Registrar interface {
 	RegisterUpload(context.Context, auth.Identity, uploadrule.FileRegistration) (int64, error)
+}
+
+// GeneratedMediaImport describes a stream that has already passed the AI
+// media spooler's size, MIME and digest checks. The file service owns the COS
+// write and the durable storage_file ready record.
+type GeneratedMediaImport struct {
+	ImportRequestKey string
+	OriginalName     string
+	MIME             string
+	SizeBytes        int64
+	Body             io.Reader
 }

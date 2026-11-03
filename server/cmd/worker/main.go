@@ -2,22 +2,33 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"admin/server/internal/config"
 	"admin/server/internal/database"
+	aimedia "admin/server/internal/module/ai/media"
+	aiprovider "admin/server/internal/module/ai/provider"
+	providerrequest "admin/server/internal/module/ai/providerRequest"
+	airun "admin/server/internal/module/ai/run"
+	runevent "admin/server/internal/module/ai/run/event"
+	aitool "admin/server/internal/module/ai/tool"
+	aiusage "admin/server/internal/module/ai/usage"
 	"admin/server/internal/module/message/notification"
 	notificationtask "admin/server/internal/module/message/notificationTask"
 	callbackevent "admin/server/internal/module/payment/callbackEvent"
 	paymentconfig "admin/server/internal/module/payment/config"
 	paymentorder "admin/server/internal/module/payment/order"
 	rechargepackage "admin/server/internal/module/payment/rechargePackage"
+	"admin/server/internal/module/payment/transaction"
+	"admin/server/internal/module/payment/wallet"
 	permissionnotification "admin/server/internal/module/permission/notification"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/module/storage/cosConfig"
@@ -53,6 +64,27 @@ type namedRunner struct {
 type runnerResult struct {
 	name string
 	err  error
+}
+
+type aiWorkerExecutor struct {
+	text  *airun.TextEngine
+	media *aimedia.Engine
+}
+
+func (e *aiWorkerExecutor) Execute(ctx context.Context, row airun.Model) error {
+	if e == nil {
+		return errors.New("AI worker executor is unavailable")
+	}
+	if row.Operation == "text.generate" {
+		if e.text == nil {
+			return errors.New("AI text engine is unavailable")
+		}
+		return e.text.Execute(ctx, row)
+	}
+	if e.media == nil {
+		return errors.New("AI media engine is unavailable")
+	}
+	return e.media.Execute(ctx, row)
 }
 
 type asynqServer interface {
@@ -166,7 +198,94 @@ func run(logger *slog.Logger) error {
 	realtimeRetention := realtime.NewRetentionService(realtimeRepository, settingService)
 	notificationRetention := notification.NewRetentionService(notificationRepository, settingService)
 	historyCleaner := scheduler.NewHistoryCleaner(schedulerRepository, settingService)
-	catalog, err := scheduler.NewTaskCatalog(append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), notificationDefinition, paymentDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))...)
+	// AI execution dependencies are assembled explicitly here; credentials and
+	// tool versions are loaded from the frozen Run snapshot only.
+	providerCipher, err := aiprovider.NewCipher(os.Getenv("APP_SECRET"), "provider-v1")
+	if err != nil {
+		return err
+	}
+	toolCipher, err := aitool.NewCipher(os.Getenv("APP_SECRET"), "tool-v1")
+	if err != nil {
+		return err
+	}
+	aiRunRepository := airun.NewRepository(postgres.GORM, wallet.NewRepository(postgres.GORM), schedulerRepository)
+	aiEventRepository := runevent.NewRepository(postgres.GORM, realtimeRepository)
+	aiRunRepository.SetEvents(aiEventRepository)
+	aiToolRepository := aitool.NewRepository(postgres.GORM)
+	aiToolExecutor := aitool.NewExecutor(nil, toolCipher)
+	aiCredentialLoader := airun.NewCredentialLoader(aiprovider.NewRepository(postgres.GORM), providerCipher)
+	aiTextEngine := airun.NewTextEngine(aiRunRepository, aiCredentialLoader, aiToolRepository, aiToolExecutor, providerrequest.NewResponsesClient(nil), providerrequest.NewChatCompletionsClient(nil))
+	aiTextEngine.SetFileReader(fileService)
+	aiRunGate := airun.NewGate(redisClient, aiRunRepository)
+	aiTextEngine.SetStreamPressure(aiRunGate)
+	mediaCipher, err := aiprovider.NewCipher(os.Getenv("APP_SECRET"), "media-v1")
+	if err != nil {
+		return err
+	}
+	spoolLimit, err := workerAIPositiveSetting(processContext, settingService, "ai.media.spool_max_bytes_per_worker")
+	if err != nil {
+		return err
+	}
+	mediaSpool, err := aimedia.NewSpooler(os.TempDir(), spoolLimit)
+	if err != nil {
+		return fmt.Errorf("configure AI media spool: %w", err)
+	}
+	aiMediaService := aimedia.NewService(aimedia.NewRepository(postgres.GORM, schedulerRepository), aiRunRepository, aiCredentialLoader, providerrequest.NewVideoClient(nil), mediaSpool, fileService, mediaCipher, aiEventRepository)
+	if err := aiMediaService.ValidateDependencies(); err != nil {
+		return err
+	}
+	imageClient := providerrequest.NewImagesClient(nil)
+	aiMediaEngine := aimedia.NewEngine(aiRunRepository, aiCredentialLoader, imageClient, imageClient, providerrequest.NewAudioClient(nil), fileService, aiMediaService)
+	aiRunWorker := &airun.Worker{Loader: aiRunRepository, Executor: &aiWorkerExecutor{text: aiTextEngine, media: aiMediaEngine}}
+	aiUsageRepository := aiusage.NewRepository(postgres.GORM, wallet.NewRepository(postgres.GORM), transaction.NewRepository(postgres.GORM), aiEventRepository)
+	aiUsageRepository.SetScheduler(schedulerRepository)
+	aiUsageService := aiusage.NewService(aiUsageRepository)
+	aiRunExecute := func(ctx context.Context, ec scheduler.ExecutionContext) error {
+		return aiRunWorker.Execute(ctx, ec.Payload)
+	}
+	aiUsageSettle := func(ctx context.Context, ec scheduler.ExecutionContext) error {
+		var payload struct {
+			ChargeID int64 `json:"chargeId"`
+		}
+		if err := json.Unmarshal(ec.Payload, &payload); err != nil || payload.ChargeID < 1 {
+			return errors.New("AI settlement payload is invalid")
+		}
+		return aiUsageService.Settle(ctx, payload.ChargeID)
+	}
+	aiRunRecover := func(ctx context.Context, _ scheduler.ExecutionContext) error {
+		if _, err := aiRunRepository.RecoverExpired(ctx, time.Now().UTC(), 100); err != nil {
+			return err
+		}
+		if _, err := aiRunRepository.RecoverStaleEffects(ctx, time.Now().UTC(), 100); err != nil {
+			return err
+		}
+		if _, err := aiRunRepository.RecoverQueued(ctx, time.Now().UTC(), 100); err != nil {
+			return err
+		}
+		if _, err := aiMediaService.RecoverDue(ctx, time.Now().UTC(), 100); err != nil {
+			return err
+		}
+		_, err := aiUsageRepository.RecoverSettlements(ctx, time.Now().UTC(), 100)
+		return err
+	}
+	aiEventCleanup := func(ctx context.Context, _ scheduler.ExecutionContext) error {
+		days, err := workerAIPositiveSetting(ctx, settingService, "ai.run.event_retention_days")
+		if err != nil || days > int64((1<<63-1)/int64(24*time.Hour)) {
+			return errors.New("AI event retention policy invalid")
+		}
+		_, err = aiEventRepository.Cleanup(ctx, time.Now().UTC().Add(-time.Duration(days)*24*time.Hour), 1000)
+		return err
+	}
+	aiDefinitions, err := scheduler.AITaskDefinitions(scheduler.AITaskExecutors{
+		RunExecute: aiRunExecute, MediaPoll: func(ctx context.Context, _ scheduler.ExecutionContext) error { return aiMediaService.PollOne(ctx) }, MediaImport: func(ctx context.Context, _ scheduler.ExecutionContext) error { return aiMediaService.ImportOne(ctx) },
+		UsageSettle: aiUsageSettle, RunRecover: aiRunRecover, RunEventCleanup: aiEventCleanup,
+	}, 5*time.Minute, 5*time.Minute)
+	if err != nil {
+		return err
+	}
+	definitions := append(scheduler.BuiltinDefinitions(realtimeRetention, notificationRetention, historyCleaner), aiDefinitions...)
+	definitions = append(definitions, notificationDefinition, paymentDefinition, storagefile.CleanupDefinition(fileService), storagefile.ScanDefinition(fileService))
+	catalog, err := scheduler.NewTaskCatalog(definitions...)
 	if err != nil {
 		return err
 	}
@@ -180,6 +299,7 @@ func run(logger *slog.Logger) error {
 		Logger:         logger,
 		Mux:            mux,
 		Runners: []namedRunner{
+			{Name: "ai-capacity", Runner: aiCapacityRunner{gate: aiRunGate, policies: airun.NewPolicyReader(settingService)}},
 			{Name: "config-generation", Runner: configRelay},
 			{Name: "realtime-outbox", Runner: realtimeRelay},
 			{Name: "scheduler-scanner", Runner: scanner},
@@ -207,6 +327,21 @@ func buildWorkerSettingService(db *gorm.DB, redisClient *projectredis.Client, ge
 		return nil, fmt.Errorf("configure Worker system setting service: %w", err)
 	}
 	return service, nil
+}
+
+func workerAIPositiveSetting(ctx context.Context, settings *systemsetting.Service, key string) (int64, error) {
+	if settings == nil || key == "" {
+		return 0, errors.New("AI media setting reader unavailable")
+	}
+	record, err := settings.Find(ctx, key)
+	if err != nil {
+		return 0, fmt.Errorf("read AI media setting %s: %w", key, err)
+	}
+	value, err := strconv.ParseInt(record.Value, 10, 64)
+	if err != nil || value < 1 {
+		return 0, fmt.Errorf("AI media setting %s is invalid", key)
+	}
+	return value, nil
 }
 
 // runWorkerAssembly 启动 relay goroutine 后启动 Asynq；任一启动失败都会

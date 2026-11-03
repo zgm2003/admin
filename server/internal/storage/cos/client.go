@@ -206,6 +206,40 @@ func (c *Client) DeleteObject(ctx context.Context, credentials Credentials, key 
 	}
 	return err
 }
+
+// PutStream uploads one generated object without buffering it in memory. The
+// caller is responsible for bounding the source; this method still verifies
+// that the declared length is positive and that the stream produced exactly
+// that many bytes before accepting the remote object.
+func (c *Client) PutStream(ctx context.Context, credentials Credentials, request PutStreamRequest) (ObjectInfo, error) {
+	if request.Body == nil || request.ContentLength < 1 || !validObjectKey(request.ObjectKey) {
+		return ObjectInfo{}, fmt.Errorf("PUT stream request invalid")
+	}
+	client, err := c.sdkClient(credentials)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	// Server-side generated media is already hashed and bounded by the spooler;
+	// the SDK's optional response CRC is not guaranteed by compatible COS
+	// endpoints. Metadata is verified with the conditional HEAD below.
+	client.Conf.EnableCRC = false
+	reader := &tencos.LimitedReadCloser{LimitedReader: io.LimitedReader{R: request.Body, N: request.ContentLength}}
+	opt := &tencos.ObjectPutOptions{ObjectPutHeaderOptions: &tencos.ObjectPutHeaderOptions{ContentType: request.ContentType, ContentLength: request.ContentLength}}
+	if request.PublicRead {
+		opt.ACLHeaderOptions = &tencos.ACLHeaderOptions{XCosACL: "public-read"}
+	}
+	if _, err = client.Object.Put(ctx, request.ObjectKey, reader, opt); err != nil {
+		return ObjectInfo{}, objectError(err)
+	}
+	info, err := c.HeadObject(ctx, credentials, request.ObjectKey)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	if info.Size != request.ContentLength || (request.ContentType != "" && info.MIME != strings.ToLower(strings.TrimSpace(strings.Split(request.ContentType, ";")[0]))) {
+		return ObjectInfo{}, fmt.Errorf("PUT stream metadata mismatch")
+	}
+	return info, nil
+}
 func (c *Client) ReadObject(ctx context.Context, credentials Credentials, key, etag string, limit int64) ([]byte, error) {
 	if !validObjectKey(key) || etag == "" || limit < 1 {
 		return nil, fmt.Errorf("read request invalid")

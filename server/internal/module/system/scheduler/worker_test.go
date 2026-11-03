@@ -30,6 +30,9 @@ func (s *executionRepositoryStub) CompleteRun(context.Context, int64, int, strin
 	s.completed++
 	return nil
 }
+func (s *executionRepositoryStub) RenewRun(context.Context, int64, int, string, time.Time) error {
+	return nil
+}
 func (s *executionRepositoryStub) FailRun(_ context.Context, _ int64, _ int, _ string, _, _ string, retryAt *time.Time, _ time.Time) error {
 	s.failed++
 	s.retryAt = retryAt
@@ -67,5 +70,17 @@ func TestExecutorPersistsRetryableFailure(t *testing.T) {
 func TestDecodeJobEnvelopeRejectsUnknownFields(t *testing.T) {
 	if _, err := DecodeJobEnvelope([]byte(`{"schemaVersion":1,"jobId":1,"attempt":1,"dispatchToken":"a","extra":true}`)); err == nil {
 		t.Fatal("expected strict decode failure")
+	}
+}
+
+func TestExecutorDoesNotCompleteAfterParentCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	definition := testDefinition("example")
+	definition.Execute = func(context.Context, ExecutionContext) error { cancel(); return nil }
+	repository := &executionRepositoryStub{job: Job{ID: 1, TaskType: "example", Payload: json.RawMessage(`{}`), Status: JobQueued, MaxAttempts: 3, PublishToken: "dispatch"}}
+	catalog, _ := NewTaskCatalog(definition)
+	err := NewExecutor(repository, catalog, "worker-1").Execute(ctx, JobEnvelope{SchemaVersion: 1, JobID: 1, Attempt: 1, DispatchToken: "dispatch"})
+	if !errors.Is(err, context.Canceled) || repository.completed != 0 || repository.failed != 0 {
+		t.Fatalf("err=%v completed=%d failed=%d", err, repository.completed, repository.failed)
 	}
 }
