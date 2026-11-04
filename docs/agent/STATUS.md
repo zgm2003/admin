@@ -1,5 +1,22 @@
 # 项目状态
 
+### Worker 冷缓存启动失败修复（2026-11-04，已验证）
+
+- 现象：`go run ./cmd/worker` 启动数秒后退出。一次为 `runner ai-capacity stopped: AI engineering policy is unavailable or invalid / error.dependencyUnavailable`，另一次更早退出于 `read AI media setting ai.media.spool_max_bytes_per_worker: error.dependencyUnavailable`。
+- 复现：删除 Redis 中 24 代 `system.setting` 的全部设置记录后立即启动 Worker 可稳定复现；26 条 AI 策略逐键冷读实测合计 561ms（最慢 108ms），说明设置数据完整，失败发生在首次策略读取与调度器启动扫描并发时，单键 500ms / 策略整体 4s 的读预算被耗尽。
+- 修复：Worker 启动 runners 前先预热 26 条 AI 策略设置（3 次尝试、500ms 间隔，持久失败仍启动失败）；`airun.Gate.Run` 对策略读取和容量刷新增加 5 次、200ms 间隔的有界重试，持久失败仍返回给 supervisor；`workerAIPositiveSetting` 对媒体 spool 设置增加 3 次重试。
+- 验证：清空 28 条设置记录后冷启动 Worker，连续存活 20 秒以上且无 ERROR；`go build ./cmd/api ./cmd/worker`、`go vet ./cmd/worker ./internal/module/ai/run`、`go test -short -p 1 ./internal/module/ai/...` 通过。启动验证时 Worker relay 已把 `ai.runtime/global` generation 2 发布到 Redis。
+- 观察：验证期间 PostgreSQL 仍有 400-1600ms 慢查询（`system_scheduler_job` 约 3.6 万行、5101 死元组），是本次故障的外部诱因；未做 VACUUM 或历史任务清理。
+
+### 官方模型目录 seed（2026-11-04，真实迁移完成）
+
+- 补齐未完成的官方模型目录 forward migration：`docs/database/2026-11-04-ai-official-model-seed.sql` 与同名 `.ps1` runner。写入 24 条标准模型身份（OpenAI 14 = 13 文本 + 1 图片，Anthropic 10 文本），启用状态；不写供应商、凭据、价格、模型绑定、菜单、角色或系统设置。
+- 迁移为只补缺失身份：已有行（含管理员改过的名称、状态、能力、来源）不覆盖；只有实际插入行时才把 `ai.runtime/global` generation 推进一代并写 outbox，复跑不改变任何事实。管理员归属优先取启用中的 `super_admin`，缺失时取首个启用账号。
+- 真实库执行前确认无 API/Worker 和其他数据库客户端，runner 创建 custom-format 全库备份并核验归档。审计目录 `C:\Users\IGT\AppData\Local\Admin\maintenance\ai-official-model\20261104-164610-098-c1bbb41e5f75427a933eda0a512d9c34`，`stage=completed`、`committed=true`；备份 SHA-256 `4B7A7380CE46E1A629E5F843E5CBC95DEBB8DC40099F3640FCE2D71EF402AA80`。
+- 结果：`ai_official_model` 0→24（OpenAI 14、Anthropic 10、文本 23、图片 1，`created_by=169`）；`ai.runtime` generation 1→2，outbox 新增 id 58、generation 2；随后启动 Worker 时 relay 已将其发布（Redis `ai.runtime` ready/2）；菜单摘要、平台版本、角色授权、其他设置与缓存摘要均未变化。幂等复跑通过。
+- 实际通过：`go test -p 1 ./internal/module/ai -run '^TestAIOfficialModelSeedIsIdempotentAndPreservesExistingRows$' -count=1 -timeout=3m`（同时修正该未跟踪测试 facts 查询中 `string_agg` 的语法错误）；`go test -short -p 1 ./internal/module/ai/...`；`go vet ./internal/module/ai/...`；`go build ./cmd/api ./cmd/worker`；PowerShell AST 语法检查。
+- 未执行：API 启动、供应商/模型/价格/Agent 配置和真实供应商/COS 调用。Worker 启停与 `ai.runtime` outbox 发布已在后续启动验证中完成。
+
 ### AI 菜单图标与顺序修正（2026-11-04，已迁移）
 
 - 接入截图发现 AI 目录及六页缺图标、页面顺序错误。迁移前 PostgreSQL 确认七个可见 AI 菜单节点 `icon` 均为 NULL、`sort_order` 均为 900，Access repository 因此按 code 次序输出。

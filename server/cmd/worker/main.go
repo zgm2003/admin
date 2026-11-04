@@ -193,6 +193,9 @@ func run(logger *slog.Logger) error {
 	if err != nil {
 		return err
 	}
+	if err := warmWorkerAIPolicySettings(processContext, settingService); err != nil {
+		return err
+	}
 	configRelay := configcache.NewRelay(configCacheRepository, configCacheStore, logger)
 	realtimeRelay := realtime.NewRelay(realtimeRepository, redisClient, logger)
 	realtimeRetention := realtime.NewRetentionService(realtimeRepository, settingService)
@@ -341,11 +344,59 @@ func buildWorkerSettingService(db *gorm.DB, redisClient *projectredis.Client, ge
 	return service, nil
 }
 
+// warmWorkerAIPolicySettings fills the generation-checked setting records
+// before runners start. The first capacity read otherwise races the scheduler
+// scan on a cold cache and can exhaust its per-read budget.
+func warmWorkerAIPolicySettings(ctx context.Context, settings *systemsetting.Service) error {
+	if settings == nil {
+		return errors.New("AI engineering policy reader unavailable")
+	}
+	reader := airun.NewPolicyReader(settings)
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+		if _, err = reader.Read(ctx); err == nil {
+			return nil
+		}
+		if attempt < 2 {
+			timer := time.NewTimer(500 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
+	return fmt.Errorf("warm AI engineering policy: %w", err)
+}
+
 func workerAIPositiveSetting(ctx context.Context, settings *systemsetting.Service, key string) (int64, error) {
 	if settings == nil || key == "" {
 		return 0, errors.New("AI media setting reader unavailable")
 	}
-	record, err := settings.Find(ctx, key)
+	var record systemsetting.Record
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return 0, ctxErr
+		}
+		record, err = settings.Find(ctx, key)
+		if err == nil {
+			break
+		}
+		if attempt < 2 {
+			timer := time.NewTimer(200 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return 0, ctx.Err()
+			case <-timer.C:
+			}
+		}
+	}
 	if err != nil {
 		return 0, fmt.Errorf("read AI media setting %s: %w", key, err)
 	}

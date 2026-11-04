@@ -229,6 +229,25 @@ func (g *Gate) RefreshCapacity(ctx context.Context, policy Policy) (bool, error)
 	return true, nil
 }
 
+// Transient cache/DB stalls must not kill the supervised capacity loop. The
+// policy is still read on every tick and a persistent failure is returned to
+// the lifecycle owner after the bounded retries.
+const (
+	capacityReadAttempts = 5
+	capacityRetryDelay   = 200 * time.Millisecond
+)
+
+func waitCapacityRetry(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
 // Run is supervised by the lifecycle owner. A read/Redis/scan error is returned
 // explicitly; an expired observation then closes admission until recovery.
 func (g *Gate) Run(ctx context.Context, policies interface {
@@ -243,11 +262,34 @@ func (g *Gate) Run(ctx context.Context, policies interface {
 		if ctx.Err() != nil {
 			return nil
 		}
-		policy, err := policies.Read(ctx)
+		var (
+			policy Policy
+			err    error
+		)
+		for attempt := 0; attempt < capacityReadAttempts; attempt++ {
+			policy, err = policies.Read(ctx)
+			if err == nil {
+				break
+			}
+			if attempt < capacityReadAttempts-1 && !waitCapacityRetry(ctx, capacityRetryDelay) {
+				return nil
+			}
+		}
 		if err != nil {
 			return err
 		}
-		if _, err := g.RefreshCapacity(ctx, policy); err != nil {
+		for attempt := 0; attempt < capacityReadAttempts; attempt++ {
+			if ctx.Err() != nil {
+				return nil
+			}
+			if _, err = g.RefreshCapacity(ctx, policy); err == nil {
+				break
+			}
+			if attempt < capacityReadAttempts-1 && !waitCapacityRetry(ctx, capacityRetryDelay) {
+				return nil
+			}
+		}
+		if err != nil {
 			return err
 		}
 		select {
