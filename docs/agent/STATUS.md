@@ -1,5 +1,14 @@
 # 项目状态
 
+### AI 菜单图标与顺序修正（2026-11-04，已迁移）
+
+- 接入截图发现 AI 目录及六页缺图标、页面顺序错误。迁移前 PostgreSQL 确认七个可见 AI 菜单节点 `icon` 均为 NULL、`sort_order` 均为 900，Access repository 因此按 code 次序输出。
+- Forward SQL 只更新 Admin AI 目录及六页，页面顺序为官方模型、供应商、智能体、AI 工作台、运行监控、工具管理；节点使用已登记 Lucide 图标。菜单内容变更使 Admin `menu_version` 从 25 增至 26 一次；不改 action、角色授权、Canvas 或其他平台。
+- 执行前停止 PID 37092 的本地 API；Worker/其他权限写入进程未运行。真实 PostgreSQL 隔离集成测试 `TestAIMenuPresentationMigrationSetsIconsAndStableOrderAndReplays` 通过。runner 创建并验证全库 custom-format 备份，SHA-256 为 `A230CC74F7FFCB5FE97DC595AE066041487D30065B4C142AD3561F6D2E0F17FB`。
+- 首次 SQL 事务已成功提交，但 runner 在 PowerShell `BigInteger++` 版本校验处中断，Redis 当时保持 `ready/25`。已修正 BigInteger 加法，并为“目标菜单已提交、Redis 恰好落后一代”的唯一恢复情形增加严格校验；重跑仅重复幂等 SQL 并发布 Redis，没有再次递增数据库版本。
+- 最终审计目录 `C:\Users\IGT\AppData\Local\Admin\maintenance\ai-menu-presentation\20261104-142202-300-cfbd323b6fae4029a809bd2f69ce6cd3`，`stage=completed`、`committed=true`、`redisPublished=true`。审计确认首次版本 26、幂等复跑版本 26、Redis Admin `ready/26`；AI 节点数为 45（目录 1、页面 6、动作 38），其他菜单、其他平台及角色授权摘要均未变。
+- 实际通过：`go test -p 1 ./internal/module/ai -run '^TestAIMenuPresentationMigrationSetsIconsAndStableOrderAndReplays$' -count=1 -timeout=2m`；PowerShell AST 语法检查；`go run ./cmd/ai-menu-state --env-file .env`（输出 Admin/Redis `26/ready`）。数据库仅菜单数据变化，不涉及 schema，因此未刷新 `current.sql`。API 为迁移已停止，尚未重启；浏览器侧栏验收待服务恢复后进行。
+
 ### AI 导航国际化修复（2026-11-04）
 
 - 接入页面检查发现侧栏和相关路由标题显示 `navigation.ai*` 原始键。菜单 `i18n_key`、Access DTO 和 `t(node.i18nKey)` 路径正确，实际原因是中英文消息表遗漏 AI 目录及六个页面键，而 Vue I18n 关闭了 fallback。
