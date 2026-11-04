@@ -1,5 +1,23 @@
 # 项目状态
 
+### AI 导航国际化修复（2026-11-04）
+
+- 接入页面检查发现侧栏和相关路由标题显示 `navigation.ai*` 原始键。菜单 `i18n_key`、Access DTO 和 `t(node.i18nKey)` 路径正确，实际原因是中英文消息表遗漏 AI 目录及六个页面键，而 Vue I18n 关闭了 fallback。
+- 已补齐 `navigation.ai`、`navigation.aiAgent`、`navigation.aiChat`、`navigation.aiOfficialModel`、`navigation.aiProvider`、`navigation.aiRun`、`navigation.aiTool` 的中英文文案，并加入双语导航回归断言；不改 PostgreSQL 菜单、Redis 状态或 RBAC。
+- `pnpm vitest run --pool=threads --maxWorkers=1 tests/i18n/index.test.ts` 按预期先失败（`navigation.ai` 未注册），补文案后 13/13 通过；`pnpm typecheck` 与 `pnpm build` 通过。生产构建保留既有 500 kB chunk 警告。
+
+### AI 正式迁移（2026-11-04，已完成）
+
+- 按 core/seed → payment → menu 执行到本地 PostgreSQL。预检确认 Redis Admin 菜单为 `ready/24`、无其他数据库客户端，未发现运行中的 API/Worker；runner 仍自行检查数据库写入连接。未启动或停止用户服务。
+- core/seed 事务提交并复跑通过：新增 21 张 AI 表、26 条内置运行策略，`system.setting` generation 从 23 推进至 24；初始化 `ai.runtime/global` generation 1 和 outbox。AI 恢复、事件清理两个周期任务均以停用状态写入，`next_run_at` 为空。
+- payment 扩展提交并复跑通过：为既有流水回填 `direction`、`balance_before_units`，增加 AI 费用来源约束和外键。1 条流水、1 个钱包的旧事实摘要及余额未变化，新增流水检查无异常，两个防篡改触发器保持启用。首次正式尝试经 runner 确认回滚；真实数据库的完整迁移 SQL 随后在事务内执行并回滚通过（1.527 秒），使用新备份与审计目录重试成功；未获得首次失败的具体服务端诊断，保留首次失败审计。
+- menu seed 提交并复跑通过：Admin 菜单版本从 24 增至 25，写入 1 个目录、6 个页面、38 个动作，并定向发布 Redis `ready/25`。其他平台、菜单和角色授权摘要保持不变。首次 runner 在只读预检阶段未读取到状态、未提交 SQL；独立预览正常后用新审计目录重试完成。
+- 最终只读核验：AI schema stamp 匹配、42 个时间字段非空 `TIMESTAMPTZ`、26 条策略有效，资金流水算术与两个保护触发器有效。AI Provider/Agent 尚未配置；无角色授权变更。`system.setting/global` 最新 outbox 等待已部署 Worker relay 发布后再进行配置/服务测试。
+- 三次成功迁移各自保存受限权限的 custom-format 全库备份及审计，备份 SHA-256 已复核。目录：`C:\Users\IGT\AppData\Local\Admin\maintenance\ai-migration\20261104-101713\core-seed`、`payment-retry`、`menu-retry`；失败的 payment 回滚及 menu 预检记录也保留在同目录。未修改 `.env`、未输出凭据。
+- 已由真实 PostgreSQL 更新 `docs/database/current.sql`。对象核对为原 418 项均保留，新增 209 项，变更项仅 `payment_transaction` 和 `system_setting`；没有删除对象。迁移交付时 `git diff --check` 通过，工作区改动为快照和本状态记录；其后 AI 导航翻译修复另有上节记录。
+- 实际迁移前定向验证：`go test -json -p 1 -parallel 1 ./internal/module/ai ./internal/module/payment/transaction ./cmd/ai-menu-state -count=1 -timeout=5m`，163 项通过、0 失败、0 跳过。完成后 `go run ./cmd/ai-menu-state --env-file .env` 实测 `45` 节点、Admin/Redis `25/ready`；最终 PostgreSQL invariant 查询通过。此前实现已有 `pnpm typecheck`、`pnpm check:architecture`、`pnpm build` 与受影响 Go 包 build/vet 通过记录。
+- 可进入本地接入测试准备：先运行当前版本 API/Worker 与前端，由 Worker relay 消化 system.setting outbox；再给测试角色显式授予所需页面和 action，配置供应商/模型、经审核的人民币价格、Agent 绑定、AI 上传规则与正余额测试钱包。不要在 Worker/存储等未准备前启用两个内置周期任务；迁移未调用真实供应商/COS、未生成业务配置或测试费用。
+
 ### AI 清理与迁移准备（2026-11-03，范围记录）
 
 - 维护者确认继续代码收尾，并询问迁移后接入测试。本轮范围为 Run/工作台展示、媒体转存过期 attempt 防护、无用兼容代码、AI 上传用途契约及菜单维护入口；不执行正式库迁移、服务启停、真实供应商/COS 调用或 Git 提交。

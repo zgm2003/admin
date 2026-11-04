@@ -43,6 +43,29 @@ describe('frontend i18n', () => {
     expect(appI18n.global.t('navigation.messageNotification')).toBe('通知中心')
   })
 
+  it('translates every AI navigation key in both supported languages', () => {
+    const expected = {
+      'navigation.ai': ['人工智能', 'AI'],
+      'navigation.aiAgent': ['智能体配置', 'AI agents'],
+      'navigation.aiChat': ['AI 工作台', 'AI workspace'],
+      'navigation.aiOfficialModel': ['官方模型', 'Official models'],
+      'navigation.aiProvider': ['供应商配置', 'Providers'],
+      'navigation.aiRun': ['运行监控', 'Run monitoring'],
+      'navigation.aiTool': ['工具管理', 'Tools'],
+    } as const
+
+    for (const [locale, index] of [
+      ['zh-CN', 0],
+      ['en-US', 1],
+    ] as const) {
+      setLocale(locale)
+      for (const [key, values] of Object.entries(expected)) {
+        expect(isAppMessageKey(key), key).toBe(true)
+        expect(appI18n.global.t(key), key).toBe(values[index])
+      }
+    }
+  })
+
   it('recognizes only exact application message keys', () => {
     expect(isAppMessageKey('navigation.dashboard')).toBe(true)
     expect(isAppMessageKey('access.loadFailed')).toBe(true)

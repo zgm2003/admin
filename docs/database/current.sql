@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict RPnBl9iZrJfpY3pa4pTsKpWYwoDh7yAJELDlYhi5WM3MgpMRRicc5XPx6FejLBM
+\restrict YBP5iMrY8vjX0x6h4yEeDpJHiOWhqIzoFOpVFjPf1HTWDPLhue0adbLEgHCAZJX
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -31,6 +31,179 @@ CREATE SCHEMA public;
 --
 
 COMMENT ON SCHEMA public IS 'standard public schema';
+
+
+--
+-- Name: ai_check_current_binding(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_check_current_binding() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE agent_ bigint;
+BEGIN
+ IF TG_TABLE_NAME='ai_agent' THEN agent_:=NEW.id; ELSE agent_:=NEW.agent_id; END IF;
+ IF EXISTS(SELECT 1 FROM ai_agent a WHERE a.id=agent_ AND a.status=1 AND a.deleted_at IS NULL
+    AND NOT EXISTS(SELECT 1 FROM ai_agent_model_binding b WHERE b.agent_id=a.id AND b.id=a.active_binding_id AND b.status=1)) THEN
+  RAISE EXCEPTION 'AI enabled agent must have an enabled current binding';
+ END IF;
+ RETURN NEW;
+END $$;
+
+
+--
+-- Name: ai_core_schema_digest(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_core_schema_digest() RETURNS text
+    LANGUAGE sql STABLE
+    AS $$
+SELECT md5(coalesce(string_agg(x, E'\n' ORDER BY x),'')) FROM (
+ SELECT 'column:'||c.relname||':'||a.attname||':'||format_type(a.atttypid,a.atttypmod)||':'||a.attnotnull::text||':'||a.attidentity::text||':'||coalesce(pg_get_expr(d.adbin,d.adrelid),'') x
+ FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+ JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
+ LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
+ WHERE n.nspname=current_schema() AND c.relkind='r' AND c.relname LIKE 'ai\_%' ESCAPE '\'
+ UNION ALL
+ SELECT 'constraint:'||c.relname||':'||p.conname||':'||pg_get_constraintdef(p.oid)
+ FROM pg_constraint p JOIN pg_class c ON c.oid=p.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname=current_schema() AND c.relname LIKE 'ai\_%' ESCAPE '\'
+ UNION ALL
+ SELECT 'index:'||indexname||':'||indexdef FROM pg_indexes WHERE schemaname=current_schema() AND tablename LIKE 'ai\_%' ESCAPE '\'
+ UNION ALL
+ SELECT 'trigger:'||c.relname||':'||t.tgname||':'||pg_get_triggerdef(t.oid)
+ FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+ WHERE n.nspname=current_schema() AND NOT t.tgisinternal AND c.relname LIKE 'ai\_%' ESCAPE '\'
+ UNION ALL
+ SELECT 'function:'||p.proname||':'||pg_get_functiondef(p.oid)
+ FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+ WHERE n.nspname=current_schema() AND p.proname LIKE 'ai\_%' ESCAPE '\' AND p.proname<>'ai_core_schema_digest'
+) s;
+$$;
+
+
+--
+-- Name: ai_guard_charge_item(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_guard_charge_item() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE parent_id bigint; charge_status smallint;
+BEGIN
+ IF TG_OP='DELETE' THEN parent_id:=OLD.charge_id; ELSE parent_id:=NEW.charge_id; END IF;
+ SELECT status INTO charge_status FROM ai_usage_charge WHERE id=parent_id FOR UPDATE;
+ IF charge_status=2 THEN RAISE EXCEPTION 'AI settled usage item is immutable'; END IF;
+ IF TG_OP='UPDATE' AND NEW.charge_id<>OLD.charge_id THEN RAISE EXCEPTION 'AI usage item cannot change owner'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+
+
+--
+-- Name: ai_guard_price_rate(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_guard_price_rate() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE version_id bigint; price_status smallint;
+BEGIN
+ IF TG_OP='DELETE' THEN version_id:=OLD.price_version_id; ELSE version_id:=NEW.price_version_id; END IF;
+ SELECT status INTO price_status FROM ai_provider_model_price_version WHERE id=version_id FOR UPDATE;
+ IF price_status=1 THEN RAISE EXCEPTION 'AI published price rate is immutable'; END IF;
+ IF TG_OP='UPDATE' AND (to_jsonb(NEW)-ARRAY['billing_unit_price_units','updated_at']) IS DISTINCT FROM
+    (to_jsonb(OLD)-ARRAY['billing_unit_price_units','updated_at']) THEN RAISE EXCEPTION 'AI dollar source rate is read-only'; END IF;
+ IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ RETURN NEW;
+END $$;
+
+
+--
+-- Name: ai_guard_price_version(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_guard_price_version() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_OP='INSERT' THEN
+  IF NEW.status<>0 THEN RAISE EXCEPTION 'AI price version must be published from a preview'; END IF;
+  RETURN NEW;
+ END IF;
+ IF TG_OP='DELETE' OR OLD.status=1 THEN RAISE EXCEPTION 'AI price version is immutable'; END IF;
+ IF (to_jsonb(NEW)-ARRAY['status','effective_at','snapshot_digest','published_by','published_at','updated_at']) IS DISTINCT FROM
+    (to_jsonb(OLD)-ARRAY['status','effective_at','snapshot_digest','published_by','published_at','updated_at']) THEN RAISE EXCEPTION 'AI price source is read-only'; END IF;
+ IF NEW.status=1 AND (NOT EXISTS(SELECT 1 FROM ai_provider_model_price_rate WHERE price_version_id=NEW.id)
+   OR EXISTS(SELECT 1 FROM ai_provider_model_price_rate WHERE price_version_id=NEW.id AND billing_unit_price_units IS NULL)) THEN
+  RAISE EXCEPTION 'AI price version has missing billing rates';
+ END IF;
+ RETURN NEW;
+END $$;
+
+
+--
+-- Name: ai_guard_run(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_guard_run() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE mutable_fields text[]:=ARRAY['execution_status','usage_status','billing_status','transfer_status','reservation_status','state_version','next_event_sequence','lease_token','lease_until','heartbeat_at','started_at','finished_at','cancel_requested_at','error_code','error_message','updated_at'];
+BEGIN
+ IF TG_OP='DELETE' THEN RAISE EXCEPTION 'AI run facts cannot be deleted'; END IF;
+ IF (to_jsonb(NEW)-mutable_fields) IS DISTINCT FROM (to_jsonb(OLD)-mutable_fields) THEN RAISE EXCEPTION 'AI run snapshot is immutable'; END IF;
+ IF NEW.execution_status<>OLD.execution_status THEN
+  IF NEW.state_version<=OLD.state_version OR
+    NOT ((OLD.execution_status=0 AND NEW.execution_status IN(1,4,5)) OR
+         (OLD.execution_status=1 AND NEW.execution_status IN(2,3,4,5)) OR
+         (OLD.execution_status=2 AND NEW.execution_status IN(3,4,5))) THEN
+   RAISE EXCEPTION 'AI run status transition is invalid';
+  END IF;
+ END IF;
+ IF NEW.state_version<OLD.state_version OR NEW.next_event_sequence<OLD.next_event_sequence THEN RAISE EXCEPTION 'AI run fencing coordinate cannot go backwards'; END IF;
+ RETURN NEW;
+END $$;
+
+
+--
+-- Name: ai_guard_settled_charge(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_guard_settled_charge() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+ IF TG_OP='DELETE' OR OLD.status=2 THEN RAISE EXCEPTION 'AI usage charge is immutable'; END IF;
+ IF NEW.status=2 AND coalesce((SELECT sum(amount_units)::numeric FROM ai_usage_charge_item WHERE charge_id=NEW.id),0)<>NEW.actual_units::numeric THEN
+  RAISE EXCEPTION 'AI usage charge item sum mismatch';
+ END IF;
+ RETURN NEW;
+END $$;
+
+
+--
+-- Name: ai_reject_immutable(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_reject_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN RAISE EXCEPTION 'AI immutable fact cannot be changed'; END $$;
+
+
+--
+-- Name: ai_valid_operations(text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ai_valid_operations(values_ text[]) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+SELECT coalesce(cardinality(values_) BETWEEN 1 AND 6
+ AND array_ndims(values_)=1 AND array_position(values_,NULL) IS NULL
+ AND values_ <@ ARRAY['text.generate','image.generate','image.edit','video.generate','audio.speech','audio.transcribe']::text[]
+ AND cardinality(values_)=(SELECT count(DISTINCT v) FROM unnest(values_) v),false);
+$$;
 
 
 --
@@ -169,6 +342,923 @@ CREATE FUNCTION public.payment_wallet_identity_guard() RETURNS trigger
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: ai_agent; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_agent (
+    id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    name character varying(100) NOT NULL,
+    description character varying(1000) DEFAULT ''::character varying NOT NULL,
+    avatar_file_id bigint,
+    capabilities text[] NOT NULL,
+    system_prompt text NOT NULL,
+    multiplier_ppm bigint NOT NULL,
+    active_binding_id bigint,
+    generation_params jsonb NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
+    created_by bigint NOT NULL,
+    updated_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ai_agent_capabilities_check CHECK (((cardinality(capabilities) > 0) AND (capabilities <@ ARRAY['text'::text, 'image'::text, 'video'::text, 'audio'::text]) AND (array_position(capabilities, NULL::text) IS NULL))),
+    CONSTRAINT ai_agent_check CHECK (((status = 0) OR (active_binding_id IS NOT NULL))),
+    CONSTRAINT ai_agent_code_check CHECK ((length((code)::text) > 0)),
+    CONSTRAINT ai_agent_generation_params_check CHECK ((jsonb_typeof(generation_params) = 'object'::text)),
+    CONSTRAINT ai_agent_multiplier_ppm_check CHECK (((multiplier_ppm >= 1) AND (multiplier_ppm <= 100000000))),
+    CONSTRAINT ai_agent_name_check CHECK ((length((name)::text) > 0)),
+    CONSTRAINT ai_agent_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_agent_system_prompt_check CHECK ((octet_length(system_prompt) <= 65536))
+);
+
+
+--
+-- Name: ai_agent_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_agent ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_agent_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_agent_model_binding; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_agent_model_binding (
+    id bigint NOT NULL,
+    agent_id bigint NOT NULL,
+    provider_model_id bigint NOT NULL,
+    text_protocol smallint DEFAULT 1 NOT NULL,
+    parameters jsonb NOT NULL,
+    status smallint DEFAULT 1 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_agent_model_binding_parameters_check CHECK ((jsonb_typeof(parameters) = 'object'::text)),
+    CONSTRAINT ai_agent_model_binding_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_agent_model_binding_text_protocol_check CHECK ((text_protocol = ANY (ARRAY[1, 2])))
+);
+
+
+--
+-- Name: ai_agent_model_binding_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_agent_model_binding ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_agent_model_binding_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_agent_tool; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_agent_tool (
+    id bigint NOT NULL,
+    agent_id bigint NOT NULL,
+    tool_id bigint NOT NULL,
+    exposed_name character varying(64) NOT NULL,
+    parameter_constraints jsonb NOT NULL,
+    status smallint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_agent_tool_exposed_name_check CHECK ((length((exposed_name)::text) > 0)),
+    CONSTRAINT ai_agent_tool_parameter_constraints_check CHECK ((jsonb_typeof(parameter_constraints) = 'object'::text)),
+    CONSTRAINT ai_agent_tool_status_check CHECK ((status = ANY (ARRAY[0, 1])))
+);
+
+
+--
+-- Name: ai_agent_tool_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_agent_tool ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_agent_tool_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_conversation; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_conversation (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    agent_id bigint NOT NULL,
+    title character varying(200) NOT NULL,
+    last_message_sequence bigint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ai_conversation_last_message_sequence_check CHECK ((last_message_sequence >= 0)),
+    CONSTRAINT ai_conversation_title_check CHECK ((length((title)::text) > 0))
+);
+
+
+--
+-- Name: ai_conversation_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_conversation ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_conversation_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_media_file; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_media_file (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    media_task_id bigint,
+    role smallint NOT NULL,
+    ordinal integer NOT NULL,
+    storage_file_id bigint,
+    import_request_key uuid,
+    source_kind smallint NOT NULL,
+    source_ciphertext text,
+    encryption_key_id character varying(64),
+    source_recoverable smallint NOT NULL,
+    source_expires_at timestamp with time zone,
+    transfer_deadline_at timestamp with time zone,
+    mime_type character varying(100),
+    size_bytes bigint,
+    metadata jsonb NOT NULL,
+    transfer_status smallint NOT NULL,
+    transfer_attempts integer NOT NULL,
+    next_transfer_at timestamp with time zone,
+    error_code character varying(64),
+    error_message character varying(1000),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_media_file_check CHECK ((((role = 1) AND (source_kind = 0) AND (storage_file_id IS NOT NULL) AND (transfer_status = 2) AND (import_request_key IS NULL) AND (source_ciphertext IS NULL) AND (encryption_key_id IS NULL) AND (source_expires_at IS NULL) AND (transfer_deadline_at IS NULL)) OR ((role = 2) AND (source_kind = ANY (ARRAY[1, 2, 3])) AND (import_request_key IS NOT NULL) AND (transfer_deadline_at IS NOT NULL)))),
+    CONSTRAINT ai_media_file_check1 CHECK (((transfer_status <> 2) OR (storage_file_id IS NOT NULL))),
+    CONSTRAINT ai_media_file_check2 CHECK (((source_ciphertext IS NULL) = (encryption_key_id IS NULL))),
+    CONSTRAINT ai_media_file_metadata_check CHECK ((jsonb_typeof(metadata) = 'object'::text)),
+    CONSTRAINT ai_media_file_ordinal_check CHECK ((ordinal >= 0)),
+    CONSTRAINT ai_media_file_role_check CHECK ((role = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ai_media_file_size_bytes_check CHECK ((size_bytes >= 0)),
+    CONSTRAINT ai_media_file_source_kind_check CHECK ((source_kind = ANY (ARRAY[0, 1, 2, 3]))),
+    CONSTRAINT ai_media_file_source_recoverable_check CHECK ((source_recoverable = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_media_file_transfer_attempts_check CHECK ((transfer_attempts >= 0)),
+    CONSTRAINT ai_media_file_transfer_status_check CHECK ((transfer_status = ANY (ARRAY[0, 1, 2, 3, 4])))
+);
+
+
+--
+-- Name: ai_media_file_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_media_file ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_media_file_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_media_task; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_media_task (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    provider_request_id bigint NOT NULL,
+    media_kind smallint NOT NULL,
+    upstream_task_id character varying(200),
+    status smallint NOT NULL,
+    progress smallint,
+    poll_attempts integer NOT NULL,
+    next_poll_at timestamp with time zone,
+    deadline_at timestamp with time zone NOT NULL,
+    upstream_result jsonb NOT NULL,
+    error_code character varying(64),
+    error_message character varying(1000),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_media_task_media_kind_check CHECK ((media_kind = ANY (ARRAY[1, 2, 3]))),
+    CONSTRAINT ai_media_task_poll_attempts_check CHECK ((poll_attempts >= 0)),
+    CONSTRAINT ai_media_task_progress_check CHECK (((progress >= 0) AND (progress <= 100))),
+    CONSTRAINT ai_media_task_status_check CHECK ((status = ANY (ARRAY[0, 1, 2, 3, 4, 5]))),
+    CONSTRAINT ai_media_task_upstream_result_check CHECK ((jsonb_typeof(upstream_result) = 'object'::text))
+);
+
+
+--
+-- Name: ai_media_task_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_media_task ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_media_task_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_message; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_message (
+    id bigint NOT NULL,
+    conversation_id bigint NOT NULL,
+    run_id bigint,
+    sequence bigint NOT NULL,
+    role smallint NOT NULL,
+    content jsonb NOT NULL,
+    status smallint NOT NULL,
+    provider_item_id character varying(200),
+    tool_call_id character varying(200),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_message_content_check CHECK ((jsonb_typeof(content) = 'array'::text)),
+    CONSTRAINT ai_message_role_check CHECK ((role = ANY (ARRAY[1, 2, 3]))),
+    CONSTRAINT ai_message_sequence_check CHECK ((sequence > 0)),
+    CONSTRAINT ai_message_status_check CHECK ((status = ANY (ARRAY[1, 2, 3])))
+);
+
+
+--
+-- Name: ai_message_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_message ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_message_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_official_model; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_official_model (
+    id bigint NOT NULL,
+    vendor_code character varying(64) NOT NULL,
+    model_key character varying(200) NOT NULL,
+    name character varying(100) NOT NULL,
+    operations text[] NOT NULL,
+    source_urls jsonb NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
+    created_by bigint NOT NULL,
+    updated_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_official_model_model_key_check CHECK ((length((model_key)::text) > 0)),
+    CONSTRAINT ai_official_model_name_check CHECK ((length((name)::text) > 0)),
+    CONSTRAINT ai_official_model_operations_check CHECK (public.ai_valid_operations(operations)),
+    CONSTRAINT ai_official_model_source_urls_check CHECK ((jsonb_typeof(source_urls) = 'array'::text)),
+    CONSTRAINT ai_official_model_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_official_model_vendor_code_check CHECK ((length((vendor_code)::text) > 0))
+);
+
+
+--
+-- Name: ai_official_model_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_official_model ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_official_model_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_provider; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_provider (
+    id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    name character varying(100) NOT NULL,
+    description character varying(1000) DEFAULT ''::character varying NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
+    current_version bigint NOT NULL,
+    created_by bigint NOT NULL,
+    updated_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ai_provider_code_check CHECK ((length((code)::text) > 0)),
+    CONSTRAINT ai_provider_current_version_check CHECK ((current_version > 0)),
+    CONSTRAINT ai_provider_name_check CHECK ((length((name)::text) > 0)),
+    CONSTRAINT ai_provider_status_check CHECK ((status = ANY (ARRAY[0, 1])))
+);
+
+
+--
+-- Name: TABLE ai_provider; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.ai_provider IS 'admin-ai-core-v1:d750f9022af8bed388cb931e4d009f7b';
+
+
+--
+-- Name: ai_provider_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_provider ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_provider_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_provider_model; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_provider_model (
+    id bigint NOT NULL,
+    provider_id bigint NOT NULL,
+    upstream_model_id character varying(200) NOT NULL,
+    name character varying(100) NOT NULL,
+    official_model_id bigint,
+    operations text[] NOT NULL,
+    limits jsonb NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ai_provider_model_check CHECK (((status = 0) OR (official_model_id IS NOT NULL))),
+    CONSTRAINT ai_provider_model_limits_check CHECK ((jsonb_typeof(limits) = 'object'::text)),
+    CONSTRAINT ai_provider_model_name_check CHECK ((length((name)::text) > 0)),
+    CONSTRAINT ai_provider_model_operations_check CHECK (public.ai_valid_operations(operations)),
+    CONSTRAINT ai_provider_model_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_provider_model_upstream_model_id_check CHECK ((length((upstream_model_id)::text) > 0))
+);
+
+
+--
+-- Name: ai_provider_model_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_provider_model ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_provider_model_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_provider_model_price_rate; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_provider_model_price_rate (
+    id bigint NOT NULL,
+    price_version_id bigint NOT NULL,
+    operation character varying(32) NOT NULL,
+    usage_key character varying(64) NOT NULL,
+    selector jsonb NOT NULL,
+    selector_hash character(64) NOT NULL,
+    unit character varying(16) NOT NULL,
+    unit_quantity numeric(24,8) NOT NULL,
+    source_unit_price numeric(30,12) NOT NULL,
+    billing_unit_price_units bigint,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_provider_model_price_rate_billing_unit_price_units_check CHECK ((billing_unit_price_units >= 0)),
+    CONSTRAINT ai_provider_model_price_rate_check CHECK (((((unit)::text <> 'token'::text) OR (unit_quantity = (1000000)::numeric)) AND (((unit)::text <> 'image'::text) OR (unit_quantity = (1)::numeric)))),
+    CONSTRAINT ai_provider_model_price_rate_operation_check CHECK (((operation)::text = ANY ((ARRAY['text.generate'::character varying, 'image.generate'::character varying, 'image.edit'::character varying, 'video.generate'::character varying, 'audio.speech'::character varying, 'audio.transcribe'::character varying])::text[]))),
+    CONSTRAINT ai_provider_model_price_rate_selector_check CHECK ((jsonb_typeof(selector) = 'object'::text)),
+    CONSTRAINT ai_provider_model_price_rate_selector_hash_check CHECK ((selector_hash ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ai_provider_model_price_rate_source_unit_price_check CHECK (((source_unit_price >= (0)::numeric) AND (source_unit_price <> 'NaN'::numeric))),
+    CONSTRAINT ai_provider_model_price_rate_unit_check CHECK (((unit)::text = ANY ((ARRAY['token'::character varying, 'image'::character varying, 'second'::character varying, 'character'::character varying, 'request'::character varying])::text[]))),
+    CONSTRAINT ai_provider_model_price_rate_unit_quantity_check CHECK (((unit_quantity > (0)::numeric) AND (unit_quantity <> 'NaN'::numeric))),
+    CONSTRAINT ai_provider_model_price_rate_usage_key_check CHECK ((length((usage_key)::text) > 0))
+);
+
+
+--
+-- Name: ai_provider_model_price_rate_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_provider_model_price_rate ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_provider_model_price_rate_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_provider_model_price_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_provider_model_price_version (
+    id bigint NOT NULL,
+    provider_model_id bigint NOT NULL,
+    version bigint NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
+    effective_at timestamp with time zone,
+    currency character(3) NOT NULL,
+    source_currency character(3) NOT NULL,
+    source_digest character(64) NOT NULL,
+    snapshot_digest character(64) NOT NULL,
+    source_payload jsonb NOT NULL,
+    synced_at timestamp with time zone NOT NULL,
+    created_by bigint NOT NULL,
+    published_by bigint,
+    published_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_provider_model_price_version_check CHECK ((((status = 0) AND (published_by IS NULL) AND (published_at IS NULL)) OR ((status = 1) AND (effective_at IS NOT NULL) AND (published_by IS NOT NULL) AND (published_at IS NOT NULL)))),
+    CONSTRAINT ai_provider_model_price_version_currency_check CHECK ((currency = 'CNY'::bpchar)),
+    CONSTRAINT ai_provider_model_price_version_snapshot_digest_check CHECK ((snapshot_digest ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ai_provider_model_price_version_source_currency_check CHECK ((source_currency = 'USD'::bpchar)),
+    CONSTRAINT ai_provider_model_price_version_source_digest_check CHECK ((source_digest ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ai_provider_model_price_version_source_payload_check CHECK ((jsonb_typeof(source_payload) = 'object'::text)),
+    CONSTRAINT ai_provider_model_price_version_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_provider_model_price_version_version_check CHECK ((version > 0))
+);
+
+
+--
+-- Name: ai_provider_model_price_version_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_provider_model_price_version ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_provider_model_price_version_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_provider_request; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_provider_request (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    sequence integer NOT NULL,
+    request_key uuid NOT NULL,
+    request_fingerprint character(64) NOT NULL,
+    status smallint NOT NULL,
+    upstream_request_id character varying(200),
+    request_summary jsonb NOT NULL,
+    response_items jsonb NOT NULL,
+    usage jsonb NOT NULL,
+    usage_status smallint NOT NULL,
+    started_at timestamp with time zone,
+    finished_at timestamp with time zone,
+    error_code character varying(64),
+    error_message character varying(1000),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_provider_request_request_fingerprint_check CHECK ((request_fingerprint ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ai_provider_request_request_summary_check CHECK ((jsonb_typeof(request_summary) = 'object'::text)),
+    CONSTRAINT ai_provider_request_response_items_check CHECK ((jsonb_typeof(response_items) = 'array'::text)),
+    CONSTRAINT ai_provider_request_sequence_check CHECK ((sequence > 0)),
+    CONSTRAINT ai_provider_request_status_check CHECK ((status = ANY (ARRAY[0, 1, 2, 3, 4]))),
+    CONSTRAINT ai_provider_request_usage_check CHECK (((jsonb_typeof(usage) = 'object'::text) AND (octet_length((usage)::text) <= 65536))),
+    CONSTRAINT ai_provider_request_usage_status_check CHECK ((usage_status = ANY (ARRAY[0, 1, 2])))
+);
+
+
+--
+-- Name: ai_provider_request_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_provider_request ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_provider_request_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_provider_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_provider_version (
+    id bigint NOT NULL,
+    provider_id bigint NOT NULL,
+    version bigint NOT NULL,
+    base_url character varying(2048) NOT NULL,
+    api_key_ciphertext text NOT NULL,
+    encryption_key_id character varying(64) NOT NULL,
+    headers_ciphertext text,
+    media_host_allowlist jsonb NOT NULL,
+    request_timeout_ms integer NOT NULL,
+    created_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_provider_version_api_key_ciphertext_check CHECK ((length(api_key_ciphertext) > 0)),
+    CONSTRAINT ai_provider_version_base_url_check CHECK (((base_url)::text ~ '^https://[^[:space:]]+$'::text)),
+    CONSTRAINT ai_provider_version_encryption_key_id_check CHECK ((length((encryption_key_id)::text) > 0)),
+    CONSTRAINT ai_provider_version_media_host_allowlist_check CHECK ((jsonb_typeof(media_host_allowlist) = 'array'::text)),
+    CONSTRAINT ai_provider_version_request_timeout_ms_check CHECK (((request_timeout_ms >= 1000) AND (request_timeout_ms <= 300000))),
+    CONSTRAINT ai_provider_version_version_check CHECK ((version > 0))
+);
+
+
+--
+-- Name: ai_provider_version_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_provider_version ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_provider_version_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_run; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_run (
+    id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    request_key uuid NOT NULL,
+    request_fingerprint character(64) NOT NULL,
+    conversation_id bigint,
+    agent_id bigint NOT NULL,
+    binding_id bigint NOT NULL,
+    provider_model_id bigint NOT NULL,
+    provider_version_id bigint NOT NULL,
+    official_model_id bigint NOT NULL,
+    price_version_id bigint NOT NULL,
+    operation character varying(32) NOT NULL,
+    execution_status smallint NOT NULL,
+    usage_status smallint NOT NULL,
+    billing_status smallint NOT NULL,
+    transfer_status smallint NOT NULL,
+    input_snapshot jsonb NOT NULL,
+    config_snapshot jsonb NOT NULL,
+    policy_snapshot jsonb NOT NULL,
+    multiplier_ppm bigint NOT NULL,
+    estimated_units bigint NOT NULL,
+    reservation_status smallint NOT NULL,
+    state_version bigint NOT NULL,
+    next_event_sequence bigint DEFAULT 0 NOT NULL,
+    lease_token uuid,
+    lease_until timestamp with time zone,
+    heartbeat_at timestamp with time zone,
+    accepted_at timestamp with time zone NOT NULL,
+    deadline_at timestamp with time zone NOT NULL,
+    started_at timestamp with time zone,
+    finished_at timestamp with time zone,
+    cancel_requested_at timestamp with time zone,
+    error_code character varying(64),
+    error_message character varying(1000),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_run_billing_status_check CHECK ((billing_status = ANY (ARRAY[0, 1, 2, 3, 4]))),
+    CONSTRAINT ai_run_check CHECK ((deadline_at > accepted_at)),
+    CONSTRAINT ai_run_check1 CHECK (((lease_token IS NULL) = (lease_until IS NULL))),
+    CONSTRAINT ai_run_config_snapshot_check CHECK ((jsonb_typeof(config_snapshot) = 'object'::text)),
+    CONSTRAINT ai_run_estimated_units_check CHECK ((estimated_units >= 0)),
+    CONSTRAINT ai_run_execution_status_check CHECK ((execution_status = ANY (ARRAY[0, 1, 2, 3, 4, 5]))),
+    CONSTRAINT ai_run_input_snapshot_check CHECK ((jsonb_typeof(input_snapshot) = 'object'::text)),
+    CONSTRAINT ai_run_multiplier_ppm_check CHECK (((multiplier_ppm >= 1) AND (multiplier_ppm <= 100000000))),
+    CONSTRAINT ai_run_next_event_sequence_check CHECK ((next_event_sequence >= 0)),
+    CONSTRAINT ai_run_operation_check CHECK (((operation)::text = ANY ((ARRAY['text.generate'::character varying, 'image.generate'::character varying, 'image.edit'::character varying, 'video.generate'::character varying, 'audio.speech'::character varying, 'audio.transcribe'::character varying])::text[]))),
+    CONSTRAINT ai_run_policy_snapshot_check CHECK ((jsonb_typeof(policy_snapshot) = 'object'::text)),
+    CONSTRAINT ai_run_request_fingerprint_check CHECK ((request_fingerprint ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ai_run_reservation_status_check CHECK ((reservation_status = ANY (ARRAY[0, 1, 2]))),
+    CONSTRAINT ai_run_state_version_check CHECK ((state_version > 0)),
+    CONSTRAINT ai_run_transfer_status_check CHECK ((transfer_status = ANY (ARRAY[0, 1, 2, 3, 4, 5]))),
+    CONSTRAINT ai_run_usage_status_check CHECK ((usage_status = ANY (ARRAY[0, 1, 2])))
+);
+
+
+--
+-- Name: ai_run_event; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_run_event (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    sequence bigint NOT NULL,
+    event_type character varying(64) NOT NULL,
+    payload jsonb NOT NULL,
+    published_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_run_event_event_type_check CHECK (((event_type)::text = ANY ((ARRAY['queued'::character varying, 'started'::character varying, 'textDelta'::character varying, 'toolStarted'::character varying, 'toolFinished'::character varying, 'mediaUpdated'::character varying, 'finished'::character varying, 'billingUpdated'::character varying])::text[]))),
+    CONSTRAINT ai_run_event_payload_check CHECK (((jsonb_typeof(payload) = 'object'::text) AND (octet_length((payload)::text) <= 65536))),
+    CONSTRAINT ai_run_event_sequence_check CHECK ((sequence > 0))
+);
+
+
+--
+-- Name: ai_run_event_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_run_event ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_run_event_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_run_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_run ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_run_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_tool; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_tool (
+    id bigint NOT NULL,
+    code character varying(64) NOT NULL,
+    name character varying(100) NOT NULL,
+    type smallint NOT NULL,
+    current_version bigint NOT NULL,
+    status smallint DEFAULT 0 NOT NULL,
+    created_by bigint NOT NULL,
+    updated_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone,
+    CONSTRAINT ai_tool_code_check CHECK ((length((code)::text) > 0)),
+    CONSTRAINT ai_tool_current_version_check CHECK ((current_version > 0)),
+    CONSTRAINT ai_tool_name_check CHECK ((length((name)::text) > 0)),
+    CONSTRAINT ai_tool_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_tool_type_check CHECK ((type = ANY (ARRAY[1, 2])))
+);
+
+
+--
+-- Name: ai_tool_call; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_tool_call (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    provider_request_id bigint NOT NULL,
+    tool_version_id bigint NOT NULL,
+    call_id character varying(200) NOT NULL,
+    exposed_name character varying(64) NOT NULL,
+    arguments jsonb NOT NULL,
+    result jsonb,
+    status smallint NOT NULL,
+    idempotency_key uuid NOT NULL,
+    execution_attempts integer NOT NULL,
+    started_at timestamp with time zone,
+    finished_at timestamp with time zone,
+    error_code character varying(64),
+    error_message character varying(1000),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_tool_call_arguments_check CHECK ((jsonb_typeof(arguments) = 'object'::text)),
+    CONSTRAINT ai_tool_call_call_id_check CHECK ((length((call_id)::text) > 0)),
+    CONSTRAINT ai_tool_call_execution_attempts_check CHECK ((execution_attempts >= 0)),
+    CONSTRAINT ai_tool_call_exposed_name_check CHECK ((length((exposed_name)::text) > 0)),
+    CONSTRAINT ai_tool_call_result_check CHECK (((result IS NULL) OR (octet_length((result)::text) <= 65536))),
+    CONSTRAINT ai_tool_call_status_check CHECK ((status = ANY (ARRAY[0, 1, 2, 3, 4])))
+);
+
+
+--
+-- Name: ai_tool_call_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_tool_call ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_tool_call_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_tool_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_tool ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_tool_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_tool_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_tool_version (
+    id bigint NOT NULL,
+    tool_id bigint NOT NULL,
+    version bigint NOT NULL,
+    type smallint NOT NULL,
+    description text NOT NULL,
+    input_schema jsonb NOT NULL,
+    output_schema jsonb NOT NULL,
+    builtin_key character varying(64),
+    http_definition jsonb,
+    secret_ciphertext text,
+    encryption_key_id character varying(64),
+    timeout_ms integer DEFAULT 10000 NOT NULL,
+    output_limit_bytes integer DEFAULT 65536 NOT NULL,
+    has_side_effect smallint NOT NULL,
+    idempotency_mode smallint NOT NULL,
+    created_by bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_tool_version_check CHECK ((((type = 1) AND (http_definition IS NOT NULL) AND (jsonb_typeof(http_definition) = 'object'::text) AND (builtin_key IS NULL)) OR ((type = 2) AND (http_definition IS NULL) AND ((builtin_key)::text = ANY ((ARRAY['currentTime'::character varying, 'calculator'::character varying])::text[]))))),
+    CONSTRAINT ai_tool_version_check1 CHECK ((((secret_ciphertext IS NULL) AND (encryption_key_id IS NULL)) OR ((secret_ciphertext IS NOT NULL) AND (encryption_key_id IS NOT NULL) AND (length((encryption_key_id)::text) > 0)))),
+    CONSTRAINT ai_tool_version_check2 CHECK ((((has_side_effect = 0) AND (idempotency_mode = 0)) OR ((has_side_effect = 1) AND (idempotency_mode = ANY (ARRAY[1, 2, 3]))))),
+    CONSTRAINT ai_tool_version_description_check CHECK ((octet_length(description) <= 16384)),
+    CONSTRAINT ai_tool_version_has_side_effect_check CHECK ((has_side_effect = ANY (ARRAY[0, 1]))),
+    CONSTRAINT ai_tool_version_idempotency_mode_check CHECK ((idempotency_mode = ANY (ARRAY[0, 1, 2, 3]))),
+    CONSTRAINT ai_tool_version_input_schema_check CHECK ((jsonb_typeof(input_schema) = 'object'::text)),
+    CONSTRAINT ai_tool_version_output_limit_bytes_check CHECK (((output_limit_bytes >= 1) AND (output_limit_bytes <= 65536))),
+    CONSTRAINT ai_tool_version_output_schema_check CHECK ((jsonb_typeof(output_schema) = 'object'::text)),
+    CONSTRAINT ai_tool_version_timeout_ms_check CHECK (((timeout_ms >= 100) AND (timeout_ms <= 30000))),
+    CONSTRAINT ai_tool_version_type_check CHECK ((type = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ai_tool_version_version_check CHECK ((version > 0))
+);
+
+
+--
+-- Name: ai_tool_version_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_tool_version ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_tool_version_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_usage_charge; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_usage_charge (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    platform_id bigint NOT NULL,
+    status smallint NOT NULL,
+    currency character(3) NOT NULL,
+    price_version_id bigint NOT NULL,
+    multiplier_ppm bigint NOT NULL,
+    actual_units bigint,
+    usage_complete smallint NOT NULL,
+    snapshot_digest character(64) NOT NULL,
+    settlement_attempts integer NOT NULL,
+    next_settle_at timestamp with time zone,
+    settled_at timestamp with time zone,
+    error_code character varying(64),
+    error_message character varying(1000),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_usage_charge_actual_units_check CHECK ((actual_units >= 0)),
+    CONSTRAINT ai_usage_charge_check CHECK (((status <> 2) OR ((usage_complete = 1) AND (actual_units IS NOT NULL) AND (settled_at IS NOT NULL)))),
+    CONSTRAINT ai_usage_charge_check1 CHECK (((status <> ALL (ARRAY[1, 3])) OR ((usage_complete = 1) AND (actual_units IS NOT NULL)))),
+    CONSTRAINT ai_usage_charge_currency_check CHECK ((currency = 'CNY'::bpchar)),
+    CONSTRAINT ai_usage_charge_multiplier_ppm_check CHECK (((multiplier_ppm >= 1) AND (multiplier_ppm <= 100000000))),
+    CONSTRAINT ai_usage_charge_settlement_attempts_check CHECK ((settlement_attempts >= 0)),
+    CONSTRAINT ai_usage_charge_snapshot_digest_check CHECK ((snapshot_digest ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ai_usage_charge_status_check CHECK ((status = ANY (ARRAY[0, 1, 2, 3, 4]))),
+    CONSTRAINT ai_usage_charge_usage_complete_check CHECK ((usage_complete = ANY (ARRAY[0, 1])))
+);
+
+
+--
+-- Name: ai_usage_charge_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_usage_charge ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_usage_charge_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: ai_usage_charge_item; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_usage_charge_item (
+    id bigint NOT NULL,
+    charge_id bigint NOT NULL,
+    provider_request_id bigint NOT NULL,
+    price_rate_id bigint NOT NULL,
+    item_key character varying(200) NOT NULL,
+    operation character varying(32) NOT NULL,
+    usage_key character varying(64) NOT NULL,
+    selector_snapshot jsonb NOT NULL,
+    quantity numeric(24,8) NOT NULL,
+    unit_quantity numeric(24,8) NOT NULL,
+    unit character varying(16) NOT NULL,
+    billing_unit_price_units bigint NOT NULL,
+    multiplier_ppm bigint NOT NULL,
+    amount_units bigint NOT NULL,
+    raw_usage_digest character(64) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT ai_usage_charge_item_amount_units_check CHECK ((amount_units >= 0)),
+    CONSTRAINT ai_usage_charge_item_billing_unit_price_units_check CHECK ((billing_unit_price_units >= 0)),
+    CONSTRAINT ai_usage_charge_item_item_key_check CHECK ((length((item_key)::text) > 0)),
+    CONSTRAINT ai_usage_charge_item_multiplier_ppm_check CHECK (((multiplier_ppm >= 1) AND (multiplier_ppm <= 100000000))),
+    CONSTRAINT ai_usage_charge_item_quantity_check CHECK ((quantity >= (0)::numeric)),
+    CONSTRAINT ai_usage_charge_item_raw_usage_digest_check CHECK ((raw_usage_digest ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT ai_usage_charge_item_selector_snapshot_check CHECK ((jsonb_typeof(selector_snapshot) = 'object'::text)),
+    CONSTRAINT ai_usage_charge_item_unit_check CHECK (((unit)::text = ANY ((ARRAY['token'::character varying, 'image'::character varying, 'second'::character varying, 'character'::character varying, 'request'::character varying])::text[]))),
+    CONSTRAINT ai_usage_charge_item_unit_quantity_check CHECK ((unit_quantity > (0)::numeric))
+);
+
+
+--
+-- Name: ai_usage_charge_item_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_usage_charge_item ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.ai_usage_charge_item_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
 
 --
 -- Name: system_operation_log; Type: TABLE; Schema: public; Owner: -
@@ -1207,9 +2297,14 @@ CREATE TABLE public.payment_transaction (
     redeem_code_id bigint,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    direction smallint NOT NULL,
+    balance_before_units bigint NOT NULL,
+    ai_usage_charge_id bigint,
+    CONSTRAINT ck_payment_transaction_ai_source_direction CHECK ((((direction = 1) AND (ai_usage_charge_id IS NULL) AND ((order_id IS NOT NULL) OR (redeem_code_id IS NOT NULL))) OR ((direction = 2) AND (ai_usage_charge_id IS NOT NULL) AND (order_id IS NULL) AND (redeem_code_id IS NULL)))),
+    CONSTRAINT ck_payment_transaction_ai_source_xor CHECK ((num_nonnulls(order_id, redeem_code_id, ai_usage_charge_id) = 1)),
     CONSTRAINT ck_payment_transaction_amount CHECK ((amount_units > 0)),
-    CONSTRAINT ck_payment_transaction_balance CHECK (((balance_after_units)::numeric >= ((- '9223372036854775808'::numeric) + (amount_units)::numeric))),
-    CONSTRAINT ck_payment_transaction_source_xor CHECK (((order_id IS NOT NULL) <> (redeem_code_id IS NOT NULL)))
+    CONSTRAINT ck_payment_transaction_direction CHECK ((direction = ANY (ARRAY[1, 2]))),
+    CONSTRAINT ck_payment_transaction_direction_balance CHECK ((((direction = 1) AND ((balance_after_units)::numeric = ((balance_before_units)::numeric + (amount_units)::numeric))) OR ((direction = 2) AND ((balance_after_units)::numeric = ((balance_before_units)::numeric - (amount_units)::numeric)))))
 );
 
 
@@ -1944,6 +3039,11 @@ CREATE TABLE public.system_setting (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
+    CONSTRAINT ck_system_setting_ai_policy CHECK (((NOT ((setting_key)::text = ANY ('{ai.run.user_inflight_limit,ai.run.user_rate_per_second,ai.run.user_rate_burst,ai.run.global_rate_per_second,ai.run.global_rate_burst,ai.run.queued_backpressure_threshold,ai.run.active_backpressure_threshold,ai.run.max_queued_seconds,ai.run.text_timeout_seconds,ai.run.image_timeout_seconds,ai.run.audio_timeout_seconds,ai.run.video_timeout_seconds,ai.run.max_model_rounds,ai.run.max_tool_calls,ai.run.max_bound_tools,ai.run.max_input_attachments,ai.run.max_output_tokens,ai.run.max_text_input_bytes,ai.run.max_images,ai.media.image_max_bytes,ai.media.audio_max_bytes,ai.media.video_max_bytes,ai.media.download_timeout_seconds,ai.media.transfer_timeout_seconds,ai.media.spool_max_bytes_per_worker,ai.run.event_retention_days}'::text[]))) OR (
+CASE
+    WHEN (value ~ '^[0-9]{1,19}$'::text) THEN (((value)::numeric >= (1)::numeric) AND ((value)::numeric <= ('9223372036854775807'::bigint)::numeric))
+    ELSE false
+END AND (value_type = 2) AND (status = 1) AND (is_builtin = 1) AND (deleted_at IS NULL)))),
     CONSTRAINT ck_system_setting_is_builtin CHECK ((is_builtin = ANY (ARRAY[0, 1]))),
     CONSTRAINT ck_system_setting_key CHECK (((setting_key)::text ~ '^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$'::text)),
     CONSTRAINT ck_system_setting_payment_order_expiry CHECK ((((setting_key)::text <> 'payment.order.expiry_minutes'::text) OR
@@ -2299,6 +3399,342 @@ ALTER TABLE ONLY public.user_phone_change_log ALTER COLUMN id SET DEFAULT nextva
 --
 
 ALTER TABLE ONLY public.user_session ALTER COLUMN id SET DEFAULT nextval('public.auth_session_id_seq'::regclass);
+
+
+--
+-- Name: ai_agent_model_binding ai_agent_model_binding_agent_id_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_model_binding
+    ADD CONSTRAINT ai_agent_model_binding_agent_id_id_key UNIQUE (agent_id, id);
+
+
+--
+-- Name: ai_agent_model_binding ai_agent_model_binding_agent_id_provider_model_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_model_binding
+    ADD CONSTRAINT ai_agent_model_binding_agent_id_provider_model_id_key UNIQUE (agent_id, provider_model_id);
+
+
+--
+-- Name: ai_agent_model_binding ai_agent_model_binding_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_model_binding
+    ADD CONSTRAINT ai_agent_model_binding_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_agent ai_agent_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent
+    ADD CONSTRAINT ai_agent_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_agent_tool ai_agent_tool_agent_id_exposed_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_tool
+    ADD CONSTRAINT ai_agent_tool_agent_id_exposed_name_key UNIQUE (agent_id, exposed_name);
+
+
+--
+-- Name: ai_agent_tool ai_agent_tool_agent_id_tool_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_tool
+    ADD CONSTRAINT ai_agent_tool_agent_id_tool_id_key UNIQUE (agent_id, tool_id);
+
+
+--
+-- Name: ai_agent_tool ai_agent_tool_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_tool
+    ADD CONSTRAINT ai_agent_tool_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_conversation ai_conversation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_conversation
+    ADD CONSTRAINT ai_conversation_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_media_file ai_media_file_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_file
+    ADD CONSTRAINT ai_media_file_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_media_file ai_media_file_run_id_role_ordinal_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_file
+    ADD CONSTRAINT ai_media_file_run_id_role_ordinal_key UNIQUE (run_id, role, ordinal);
+
+
+--
+-- Name: ai_media_task ai_media_task_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_task
+    ADD CONSTRAINT ai_media_task_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_media_task ai_media_task_run_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_task
+    ADD CONSTRAINT ai_media_task_run_id_key UNIQUE (run_id);
+
+
+--
+-- Name: ai_message ai_message_conversation_id_sequence_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_message
+    ADD CONSTRAINT ai_message_conversation_id_sequence_key UNIQUE (conversation_id, sequence);
+
+
+--
+-- Name: ai_message ai_message_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_message
+    ADD CONSTRAINT ai_message_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_official_model ai_official_model_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_official_model
+    ADD CONSTRAINT ai_official_model_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_official_model ai_official_model_vendor_code_model_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_official_model
+    ADD CONSTRAINT ai_official_model_vendor_code_model_key_key UNIQUE (vendor_code, model_key);
+
+
+--
+-- Name: ai_provider_model ai_provider_model_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model
+    ADD CONSTRAINT ai_provider_model_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_provider_model_price_rate ai_provider_model_price_rate_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_rate
+    ADD CONSTRAINT ai_provider_model_price_rate_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_provider_model_price_rate ai_provider_model_price_rate_price_version_id_operation_usa_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_rate
+    ADD CONSTRAINT ai_provider_model_price_rate_price_version_id_operation_usa_key UNIQUE (price_version_id, operation, usage_key, selector_hash);
+
+
+--
+-- Name: ai_provider_model_price_version ai_provider_model_price_version_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_version
+    ADD CONSTRAINT ai_provider_model_price_version_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_provider_model_price_version ai_provider_model_price_version_provider_model_id_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_version
+    ADD CONSTRAINT ai_provider_model_price_version_provider_model_id_id_key UNIQUE (provider_model_id, id);
+
+
+--
+-- Name: ai_provider_model_price_version ai_provider_model_price_version_provider_model_id_version_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_version
+    ADD CONSTRAINT ai_provider_model_price_version_provider_model_id_version_key UNIQUE (provider_model_id, version);
+
+
+--
+-- Name: ai_provider ai_provider_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider
+    ADD CONSTRAINT ai_provider_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_provider_request ai_provider_request_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_request
+    ADD CONSTRAINT ai_provider_request_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_provider_request ai_provider_request_request_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_request
+    ADD CONSTRAINT ai_provider_request_request_key_key UNIQUE (request_key);
+
+
+--
+-- Name: ai_provider_request ai_provider_request_run_id_sequence_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_request
+    ADD CONSTRAINT ai_provider_request_run_id_sequence_key UNIQUE (run_id, sequence);
+
+
+--
+-- Name: ai_provider_version ai_provider_version_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_version
+    ADD CONSTRAINT ai_provider_version_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_provider_version ai_provider_version_provider_id_version_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_version
+    ADD CONSTRAINT ai_provider_version_provider_id_version_key UNIQUE (provider_id, version);
+
+
+--
+-- Name: ai_run_event ai_run_event_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run_event
+    ADD CONSTRAINT ai_run_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_run_event ai_run_event_run_id_sequence_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run_event
+    ADD CONSTRAINT ai_run_event_run_id_sequence_key UNIQUE (run_id, sequence);
+
+
+--
+-- Name: ai_run ai_run_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_run ai_run_platform_id_user_id_request_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_platform_id_user_id_request_key_key UNIQUE (platform_id, user_id, request_key);
+
+
+--
+-- Name: ai_tool_call ai_tool_call_idempotency_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_call
+    ADD CONSTRAINT ai_tool_call_idempotency_key_key UNIQUE (idempotency_key);
+
+
+--
+-- Name: ai_tool_call ai_tool_call_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_call
+    ADD CONSTRAINT ai_tool_call_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_tool_call ai_tool_call_run_id_call_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_call
+    ADD CONSTRAINT ai_tool_call_run_id_call_id_key UNIQUE (run_id, call_id);
+
+
+--
+-- Name: ai_tool ai_tool_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool
+    ADD CONSTRAINT ai_tool_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_tool_version ai_tool_version_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_version
+    ADD CONSTRAINT ai_tool_version_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_tool_version ai_tool_version_tool_id_version_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_version
+    ADD CONSTRAINT ai_tool_version_tool_id_version_key UNIQUE (tool_id, version);
+
+
+--
+-- Name: ai_usage_charge_item ai_usage_charge_item_charge_id_provider_request_id_item_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge_item
+    ADD CONSTRAINT ai_usage_charge_item_charge_id_provider_request_id_item_key_key UNIQUE (charge_id, provider_request_id, item_key);
+
+
+--
+-- Name: ai_usage_charge_item ai_usage_charge_item_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge_item
+    ADD CONSTRAINT ai_usage_charge_item_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_usage_charge ai_usage_charge_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge
+    ADD CONSTRAINT ai_usage_charge_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_usage_charge ai_usage_charge_run_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge
+    ADD CONSTRAINT ai_usage_charge_run_id_key UNIQUE (run_id);
 
 
 --
@@ -2774,6 +4210,216 @@ ALTER TABLE ONLY public.user_profile
 
 
 --
+-- Name: ix_ai_agent_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_agent_status ON public.ai_agent USING btree (status, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_ai_agent_tool; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_agent_tool ON public.ai_agent_tool USING btree (tool_id);
+
+
+--
+-- Name: ix_ai_binding_model; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_binding_model ON public.ai_agent_model_binding USING btree (provider_model_id);
+
+
+--
+-- Name: ix_ai_conversation_agent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_conversation_agent ON public.ai_conversation USING btree (agent_id);
+
+
+--
+-- Name: ix_ai_conversation_owner; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_conversation_owner ON public.ai_conversation USING btree (platform_id, user_id, updated_at DESC, id DESC) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_ai_media_file_retry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_media_file_retry ON public.ai_media_file USING btree (next_transfer_at, id) WHERE (transfer_status = 3);
+
+
+--
+-- Name: ix_ai_media_file_storage; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_media_file_storage ON public.ai_media_file USING btree (storage_file_id);
+
+
+--
+-- Name: ix_ai_media_task_poll; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_media_task_poll ON public.ai_media_task USING btree (next_poll_at, id) WHERE (status = 1);
+
+
+--
+-- Name: ix_ai_message_run; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_message_run ON public.ai_message USING btree (run_id, sequence);
+
+
+--
+-- Name: ix_ai_official_model_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_official_model_status ON public.ai_official_model USING btree (status, id);
+
+
+--
+-- Name: ix_ai_price_version_effective; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_price_version_effective ON public.ai_provider_model_price_version USING btree (provider_model_id, effective_at DESC) WHERE (status = 1);
+
+
+--
+-- Name: ix_ai_provider_model_official; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_provider_model_official ON public.ai_provider_model USING btree (official_model_id);
+
+
+--
+-- Name: ix_ai_provider_model_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_provider_model_status ON public.ai_provider_model USING btree (provider_id, status, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_ai_provider_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_provider_status ON public.ai_provider USING btree (status, id DESC) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_ai_request_recover; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_request_recover ON public.ai_provider_request USING btree (status, updated_at) WHERE (status = ANY (ARRAY[1, 4]));
+
+
+--
+-- Name: ix_ai_run_agent; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_agent ON public.ai_run USING btree (agent_id, accepted_at DESC);
+
+
+--
+-- Name: ix_ai_run_event_cleanup; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_event_cleanup ON public.ai_run_event USING btree (created_at, id);
+
+
+--
+-- Name: ix_ai_run_event_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_event_pending ON public.ai_run_event USING btree (id) WHERE (published_at IS NULL);
+
+
+--
+-- Name: ix_ai_run_history; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_history ON public.ai_run USING btree (accepted_at DESC, id DESC);
+
+
+--
+-- Name: ix_ai_run_inflight; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_inflight ON public.ai_run USING btree (user_id, id) INCLUDE (estimated_units, usage_status) WHERE (reservation_status = 1);
+
+
+--
+-- Name: ix_ai_run_lease; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_lease ON public.ai_run USING btree (lease_until, id) WHERE ((execution_status = ANY (ARRAY[1, 2])) AND (lease_until IS NOT NULL));
+
+
+--
+-- Name: ix_ai_run_model; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_model ON public.ai_run USING btree (provider_model_id, accepted_at DESC);
+
+
+--
+-- Name: ix_ai_run_owner; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_owner ON public.ai_run USING btree (platform_id, user_id, accepted_at DESC, id DESC);
+
+
+--
+-- Name: ix_ai_run_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_run_status ON public.ai_run USING btree (execution_status, accepted_at);
+
+
+--
+-- Name: ix_ai_tool_call_recover; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_tool_call_recover ON public.ai_tool_call USING btree (status, updated_at) WHERE (status = ANY (ARRAY[1, 4]));
+
+
+--
+-- Name: ix_ai_tool_call_request; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_tool_call_request ON public.ai_tool_call USING btree (provider_request_id, id);
+
+
+--
+-- Name: ix_ai_tool_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_tool_status ON public.ai_tool USING btree (status, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ix_ai_usage_charge_owner; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_usage_charge_owner ON public.ai_usage_charge USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: ix_ai_usage_charge_retry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_usage_charge_retry ON public.ai_usage_charge USING btree (next_settle_at, id) WHERE (status = ANY (ARRAY[1, 3]));
+
+
+--
+-- Name: ix_ai_usage_item_request; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_ai_usage_item_request ON public.ai_usage_charge_item USING btree (provider_request_id);
+
+
+--
 -- Name: ix_audit_operation_log_action_created_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3222,6 +4868,55 @@ CREATE INDEX ix_user_session_user_platform_created_at ON public.user_session USI
 
 
 --
+-- Name: ux_ai_agent_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ai_agent_code ON public.ai_agent USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_ai_media_import_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ai_media_import_key ON public.ai_media_file USING btree (import_request_key) WHERE (import_request_key IS NOT NULL);
+
+
+--
+-- Name: ux_ai_price_version_effective; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ai_price_version_effective ON public.ai_provider_model_price_version USING btree (provider_model_id, effective_at) WHERE (status = 1);
+
+
+--
+-- Name: ux_ai_provider_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ai_provider_code ON public.ai_provider USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_ai_provider_model_identity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ai_provider_model_identity ON public.ai_provider_model USING btree (provider_id, upstream_model_id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ux_ai_run_conversation_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ai_run_conversation_active ON public.ai_run USING btree (conversation_id) WHERE ((conversation_id IS NOT NULL) AND (execution_status = ANY (ARRAY[0, 1, 2])));
+
+
+--
+-- Name: ux_ai_tool_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_ai_tool_code ON public.ai_tool USING btree (code) WHERE (deleted_at IS NULL);
+
+
+--
 -- Name: ux_audit_operation_log_event_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -3387,6 +5082,13 @@ CREATE UNIQUE INDEX ux_payment_redeem_batch_request ON public.payment_redeem_cod
 --
 
 CREATE UNIQUE INDEX ux_payment_redeem_code_code ON public.payment_redeem_code USING btree (code);
+
+
+--
+-- Name: ux_payment_transaction_ai_usage_charge; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_payment_transaction_ai_usage_charge ON public.payment_transaction USING btree (ai_usage_charge_id) WHERE (ai_usage_charge_id IS NOT NULL);
 
 
 --
@@ -3712,6 +5414,595 @@ CREATE TRIGGER payment_wallet_no_delete BEFORE DELETE OR TRUNCATE ON public.paym
 
 
 --
+-- Name: ai_agent tr_agent_current_binding; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER tr_agent_current_binding AFTER INSERT OR UPDATE ON public.ai_agent DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.ai_check_current_binding();
+
+
+--
+-- Name: ai_agent_model_binding tr_binding_current; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE CONSTRAINT TRIGGER tr_binding_current AFTER INSERT OR UPDATE ON public.ai_agent_model_binding DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.ai_check_current_binding();
+
+
+--
+-- Name: ai_usage_charge tr_charge; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_charge BEFORE DELETE OR UPDATE ON public.ai_usage_charge FOR EACH ROW EXECUTE FUNCTION public.ai_guard_settled_charge();
+
+
+--
+-- Name: ai_usage_charge_item tr_charge_item; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_charge_item BEFORE INSERT OR DELETE OR UPDATE ON public.ai_usage_charge_item FOR EACH ROW EXECUTE FUNCTION public.ai_guard_charge_item();
+
+
+--
+-- Name: ai_provider_version tr_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON public.ai_provider_version FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_tool_version tr_immutable; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON public.ai_tool_version FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_media_file tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_media_file FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_media_task tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_media_task FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_message tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_message FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_provider_model_price_rate tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_provider_model_price_rate FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_provider_model_price_version tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_provider_model_price_version FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_provider_request tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_provider_request FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_run tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_run FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_tool_call tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_tool_call FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_usage_charge tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_usage_charge FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_usage_charge_item tr_no_truncate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_no_truncate BEFORE TRUNCATE ON public.ai_usage_charge_item FOR EACH STATEMENT EXECUTE FUNCTION public.ai_reject_immutable();
+
+
+--
+-- Name: ai_provider_model_price_rate tr_price_rate; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_price_rate BEFORE INSERT OR DELETE OR UPDATE ON public.ai_provider_model_price_rate FOR EACH ROW EXECUTE FUNCTION public.ai_guard_price_rate();
+
+
+--
+-- Name: ai_provider_model_price_version tr_price_version; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_price_version BEFORE INSERT OR DELETE OR UPDATE ON public.ai_provider_model_price_version FOR EACH ROW EXECUTE FUNCTION public.ai_guard_price_version();
+
+
+--
+-- Name: ai_run tr_run_snapshot; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tr_run_snapshot BEFORE DELETE OR UPDATE ON public.ai_run FOR EACH ROW EXECUTE FUNCTION public.ai_guard_run();
+
+
+--
+-- Name: ai_agent ai_agent_avatar_file_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent
+    ADD CONSTRAINT ai_agent_avatar_file_id_fkey FOREIGN KEY (avatar_file_id) REFERENCES public.storage_file(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_agent ai_agent_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent
+    ADD CONSTRAINT ai_agent_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_agent_model_binding ai_agent_model_binding_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_model_binding
+    ADD CONSTRAINT ai_agent_model_binding_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.ai_agent(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_agent_model_binding ai_agent_model_binding_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_model_binding
+    ADD CONSTRAINT ai_agent_model_binding_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.ai_provider_model(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_agent_tool ai_agent_tool_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_tool
+    ADD CONSTRAINT ai_agent_tool_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.ai_agent(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_agent_tool ai_agent_tool_tool_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent_tool
+    ADD CONSTRAINT ai_agent_tool_tool_id_fkey FOREIGN KEY (tool_id) REFERENCES public.ai_tool(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_agent ai_agent_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent
+    ADD CONSTRAINT ai_agent_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_conversation ai_conversation_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_conversation
+    ADD CONSTRAINT ai_conversation_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.ai_agent(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_conversation ai_conversation_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_conversation
+    ADD CONSTRAINT ai_conversation_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_conversation ai_conversation_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_conversation
+    ADD CONSTRAINT ai_conversation_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_media_file ai_media_file_media_task_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_file
+    ADD CONSTRAINT ai_media_file_media_task_id_fkey FOREIGN KEY (media_task_id) REFERENCES public.ai_media_task(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_media_file ai_media_file_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_file
+    ADD CONSTRAINT ai_media_file_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_run(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_media_file ai_media_file_storage_file_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_file
+    ADD CONSTRAINT ai_media_file_storage_file_id_fkey FOREIGN KEY (storage_file_id) REFERENCES public.storage_file(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_media_task ai_media_task_provider_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_task
+    ADD CONSTRAINT ai_media_task_provider_request_id_fkey FOREIGN KEY (provider_request_id) REFERENCES public.ai_provider_request(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_media_task ai_media_task_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_media_task
+    ADD CONSTRAINT ai_media_task_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_run(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_message ai_message_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_message
+    ADD CONSTRAINT ai_message_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.ai_conversation(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_message ai_message_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_message
+    ADD CONSTRAINT ai_message_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_run(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_official_model ai_official_model_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_official_model
+    ADD CONSTRAINT ai_official_model_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_official_model ai_official_model_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_official_model
+    ADD CONSTRAINT ai_official_model_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider ai_provider_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider
+    ADD CONSTRAINT ai_provider_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_model ai_provider_model_official_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model
+    ADD CONSTRAINT ai_provider_model_official_model_id_fkey FOREIGN KEY (official_model_id) REFERENCES public.ai_official_model(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_model_price_rate ai_provider_model_price_rate_price_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_rate
+    ADD CONSTRAINT ai_provider_model_price_rate_price_version_id_fkey FOREIGN KEY (price_version_id) REFERENCES public.ai_provider_model_price_version(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_model_price_version ai_provider_model_price_version_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_version
+    ADD CONSTRAINT ai_provider_model_price_version_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_model_price_version ai_provider_model_price_version_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_version
+    ADD CONSTRAINT ai_provider_model_price_version_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.ai_provider_model(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_model_price_version ai_provider_model_price_version_published_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model_price_version
+    ADD CONSTRAINT ai_provider_model_price_version_published_by_fkey FOREIGN KEY (published_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_model ai_provider_model_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_model
+    ADD CONSTRAINT ai_provider_model_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.ai_provider(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_request ai_provider_request_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_request
+    ADD CONSTRAINT ai_provider_request_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_run(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider ai_provider_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider
+    ADD CONSTRAINT ai_provider_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_version ai_provider_version_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_version
+    ADD CONSTRAINT ai_provider_version_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_provider_version ai_provider_version_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider_version
+    ADD CONSTRAINT ai_provider_version_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.ai_provider(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_agent_id_binding_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_agent_id_binding_id_fkey FOREIGN KEY (agent_id, binding_id) REFERENCES public.ai_agent_model_binding(agent_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_agent_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES public.ai_agent(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_conversation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.ai_conversation(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run_event ai_run_event_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run_event
+    ADD CONSTRAINT ai_run_event_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_run(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_official_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_official_model_id_fkey FOREIGN KEY (official_model_id) REFERENCES public.ai_official_model(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_provider_model_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_provider_model_id_fkey FOREIGN KEY (provider_model_id) REFERENCES public.ai_provider_model(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_provider_model_id_price_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_provider_model_id_price_version_id_fkey FOREIGN KEY (provider_model_id, price_version_id) REFERENCES public.ai_provider_model_price_version(provider_model_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_provider_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_provider_version_id_fkey FOREIGN KEY (provider_version_id) REFERENCES public.ai_provider_version(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_run ai_run_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_run
+    ADD CONSTRAINT ai_run_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_tool_call ai_tool_call_provider_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_call
+    ADD CONSTRAINT ai_tool_call_provider_request_id_fkey FOREIGN KEY (provider_request_id) REFERENCES public.ai_provider_request(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_tool_call ai_tool_call_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_call
+    ADD CONSTRAINT ai_tool_call_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_run(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_tool_call ai_tool_call_tool_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_call
+    ADD CONSTRAINT ai_tool_call_tool_version_id_fkey FOREIGN KEY (tool_version_id) REFERENCES public.ai_tool_version(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_tool ai_tool_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool
+    ADD CONSTRAINT ai_tool_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_tool ai_tool_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool
+    ADD CONSTRAINT ai_tool_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_tool_version ai_tool_version_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_version
+    ADD CONSTRAINT ai_tool_version_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_tool_version ai_tool_version_tool_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool_version
+    ADD CONSTRAINT ai_tool_version_tool_id_fkey FOREIGN KEY (tool_id) REFERENCES public.ai_tool(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_usage_charge_item ai_usage_charge_item_charge_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge_item
+    ADD CONSTRAINT ai_usage_charge_item_charge_id_fkey FOREIGN KEY (charge_id) REFERENCES public.ai_usage_charge(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_usage_charge_item ai_usage_charge_item_price_rate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge_item
+    ADD CONSTRAINT ai_usage_charge_item_price_rate_id_fkey FOREIGN KEY (price_rate_id) REFERENCES public.ai_provider_model_price_rate(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_usage_charge_item ai_usage_charge_item_provider_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge_item
+    ADD CONSTRAINT ai_usage_charge_item_provider_request_id_fkey FOREIGN KEY (provider_request_id) REFERENCES public.ai_provider_request(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_usage_charge ai_usage_charge_platform_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge
+    ADD CONSTRAINT ai_usage_charge_platform_id_fkey FOREIGN KEY (platform_id) REFERENCES public.permission_auth_platform(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_usage_charge ai_usage_charge_price_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge
+    ADD CONSTRAINT ai_usage_charge_price_version_id_fkey FOREIGN KEY (price_version_id) REFERENCES public.ai_provider_model_price_version(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_usage_charge ai_usage_charge_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge
+    ADD CONSTRAINT ai_usage_charge_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.ai_run(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_usage_charge ai_usage_charge_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_charge
+    ADD CONSTRAINT ai_usage_charge_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: ai_agent fk_ai_agent_current_binding; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_agent
+    ADD CONSTRAINT fk_ai_agent_current_binding FOREIGN KEY (id, active_binding_id) REFERENCES public.ai_agent_model_binding(agent_id, id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: ai_provider fk_ai_provider_current_version; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_provider
+    ADD CONSTRAINT fk_ai_provider_current_version FOREIGN KEY (id, current_version) REFERENCES public.ai_provider_version(provider_id, version) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: ai_tool fk_ai_tool_current_version; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_tool
+    ADD CONSTRAINT fk_ai_tool_current_version FOREIGN KEY (id, current_version) REFERENCES public.ai_tool_version(tool_id, version) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;
+
+
+--
 -- Name: system_operation_log fk_audit_operation_log_platform; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3957,6 +6248,14 @@ ALTER TABLE ONLY public.payment_redeem_code
 
 ALTER TABLE ONLY public.payment_redeem_code
     ADD CONSTRAINT fk_payment_redeem_code_user FOREIGN KEY (used_by) REFERENCES public.user_account(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: payment_transaction fk_payment_transaction_ai_usage_charge; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transaction
+    ADD CONSTRAINT fk_payment_transaction_ai_usage_charge FOREIGN KEY (ai_usage_charge_id) REFERENCES public.ai_usage_charge(id) ON DELETE RESTRICT;
 
 
 --
@@ -4291,5 +6590,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict RPnBl9iZrJfpY3pa4pTsKpWYwoDh7yAJELDlYhi5WM3MgpMRRicc5XPx6FejLBM
+\unrestrict YBP5iMrY8vjX0x6h4yEeDpJHiOWhqIzoFOpVFjPf1HTWDPLhue0adbLEgHCAZJX
 
