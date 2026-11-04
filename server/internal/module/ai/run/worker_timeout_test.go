@@ -14,16 +14,16 @@ func (l *workerTimeoutLoader) Find(context.Context, int64) (Model, error) { retu
 
 func TestWorkerTimeoutUsesFrozenRunAndTransferDeadlines(t *testing.T) {
 	now := time.Date(2026, 11, 3, 10, 0, 0, 0, time.UTC)
-	loader := &workerTimeoutLoader{row: Model{ID: 9, ExecutionStatus: 0, Operation: "image.generate", DeadlineAt: now.Add(2 * time.Minute), PolicySnapshot: json.RawMessage(`{"transferTimeoutSeconds":900}`)}}
+	loader := &workerTimeoutLoader{row: Model{ID: 9, ExecutionStatus: 0, Operation: "image.generate", InputSnapshot: json.RawMessage(`{"count":3}`), DeadlineAt: now.Add(2 * time.Minute), PolicySnapshot: json.RawMessage(`{"transferTimeoutSeconds":900}`)}}
 	worker := &Worker{Loader: loader}
 	got, err := worker.TimeoutForPayload(context.Background(), json.RawMessage(`{"runId":9}`), now)
-	if err != nil || got != 17*time.Minute+30*time.Second {
-		t.Fatalf("timeout=%s err=%v want=17m30s", got, err)
+	if err != nil || got != 47*time.Minute+30*time.Second {
+		t.Fatalf("timeout=%s err=%v want=47m30s for three image imports", got, err)
 	}
 	loader.row.PolicySnapshot = json.RawMessage(`{"transferTimeoutSeconds":1800}`)
 	got, err = worker.TimeoutForPayload(context.Background(), json.RawMessage(`{"runId":9}`), now)
-	if err != nil || got != 32*time.Minute+30*time.Second {
-		t.Fatalf("updated frozen policy timeout=%s err=%v want=32m30s", got, err)
+	if err != nil || got != 92*time.Minute+30*time.Second {
+		t.Fatalf("updated frozen policy timeout=%s err=%v want=92m30s", got, err)
 	}
 	loader.row.DeadlineAt = now.Add(-time.Second)
 	got, err = worker.TimeoutForPayload(context.Background(), json.RawMessage(`{"runId":9}`), now)

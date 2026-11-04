@@ -1,13 +1,25 @@
 # 项目状态
 
-### AI 清理与迁移准备（2026-11-03，当前工作）
+### AI 清理与迁移准备（2026-11-03，范围记录）
 
 - 维护者确认继续代码收尾，并询问迁移后接入测试。本轮范围为 Run/工作台展示、媒体转存过期 attempt 防护、无用兼容代码、AI 上传用途契约及菜单维护入口；不执行正式库迁移、服务启停、真实供应商/COS 调用或 Git 提交。
 - 数据流沿既有 AI → Scheduler/Worker → Provider/Storage/Usage；保留六页及 38 action，不改角色授权。菜单维护仅发布 Admin 平台菜单版本，不清 Redis，不枚举用户。容量仍按百万用户、多实例基线，展示与序列化修改不增加请求热路径查询；迁移属于停服离线过程。
-- 开始时工作区干净。已复现并修复重复费用页签、数字状态展示与旧媒体 attempt 完成覆盖；正补齐迁移前置和最终回归。验收：AI/Storage/Scheduler 定向测试、媒体隔离 PostgreSQL、菜单维护流程/Redis 版本、前端测试/类型/构建及 diff 检查；正式迁移与真实接入验收分别记录。
+- 开始时工作区干净。重复费用页签、数字状态展示与旧媒体 attempt 完成覆盖已修复；最终结果见下方 2026-11-04 记录。正式迁移与真实接入验收分别记录。
 
 
-### AI 收尾实现与验证（2026-11-03，以本节为准）
+### AI 收尾实现与验证（2026-11-04，以本节为准）
+
+- 已完成：Run/Chat 共用强类型记录表、后端状态文案及金额字符串精度；AI 输入/输出按 `ai/input`、`ai/image`、`ai/audio`、`ai/video` 规则存储；API 补齐 AI 调度目录；新增菜单维护 runner 与仅发布 Admin 菜单版本的 `ai-menu-state` 命令。角色授权、Canvas、视频新建禁用边界不变。
+- Worker 在发布与执行时按冻结 Run/媒体事实计算预算，媒体任务按 payload ID claim；轮询占用期覆盖 330 秒执行预算并受任务截止约束，防止慢请求被重复领取。完成后以返回时刻计算转存截止、下一轮调度和退避；过期结果有界持久化为 `MEDIA_DEADLINE`。图片预算考虑冻结数量，Provider 拒绝超量图片响应并保留未知用量语义。保留 ownership、attempt fencing、租约、幂等和未知副作用保护，删除无用兼容参数及占位引用。
+- 容量影响：AI Job 发布/执行各增加一次按主键读取冻结 Run/媒体事实；不增加共享 HTTP 热路径配置查询，不引入本机缓存。跨实例仍依靠 PostgreSQL claim/期限、现有 Scheduler 租约和 Redis 队列；菜单维护在停服窗口离线执行。
+- 实际通过：`go test -short -p 1 ./internal/module/ai/... ./internal/module/system/scheduler ./cmd/api ./cmd/ai-menu-state -count=1 -timeout=5m`；最终修改后 `go test -short -p 1 ./internal/module/ai/providerRequest ./internal/module/ai/media ./internal/module/ai/run ./internal/module/system/scheduler ./cmd/api ./cmd/ai-menu-state -count=1 -timeout=4m`；storage/file 与 storage/uploadRule 全包测试。`go vet` AI providerRequest/media/run/Scheduler 和 API/Worker/菜单命令、`go build ./cmd/api ./cmd/worker ./cmd/ai-menu-state` 均通过。
+- 真实隔离验证：`RUN_AI_MEDIA_INTEGRATION=1` 的媒体截止测试通过（最终定向 3.587s）；`TestPollUsesCompletionTimeForTransferAndNextAttempt` 与 `TestPollClaimCoversProviderRequestAndExpiresAtTaskDeadline` 两项测试通过（18.296s，含四种响应及两种期限），直接校验持久化结果。菜单 runner 13 项受控失败/成功路径与菜单命令隔离 PostgreSQL/Redis 测试已通过。供应商超量图片回归已实际先失败后通过；本轮未调用真实供应商/COS。
+- 前端 `pnpm typecheck`、`pnpm check:architecture`、`pnpm build` 通过；AI workspace/chat 定向最终 17 项通过。全量 `pnpm vitest run --pool=threads --maxWorkers=1` 实测 141 文件、1282/1293 用例通过，11 项失败，均位于本轮未修改的 permission/user/message/storage/system 页面；未声称全量绿灯，保留既有大 chunk 构建警告。
+- 未完成的环境验收：完整 Go 集成测试曾因 PostgreSQL 隔离 schema 操作/连接超时失败并中止；后续一次数据库返回 SQLSTATE 57P03，再后媒体定向复跑通过。收尾时 `pg_isready -h 127.0.0.1 -p 5432` 返回 `no response`。两个本轮失败测试 schema `test_ai_core_seed_1793754601805716100`、`test_ai_core_seed_1793754663977846100` 的精确清理尝试未成功，是否仍存在待数据库恢复后确认；未扩大删除范围。先恢复稳定连接并串行重跑完整迁移集成测试，再执行正式迁移。
+- 独立代码复核提出的超时、时间基准、超量响应和并发领取缺陷均已修复，最终未发现新的 Critical/Important 问题。正式 core/seed/payment/menu 迁移、业务库快照、真实供应商/COS、浏览器 E2E 与容量压测未执行；本轮没有启停服务或创建 Git 提交。工作期间观察到 HEAD 已从 `9a3c77fa` 变为 `123c95d6`，保留现有历史和其余未提交修复。
+- 接入顺序：数据库恢复并完成迁移预检 → 停止旧 API/Worker/账务写入 → core/seed → payment → 部署新版 → menu runner 与 Redis 版本核对 → 恢复服务、显式角色授权与启用 AI 恢复/清理任务 → 配置供应商/模型、人民币售价、Agent 绑定、AI 上传规则及测试钱包 → 真实接入测试。API/Worker 保持同一既有 `APP_SECRET`。维护入口：`docs/database/2026-10-28-ai-core-seed.ps1`、`2026-10-28-ai-payment.ps1`、`2026-10-28-ai-menu.ps1`，均须在实际停服后传 `-ServicesStopped`。
+
+### AI 收尾实现与验证（2026-11-03，上一批记录）
 
 - 维护者要求持续完成；沿用当前功能分支和未提交改动，不操作 Git 历史、不执行正式业务库迁移、不启停服务、不调用付费 OpenAI 或真实 COS。此前复核列出的缺口已进入本轮修复；以下按实际代码和验证记录更新，不能将下方旧批次记录当作当前待办。
 - 计费已按冻结 operation/usage key/selector/quality/size 唯一选档；必要计量缺失时保留未知事实，不按零收费。Run 总额统一舍入后稳定分摊，结算前独立重建必要维度、实际数量、费率和规范化 usage 摘要，拒绝部分或篡改账单。音频按真实 token/时长/Unicode 字符计量，不叠加估算分钟价。

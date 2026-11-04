@@ -39,9 +39,10 @@ func AITaskDefinitions(executors AITaskExecutors, generationTimeout, transferTim
 		}
 		return nil
 	}
+	const mediaPollTimeout = 5*time.Minute + 30*time.Second
 	return []TaskDefinition{
 		{Type: "ai.run.execute", DisplayName: "AI运行执行", DisplayNameEnglish: "AI run execution", Queue: "default", Timeout: generationTimeout + transferTimeout + 30*time.Second, MaxAttempts: 1, ValidateParams: empty, Execute: executors.RunExecute},
-		{Type: "ai.media.poll", DisplayName: "AI媒体轮询", DisplayNameEnglish: "AI media polling", Queue: "default", Timeout: 30 * time.Second, MaxAttempts: 3, Backoff: publishBackoff, ValidateParams: empty, Execute: executors.MediaPoll},
+		{Type: "ai.media.poll", DisplayName: "AI媒体轮询", DisplayNameEnglish: "AI media polling", Queue: "default", Timeout: mediaPollTimeout, MaxAttempts: 3, Backoff: publishBackoff, ValidateParams: empty, Execute: executors.MediaPoll},
 		{Type: "ai.media.import", DisplayName: "AI媒体导入", DisplayNameEnglish: "AI media import", Queue: "default", Timeout: transferTimeout + 30*time.Second, MaxAttempts: 3, Backoff: publishBackoff, ValidateParams: empty, Execute: executors.MediaImport},
 		{Type: "ai.usage.settle", DisplayName: "AI用量结算", DisplayNameEnglish: "AI usage settlement", Queue: "default", Timeout: 30 * time.Second, MaxAttempts: 10, Backoff: aiSettlementBackoff, ValidateParams: empty, Execute: executors.UsageSettle},
 		{Type: "ai.run.recover", DisplayName: "AI运行恢复", DisplayNameEnglish: "AI run recovery", BuiltinKey: "ai.run.recover", Queue: "maintenance", Timeout: 20 * time.Second, MaxAttempts: 3, ValidateParams: empty, Execute: executors.RunRecover},

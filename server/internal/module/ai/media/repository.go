@@ -17,6 +17,8 @@ var (
 	ErrConflict    = errors.New("AI media state conflict")
 )
 
+const pollClaimWindow = 5*time.Minute + 30*time.Second
+
 type Repository struct {
 	db        *gorm.DB
 	scheduler *scheduler.Repository
@@ -65,7 +67,10 @@ func (r *Repository) claimPoll(ctx context.Context, taskID int64, now time.Time)
 			out.Status = TaskExpired
 			return tx.Model(&Task{}).Where("id=? AND status=?", out.ID, TaskPolling).Updates(map[string]any{"status": TaskExpired, "error_code": "MEDIA_DEADLINE", "error_message": "媒体任务超过转存截止时间", "updated_at": now}).Error
 		}
-		next := now.Add(time.Minute)
+		next := now.Add(pollClaimWindow)
+		if next.After(out.DeadlineAt) {
+			next = out.DeadlineAt
+		}
 		if err := tx.Model(&Task{}).Where("id=? AND status=?", out.ID, TaskPolling).Updates(map[string]any{"next_poll_at": next, "poll_attempts": gorm.Expr("poll_attempts+1"), "updated_at": now}).Error; err != nil {
 			return err
 		}

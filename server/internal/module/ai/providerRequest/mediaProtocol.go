@@ -166,7 +166,7 @@ func (c *ImagesClient) Generate(ctx context.Context, in ImageRequest) (ImageResp
 			RevisedPrompt string `json:"revised_prompt"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(raw, &wire) != nil || len(wire.Data) == 0 {
+	if json.Unmarshal(raw, &wire) != nil || len(wire.Data) == 0 || len(wire.Data) > in.N {
 		return out, requestFailure("protocol", status, id, true, ErrResponseInvalid)
 	}
 	out.Created = wire.Created
@@ -250,7 +250,7 @@ func (c *ImagesClient) Edit(ctx context.Context, in ImageEditRequest) (ImageResp
 			RevisedPrompt string `json:"revised_prompt"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(raw, &wire) != nil || len(wire.Data) == 0 {
+	if json.Unmarshal(raw, &wire) != nil || len(wire.Data) == 0 || len(wire.Data) > in.N {
 		return out, requestFailure("protocol", resp.StatusCode, id, true, ErrResponseInvalid)
 	}
 	out.Created, out.RequestID, out.Raw = wire.Created, id, raw

@@ -27,6 +27,34 @@ func TestImagesGenerateSendsNativePayloadAndParsesURL(t *testing.T) {
 	}
 }
 
+func TestImagesGenerateRejectsMoreResultsThanRequested(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, `{"created":1,"data":[{"url":"https://cdn.example/1.png"},{"url":"https://cdn.example/2.png"}]}`)
+	}))
+	defer srv.Close()
+	_, err := NewImagesClient(srv.Client()).Generate(context.Background(), ImageRequest{
+		Config: FrozenConfig{BaseURL: srv.URL, APIKey: "k", Model: "image-model", Timeout: time.Second},
+		Prompt: "draw", N: 1,
+	})
+	if err == nil {
+		t.Fatal("expected provider response count mismatch")
+	}
+}
+
+func TestImagesEditRejectsMoreResultsThanRequested(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		io.WriteString(w, `{"created":1,"data":[{"url":"https://cdn.example/1.png"},{"url":"https://cdn.example/2.png"}]}`)
+	}))
+	defer srv.Close()
+	_, err := NewImagesClient(srv.Client()).Edit(context.Background(), ImageEditRequest{
+		Config: FrozenConfig{BaseURL: srv.URL, APIKey: "k", Model: "image-model", Timeout: time.Second},
+		Prompt: "edit", N: 1, Image: strings.NewReader("image"), MIME: "image/png",
+	})
+	if err == nil {
+		t.Fatal("expected provider response count mismatch")
+	}
+}
+
 func TestVideoSubmitDoesNotRetryUnknownPost(t *testing.T) {
 	attempts := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { attempts++; http.Error(w, "oops", http.StatusBadGateway) }))

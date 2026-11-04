@@ -221,7 +221,117 @@ func TestPollStopsAtMediaDeadlineWithoutCreatingFile(t *testing.T) {
 	}
 }
 
+func TestPollClaimCoversProviderRequestAndExpiresAtTaskDeadline(t *testing.T) {
+	r, db, ctx := mediaRepositoryDB(t)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	for _, remaining := range []time.Duration{20 * time.Minute, 2 * time.Minute} {
+		task := Task{RunID: 1, ProviderRequestID: 1, MediaKind: 1, Status: TaskPolling, DeadlineAt: now.Add(remaining), UpstreamResult: json.RawMessage(`{}`), CreatedAt: now, UpdatedAt: now}
+		if err := db.WithContext(ctx).Create(&task).Error; err != nil {
+			t.Fatal(err)
+		}
+		claimed, found, err := r.ClaimPollByID(ctx, task.ID, now)
+		if err != nil || !found {
+			t.Fatalf("initial claim found=%v err=%v", found, err)
+		}
+		window := 330 * time.Second
+		if remaining < window {
+			window = remaining
+		}
+		if claimed.NextPollAt == nil || !claimed.NextPollAt.Equal(now.Add(window)) {
+			t.Fatalf("claim expiry=%v want=%s", claimed.NextPollAt, now.Add(window))
+		}
+		for _, elapsed := range []time.Duration{time.Minute, window - time.Second} {
+			if _, found, err := r.ClaimPollByID(ctx, task.ID, now.Add(elapsed)); err != nil || found {
+				t.Fatalf("reclaimed live poll after %s: found=%v err=%v", elapsed, found, err)
+			}
+		}
+		claimed, found, err = r.ClaimPollByID(ctx, task.ID, now.Add(window))
+		if err != nil || !found {
+			t.Fatalf("expired claim not recovered: found=%v err=%v", found, err)
+		}
+		if remaining <= window && claimed.Status != TaskExpired {
+			t.Fatalf("past-deadline task status=%d want expired", claimed.Status)
+		}
+	}
+}
+
 type mediaDeadlineRunLoader struct{ row airun.Model }
+
+func TestPollUsesCompletionTimeForTransferAndNextAttempt(t *testing.T) {
+	for _, outcome := range []string{"completed", "missing-url", "processing", "request-error"} {
+		t.Run(outcome, func(t *testing.T) {
+			r, db, ctx := mediaRepositoryDB(t)
+			startedAt := time.Now().UTC().Truncate(time.Microsecond)
+			completedAt := startedAt.Add(5 * time.Minute)
+			clock := startedAt
+			task := Task{RunID: 1, ProviderRequestID: 1, MediaKind: 1, UpstreamTaskID: ptrString("upstream-task"), Status: TaskPolling, DeadlineAt: startedAt.Add(20 * time.Minute), UpstreamResult: json.RawMessage(`{}`), CreatedAt: startedAt, UpdatedAt: startedAt}
+			if err := db.WithContext(ctx).Create(&task).Error; err != nil {
+				t.Fatal(err)
+			}
+			policy := validMediaPolicy()
+			policy.TransferTimeoutSeconds = 60
+			policyJSON, err := json.Marshal(policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			poller := mediaPollFunc(func(context.Context, providerrequest.FrozenConfig, string) (providerrequest.VideoResource, error) {
+				clock = completedAt
+				if outcome == "request-error" {
+					return providerrequest.VideoResource{}, errors.New("provider request timed out")
+				}
+				if outcome == "missing-url" {
+					return providerrequest.VideoResource{ID: "upstream-task", Status: "completed"}, nil
+				}
+				return providerrequest.VideoResource{ID: "upstream-task", Status: outcome, URL: "https://HOST/video.mp4"}, nil
+			})
+			service := NewService(r, mediaDeadlineRunLoader{row: airun.Model{ID: 1, ConfigSnapshot: json.RawMessage(`{}`), PolicySnapshot: policyJSON}}, mediaDeadlineCredentialLoader{}, poller, &Spooler{}, mediaImportStub{}, mediaDeadlineCipher{}, nil)
+			service.now = func() time.Time { return clock }
+			payload, err := json.Marshal(map[string]int64{"mediaTaskId": task.ID})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := service.PollOne(ctx, payload); err != nil {
+				t.Fatal(err)
+			}
+			var saved Task
+			if err := db.WithContext(ctx).First(&saved, task.ID).Error; err != nil {
+				t.Fatal(err)
+			}
+			if !saved.UpdatedAt.Equal(completedAt) {
+				t.Fatalf("updatedAt=%s want completion=%s", saved.UpdatedAt, completedAt)
+			}
+			if outcome == "completed" {
+				var file File
+				if err := db.WithContext(ctx).Where("media_task_id=?", task.ID).First(&file).Error; err != nil {
+					t.Fatal(err)
+				}
+				if file.TransferDeadline == nil || !file.TransferDeadline.Equal(completedAt.Add(time.Minute)) || !file.CreatedAt.Equal(completedAt) {
+					t.Fatalf("file createdAt=%s deadline=%v want=%s", file.CreatedAt, file.TransferDeadline, completedAt.Add(time.Minute))
+				}
+				return
+			}
+			if outcome == "missing-url" {
+				if saved.Status != TaskFailed || saved.ErrorCode == nil || *saved.ErrorCode != "MEDIA_URL_MISSING" {
+					t.Fatalf("missing URL status=%d code=%v", saved.Status, saved.ErrorCode)
+				}
+				return
+			}
+			wait := time.Minute
+			if outcome == "request-error" {
+				wait = 2 * time.Minute
+			}
+			if saved.NextPollAt == nil || !saved.NextPollAt.Equal(completedAt.Add(wait)) {
+				t.Fatalf("nextPollAt=%v want=%s", saved.NextPollAt, completedAt.Add(wait))
+			}
+		})
+	}
+}
+
+type mediaPollFunc func(context.Context, providerrequest.FrozenConfig, string) (providerrequest.VideoResource, error)
+
+func (f mediaPollFunc) Poll(ctx context.Context, config providerrequest.FrozenConfig, taskID string) (providerrequest.VideoResource, error) {
+	return f(ctx, config, taskID)
+}
 
 func (l mediaDeadlineRunLoader) Find(context.Context, int64) (airun.Model, error) { return l.row, nil }
 
@@ -247,6 +357,7 @@ func (p *mediaDeadlineVideoPoller) Poll(ctx context.Context, _ providerrequest.F
 type mediaDeadlineCipher struct{}
 
 func (mediaDeadlineCipher) Open(string, string) (string, error) { return "", nil }
+func (mediaDeadlineCipher) Seal(string) (string, string, error) { return "sealed", "key", nil }
 
 type mediaImportStub struct{}
 

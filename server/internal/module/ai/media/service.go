@@ -203,6 +203,9 @@ func (s *Service) PollOne(ctx context.Context, payload json.RawMessage) error {
 	if task.Status == TaskExpired {
 		return nil
 	}
+	if !task.DeadlineAt.After(now) {
+		return s.expirePoll(ctx, task, now)
+	}
 	if task.UpstreamTaskID == nil || strings.TrimSpace(*task.UpstreamTaskID) == "" {
 		return s.finishPollFailure(ctx, task, "UPSTREAM_TASK_MISSING", "供应商媒体任务标识缺失", now)
 	}
@@ -218,9 +221,18 @@ func (s *Service) PollOne(ctx context.Context, payload json.RawMessage) error {
 	if err != nil {
 		return s.retryPoll(ctx, task, "CREDENTIAL_UNAVAILABLE", "媒体依赖暂时不可用", now)
 	}
-	resource, err := s.video.Poll(ctx, config, *task.UpstreamTaskID)
+	pollCtx, pollCancel := context.WithDeadline(ctx, task.DeadlineAt)
+	resource, err := s.video.Poll(pollCtx, config, *task.UpstreamTaskID)
+	pollCancel()
+	completedAt := s.now().UTC()
 	if err != nil {
-		return s.retryPoll(ctx, task, "UPSTREAM_POLL_FAILED", "媒体依赖暂时不可用", now)
+		if errors.Is(pollCtx.Err(), context.DeadlineExceeded) && !task.DeadlineAt.After(completedAt) {
+			return s.expirePoll(ctx, task, completedAt)
+		}
+		return s.retryPoll(ctx, task, "UPSTREAM_POLL_FAILED", "媒体依赖暂时不可用", completedAt)
+	}
+	if !task.DeadlineAt.After(completedAt) {
+		return s.expirePoll(ctx, task, completedAt)
 	}
 	status := strings.ToLower(strings.TrimSpace(resource.Status))
 	progress := int16(resource.Progress)
@@ -239,18 +251,28 @@ func (s *Service) PollOne(ctx context.Context, payload json.RawMessage) error {
 	switch status {
 	case "completed", "succeeded", "success":
 		if strings.TrimSpace(resource.URL) == "" {
-			return s.finishPollFailure(ctx, task, "MEDIA_URL_MISSING", "供应商未返回媒体地址", now)
+			return s.finishPollFailure(ctx, task, "MEDIA_URL_MISSING", "供应商未返回媒体地址", completedAt)
 		}
-		if err := s.createURLFile(ctx, task, runRow, resource.URL, result, config.MediaHostAllowlist, now); err != nil {
+		if err := s.createURLFile(ctx, task, runRow, resource.URL, result, config.MediaHostAllowlist, completedAt); err != nil {
 			return err
 		}
-		return s.repository.MarkPoll(ctx, task.ID, TaskSucceeded, &progress, result, "", "", nil, now)
+		return s.repository.MarkPoll(ctx, task.ID, TaskSucceeded, &progress, result, "", "", nil, completedAt)
 	case "failed", "error", "canceled", "cancelled":
 		message := "供应商媒体任务失败"
-		return s.finishPollFailure(ctx, task, "UPSTREAM_MEDIA_FAILED", message, now)
+		return s.finishPollFailure(ctx, task, "UPSTREAM_MEDIA_FAILED", message, completedAt)
 	default:
-		return s.repository.MarkPoll(ctx, task.ID, TaskPolling, &progress, result, "", "", timePtr(now.Add(time.Minute)), now)
+		return s.repository.MarkPoll(ctx, task.ID, TaskPolling, &progress, result, "", "", timePtr(completedAt.Add(time.Minute)), completedAt)
 	}
+}
+
+func (s *Service) expirePoll(ctx context.Context, task Task, now time.Time) error {
+	finalize, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer cancel()
+	result := task.UpstreamResult
+	if len(result) == 0 {
+		result = json.RawMessage(`{}`)
+	}
+	return s.repository.MarkPoll(finalize, task.ID, TaskExpired, task.Progress, result, "MEDIA_DEADLINE", "媒体任务超过转存截止时间", nil, now)
 }
 
 func (s *Service) createURLFile(ctx context.Context, task Task, runRow airun.Model, sourceURL string, result json.RawMessage, hosts []string, now time.Time) error {
@@ -428,6 +450,9 @@ func (s *Service) finishPollFailure(ctx context.Context, task Task, code, messag
 }
 
 func (s *Service) retryPoll(ctx context.Context, task Task, code, message string, now time.Time) error {
+	if s.now != nil {
+		now = s.now().UTC()
+	}
 	if !task.DeadlineAt.After(now) || task.PollAttempts >= 10 {
 		return s.finishPollFailure(ctx, task, code, message, now)
 	}

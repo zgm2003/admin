@@ -61,11 +61,35 @@ func (w *Worker) TimeoutForPayload(ctx context.Context, payload json.RawMessage,
 		var policy struct {
 			TransferTimeoutSeconds int64 `json:"transferTimeoutSeconds"`
 		}
-		if json.Unmarshal(row.PolicySnapshot, &policy) == nil && policy.TransferTimeoutSeconds > 0 && policy.TransferTimeoutSeconds <= math.MaxInt64/int64(time.Second) {
-			transfer = time.Duration(policy.TransferTimeoutSeconds) * time.Second
+		if json.Unmarshal(row.PolicySnapshot, &policy) == nil && policy.TransferTimeoutSeconds > 0 {
+			transfer = durationFromSeconds(policy.TransferTimeoutSeconds)
+			if row.Operation == "image.generate" || row.Operation == "image.edit" {
+				var input struct {
+					Count int64 `json:"count"`
+				}
+				if json.Unmarshal(row.InputSnapshot, &input) == nil && input.Count > 1 {
+					transfer = multiplyDuration(transfer, input.Count)
+				}
+			}
 		}
 	}
 	return remainingBudget(row.DeadlineAt, now, transfer, finishWindow), nil
+}
+
+func durationFromSeconds(seconds int64) time.Duration {
+	const maxDuration = time.Duration(math.MaxInt64)
+	if seconds <= 0 || seconds > math.MaxInt64/int64(time.Second) {
+		return maxDuration
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func multiplyDuration(value time.Duration, multiplier int64) time.Duration {
+	const maxDuration = time.Duration(math.MaxInt64)
+	if value <= 0 || multiplier <= 0 || value > maxDuration/time.Duration(multiplier) {
+		return maxDuration
+	}
+	return value * time.Duration(multiplier)
 }
 
 func parseRunID(payload json.RawMessage) (int64, error) {
