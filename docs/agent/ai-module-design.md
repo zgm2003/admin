@@ -911,34 +911,27 @@ JSON 大字段。没有首期聚合表时就明确查询上限，不假定百万
 
 ### 10.3 工程初始值与硬限制
 
-下表为本设计明确选择的初始工程值，后续由显式维护的 `system_setting` 键和后端 constraints 输出；migration seed，
-缺失/非法不在运行时猜默认。不是模型报价或承诺的最大负余额。每个 Run 冻结实际使用的 policy。
+后台可调策略只保留 5 个显式 `system_setting` 键；缺失/非法不在运行时猜默认，每个 Run 冻结实际使用的 policy。
+迁移 `2026-11-05-ai-policy-slim.sql` 软删除其余 21 个键。
 
 | 设置键/范围 | 初始值 |
 | --- | --- |
 | ai.run.user_inflight_limit | 2，跨平台同一用户合计 |
 | ai.run.user_rate_per_second / user_rate_burst | 1 / 5，分布式 token bucket |
-| ai.run.global_rate_per_second / global_rate_burst | 200 / 400，跨实例共享 token bucket |
-| ai.run.queued_backpressure_threshold / active_backpressure_threshold | 1000 / 2000，1 秒有界观测，非资金准入信号量 |
 | ai.run.max_queued_seconds | 60，尚未发送超时直接失败并按已知零用量结束 |
-| ai.run.text_timeout_seconds | 180 |
-| ai.run.image_timeout_seconds | 300 |
-| ai.run.audio_timeout_seconds | 300 |
-| ai.run.video_timeout_seconds | 3600 |
-| ai.run.max_model_rounds | 8 |
-| ai.run.max_tool_calls | 16 |
-| ai.run.max_bound_tools | 16，另受快照总大小限制 |
-| ai.run.max_input_attachments | 4 |
-| ai.run.max_output_tokens | 4096，且不超过当前模型限制 |
-| ai.run.max_text_input_bytes | 131072，另经当前模型 token/上下文限制校验 |
-| ai.run.max_images | 4，且不超过供应商支持数量 |
-| ai.media.image_max_bytes | 10485760（10 MiB） |
-| ai.media.audio_max_bytes | 104857600（100 MiB） |
-| ai.media.video_max_bytes | 524288000（500 MiB） |
-| ai.media.download_timeout_seconds | 300，每次受剩余任务时限约束 |
-| ai.media.transfer_timeout_seconds | 900，独立于生成时限，另受源失效时间约束 |
-| ai.media.spool_max_bytes_per_worker | 2147483648（2 GiB）；单实例导入并发 2 |
 | ai.run.event_retention_days | 7，只清终态、已结算、已发布事件 |
+
+其余限制按归属分层，不再进入 `system_setting`：
+
+- **模型能力**：`ai_provider_model.limits` 的 `maxInputTokens`、`maxOutputTokens`、`maxImages`、`maxAudioSeconds`；
+  全局 `max_output_tokens` / `max_images` 已移除，避免把高能力模型硬压到全局值。
+- **Agent 行为**：`max_model_rounds=8`、`max_tool_calls=16`，本期为 `ai/limits.go` 常量；确需按 Agent 调时再进
+  `ai_agent` 字段，回归测试覆盖默认值。
+- **工程常量**：文本/图片/音频/视频单次操作超时 180/300/300/3600 秒，媒体字节上限 10/100/500 MiB，
+  下载/转存超时 300/900 秒，可绑工具 16、单次附件 4、文本输入字节 131072。
+- **部署容量**：`AI_GLOBAL_RATE_PER_SECOND` / `AI_GLOBAL_RATE_BURST` /
+  `AI_QUEUED_BACKPRESSURE_THRESHOLD` / `AI_ACTIVE_BACKPRESSURE_THRESHOLD` /
+  `AI_MEDIA_SPOOL_MAX_BYTES`，API 与 Worker 启动时加载并校验，避免同一集群出现两套容量口径。
 
 单次 HTTP 工具默认 10 秒、最大 30 秒，输出最大 64 KiB；输入 JSON 请求最大 1 MiB，提示词/附件规则仍单独校验。
 音视频请求的秒数、图像尺寸/质量、音色等由启用的 Provider Model 声明并被标准价格覆盖，不虚构统一时长或通用尺寸。
@@ -947,7 +940,7 @@ Run 失败并据实保留费用，不在上限之外再请求一轮“总结”�
 
 新消费在幂等已存在检查后经过 Redis Lua 用户/全局 token bucket，超限返回 429+retryAfter；Redis 不可确认则 503，
 不故障放行。队列/活跃量由单个跨实例 lease leader 每秒一次通过 Run 状态索引有界统计，发布 2 秒有效的容量观测；
-follower 不逐请求查询 PostgreSQL，缺失/过期/错误拒绝新准入。达到阈值停止新 Run，最多容许观测延迟期间一个全局 burst
+follower 不逐请求查询 PostgreSQL，缺失/过期/错误拒绝新准入。达到部署背压阈值停止新 Run，最多容许观测延迟期间一个全局 burst
 的额外负载，明确不是精确全局在途硬上限。恢复扫描将 queued 超过 60 秒且未发送的 Run 结束，释放预留；
 已发送/未知结果不能套用 queued 规则归零。限流/容量 gate 不代替钱包事务和跨平台个人在途检查。
 

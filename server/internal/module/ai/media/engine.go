@@ -119,9 +119,9 @@ func (e *Engine) generate(ctx context.Context, row airun.Model, token string, me
 		if e.files == nil || len(input.FileSnapshots) != 1 {
 			return "MEDIA_INPUT_UNAVAILABLE"
 		}
-		maxBytes := policy.ImageMaxBytes
+		maxBytes := ai.ImageMaxBytes
 		if row.Operation == string(ai.OperationAudioTranscribe) {
-			maxBytes = policy.AudioMaxBytes
+			maxBytes = ai.AudioMaxBytes
 		}
 		var err error
 		inputData, inputMIME, inputName, err = e.files.ReadAIFrozenReference(ctx, row.UserID, row.PlatformID, input.FileSnapshots[0], maxBytes)
@@ -157,7 +157,7 @@ func (e *Engine) generate(ctx context.Context, row airun.Model, token string, me
 				return e.finishFailure(ctx, row, token, fact.ID, items, usage, "MEDIA_INPUT_UNAVAILABLE", nil)
 			}
 
-			response, callErr = e.editor.Edit(ctx, providerrequest.ImageEditRequest{Config: credential, Prompt: input.Text, N: input.Count, Size: input.Size, Quality: input.Quality, MaxBytes: policy.ImageMaxBytes, Image: bytes.NewReader(inputData), Filename: inputName, MIME: inputMIME, Params: mediaParams})
+			response, callErr = e.editor.Edit(ctx, providerrequest.ImageEditRequest{Config: credential, Prompt: input.Text, N: input.Count, Size: input.Size, Quality: input.Quality, MaxBytes: ai.ImageMaxBytes, Image: bytes.NewReader(inputData), Filename: inputName, MIME: inputMIME, Params: mediaParams})
 		} else {
 			response, callErr = e.images.Generate(ctx, providerrequest.ImageRequest{Config: credential, Prompt: input.Text, N: input.Count, Size: input.Size, Quality: input.Quality, OutputFormat: input.Format, Params: mediaParams})
 		}
@@ -186,7 +186,7 @@ func (e *Engine) generate(ctx context.Context, row airun.Model, token string, me
 			requestID = stream.RequestID
 			usage = speechUsage(config, input.Text, stream.Usage)
 
-			_, importErr := e.media.ImportInline(mediaCtx, auth.Identity{UserID: row.UserID, PlatformID: row.PlatformID}, InlineImport{RunID: row.ID, ProviderID: fact.ID, Ordinal: 0, RequestSeed: fmt.Sprintf("%d", fact.ID), OriginalName: "speech." + normalizedFormat(input.Format), MIME: stream.MIME, MaxBytes: policy.AudioMaxBytes, TransferTimeout: time.Duration(policy.TransferTimeoutSeconds) * time.Second, AllowedMIMEs: []string{"audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4"}, Body: stream.Body, ContentLength: stream.ContentLength, SourceKind: SourceStream})
+			_, importErr := e.media.ImportInline(mediaCtx, auth.Identity{UserID: row.UserID, PlatformID: row.PlatformID}, InlineImport{RunID: row.ID, ProviderID: fact.ID, Ordinal: 0, RequestSeed: fmt.Sprintf("%d", fact.ID), OriginalName: "speech." + normalizedFormat(input.Format), MIME: stream.MIME, MaxBytes: ai.AudioMaxBytes, TransferTimeout: time.Duration(ai.TransferTimeoutSeconds) * time.Second, AllowedMIMEs: []string{"audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4"}, Body: stream.Body, ContentLength: stream.ContentLength, SourceKind: SourceStream})
 			if final, ok := stream.Body.(interface {
 				Usage() providerrequest.MediaUsage
 			}); ok {
@@ -197,9 +197,9 @@ func (e *Engine) generate(ctx context.Context, row airun.Model, token string, me
 				providerErr = fmt.Errorf("%w: media stream incomplete", providerrequest.ErrSubmissionUnknown)
 			}
 			resultAt := e.now().UTC()
-			prepared, prepareErr := e.media.PrepareResultFile(InlineImport{RunID: row.ID, ProviderID: fact.ID, Ordinal: 0, RequestSeed: fmt.Sprintf("%d", fact.ID), MIME: stream.MIME, SourceKind: SourceStream, TransferTimeout: time.Duration(policy.TransferTimeoutSeconds) * time.Second}, "", nil, resultAt)
+			prepared, prepareErr := e.media.PrepareResultFile(InlineImport{RunID: row.ID, ProviderID: fact.ID, Ordinal: 0, RequestSeed: fmt.Sprintf("%d", fact.ID), MIME: stream.MIME, SourceKind: SourceStream, TransferTimeout: time.Duration(ai.TransferTimeoutSeconds) * time.Second}, "", nil, resultAt)
 			if prepareErr != nil {
-				prepared = e.media.FailedResultFile(InlineImport{RunID: row.ID, ProviderID: fact.ID, Ordinal: 0, RequestSeed: fmt.Sprintf("%d", fact.ID), SourceKind: SourceStream, TransferTimeout: time.Duration(policy.TransferTimeoutSeconds) * time.Second}, resultAt, "INVALID_SOURCE")
+				prepared = e.media.FailedResultFile(InlineImport{RunID: row.ID, ProviderID: fact.ID, Ordinal: 0, RequestSeed: fmt.Sprintf("%d", fact.ID), SourceKind: SourceStream, TransferTimeout: time.Duration(ai.TransferTimeoutSeconds) * time.Second}, resultAt, "INVALID_SOURCE")
 			}
 			if importErr != nil {
 				markResultUnrecoverable(&prepared, "SOURCE_UNRECOVERABLE", "一次性媒体结果保存失败且无法恢复")
@@ -218,7 +218,7 @@ func (e *Engine) generate(ctx context.Context, row airun.Model, token string, me
 			return e.finishFailure(ctx, row, token, fact.ID, items, usage, "MEDIA_INPUT_UNAVAILABLE", nil)
 		}
 
-		response, callErr := e.audio.Transcribe(ctx, providerrequest.TranscriptionRequest{Config: credential, MaxBytes: policy.AudioMaxBytes, Audio: bytes.NewReader(inputData), Filename: inputName, MIME: inputMIME, ResponseFormat: input.Format, Prompt: input.Text, Params: mediaParams})
+		response, callErr := e.audio.Transcribe(ctx, providerrequest.TranscriptionRequest{Config: credential, MaxBytes: ai.AudioMaxBytes, Audio: bytes.NewReader(inputData), Filename: inputName, MIME: inputMIME, ResponseFormat: input.Format, Prompt: input.Text, Params: mediaParams})
 		requestID, requestErr, usage = response.RequestID, callErr, response.Usage
 		items, _ = json.Marshal([]map[string]string{{"text": response.Text}})
 	}
@@ -323,7 +323,7 @@ func imageImport(row airun.Model, providerRequestID int64, index int, policy air
 	case "webp":
 		mime, ext = "image/webp", "webp"
 	}
-	return InlineImport{RunID: row.ID, ProviderID: providerRequestID, Ordinal: index, RequestSeed: fmt.Sprintf("%d:%d", providerRequestID, index), OriginalName: fmt.Sprintf("image-%d.%s", index, ext), MIME: mime, MaxBytes: policy.ImageMaxBytes, TransferTimeout: time.Duration(policy.TransferTimeoutSeconds) * time.Second, DownloadTimeout: time.Duration(policy.DownloadTimeoutSeconds) * time.Second, AllowedMIMEs: []string{"image/png", "image/jpeg", "image/webp"}}
+	return InlineImport{RunID: row.ID, ProviderID: providerRequestID, Ordinal: index, RequestSeed: fmt.Sprintf("%d:%d", providerRequestID, index), OriginalName: fmt.Sprintf("image-%d.%s", index, ext), MIME: mime, MaxBytes: ai.ImageMaxBytes, TransferTimeout: time.Duration(ai.TransferTimeoutSeconds) * time.Second, DownloadTimeout: time.Duration(ai.DownloadTimeoutSeconds) * time.Second, AllowedMIMEs: []string{"image/png", "image/jpeg", "image/webp"}}
 }
 
 func speechParams(config airun.RuntimeConfig, raw json.RawMessage) json.RawMessage {

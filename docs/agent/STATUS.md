@@ -1,5 +1,16 @@
 # 项目状态
 
+### AI 系统设置 26→5 收敛（2026-11-05，真实库已迁移）
+
+- 目标：系统设置只保留 5 个管理员可调策略（`user_inflight_limit`、`user_rate_per_second`、`user_rate_burst`、`max_queued_seconds`、`event_retention_days`）；模型能力回归 `ai_provider_model.limits`，工程限制进 `ai/limits.go` 常量，部署容量进环境变量，Agent 轮次/工具次数一期用常量。
+- 代码：`ai/run/policy.go` 从 26 字段缩为 4 字段（事件保留仍由 Worker 直接读 setting，不在 policy 内）；`run/service.go`、`text_engine.go`、`text_history.go`、`reconcile*.go`、`media/*` 改用 `ai.Max*`/超时常量；`Gate` 新增 `GateLimits`，从 `AI_GLOBAL_RATE_PER_SECOND`、`AI_GLOBAL_RATE_BURST`、`AI_QUEUED_BACKPRESSURE_THRESHOLD`、`AI_ACTIVE_BACKPRESSURE_THRESHOLD` 读取；Worker spool 改读 `AI_MEDIA_SPOOL_MAX_BYTES`；删除全局 `max_output_tokens`/`max_images` 的二次封顶，文本输入只保留 128 KiB 字节护栏（修复字节与 token 混比）。
+- 迁移：新增 `docs/database/2026-11-05-ai-policy-slim.sql` 与同名 `.ps1` runner。软删除 21 个键、把 `ck_system_setting_ai_policy` 替换为 5 键定义、仅在实际删除时推进 `system.setting` generation + outbox；历史 `2026-10-28-ai-core-seed.sql` 保持原样，全新安装按顺序执行 core seed 后再跑本次迁移。runner 要求 `-ServicesStopped`，执行全库备份、连接检查、5 键/代际/无关事实核验和幂等复跑。
+- 验证：隔离 schema 实测 26→5、generation 24→25、新 outbox 未发布，复跑零变化；新增 `TestAIPolicySlimRemovesEngineeringSettingsAndKeepsRetainedPolicy` 通过（真实 PostgreSQL 临时 schema）；`go test -short -p 1 ./internal/module/ai/...`、`go vet ./internal/module/ai/... ./cmd/api ./cmd/worker`、`go build ./cmd/api ./cmd/worker`、`go test ./internal/config` 均通过；`current.sql` 约束快照已同步为 5 键。
+- 真实库结果：`ai.%` 有效设置 5 条、软删除 21 条；`ck_system_setting_ai_policy` 已是 5 键定义；`system.setting/global` generation 24→25，outbox id 59 已发布（Worker relay 已消化）。API 已于 10:11 以新代码重启；Worker 当前未常驻。
+- 部署配置：`server/.env` 与 `.env.example` 已补 `AI_GLOBAL_RATE_PER_SECOND=200`、`AI_GLOBAL_RATE_BURST=400`、`AI_QUEUED_BACKPRESSURE_THRESHOLD=1000`、`AI_ACTIVE_BACKPRESSURE_THRESHOLD=2000`、`AI_MEDIA_SPOOL_MAX_BYTES=2147483648`；未设置时使用同值默认，修改后需重启 API/Worker。
+- 兼容性：旧 `ai_run.policy_snapshot` 的多余字段反序列化时自动忽略；新代码对 26 键和 5 键都可运行，旧代码不能在 5 键库上运行。
+- 未执行：真实 Provider/Agent 配置与供应商调用、Agent 级 `max_model_rounds`/`max_tool_calls` 表字段（二期）。
+
 ### 调度 options 接口 10006 修复（2026-11-04，已验证）
 
 - 现象：`GET /api/admin/v1/system/scheduler/options` 返回 `code=10006`「服务暂未就绪」。

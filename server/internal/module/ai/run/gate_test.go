@@ -29,6 +29,15 @@ func (r *unavailableGateRedis) EvalString(context.Context, string, []string, ...
 	return "", errors.New("Redis unavailable")
 }
 
+func testGateLimits() GateLimits {
+	return GateLimits{
+		GlobalRatePerSecond:         200,
+		GlobalRateBurst:             400,
+		QueuedBackpressureThreshold: 1000,
+		ActiveBackpressureThreshold: 2000,
+	}
+}
+
 func testGatePolicy(t *testing.T) Policy {
 	t.Helper()
 	p, err := NewPolicyReader(validPolicySettings()).Read(context.Background())
@@ -41,7 +50,7 @@ func testGatePolicy(t *testing.T) Policy {
 func TestGateDoesNotQueryPostgresWhenRedisIsUnavailableOrContextCanceled(t *testing.T) {
 	r := &unavailableGateRedis{}
 	calls := 0
-	g := NewGate(r, capacityCounterFunc(func(context.Context, int64, int64) (CapacityCounts, error) { calls++; return CapacityCounts{}, nil }))
+	g := NewGate(r, capacityCounterFunc(func(context.Context, int64, int64) (CapacityCounts, error) { calls++; return CapacityCounts{}, nil }), testGateLimits())
 	if err := g.Check(context.Background(), 1, testGatePolicy(t)); !errors.Is(err, ErrGateUnavailable) {
 		t.Fatalf("err=%v", err)
 	}
@@ -81,7 +90,7 @@ func gatePair(t *testing.T, counter CapacityCounter) (*Gate, *Gate, *projectredi
 	t.Helper()
 	first, second := openGateRedis(t), openGateRedis(t)
 	prefix := "test:ai:run:gate:{" + uuid.NewString() + "}:"
-	a, b := NewGate(first, counter), NewGate(second, counter)
+	a, b := NewGate(first, counter, testGateLimits()), NewGate(second, counter, testGateLimits())
 	a.prefix, b.prefix = prefix, prefix
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -134,9 +143,9 @@ func TestGateRedisTwoInstancesShareUserAndGlobalBuckets(t *testing.T) {
 func TestGateRedisGlobalDenialDoesNotSpendUserToken(t *testing.T) {
 	a, b, client := gatePair(t, capacityCounterFunc(func(context.Context, int64, int64) (CapacityCounts, error) { return CapacityCounts{}, nil }))
 	ctx := context.Background()
+	a.limits.GlobalRatePerSecond, a.limits.GlobalRateBurst = 1, 1
+	b.limits.GlobalRatePerSecond, b.limits.GlobalRateBurst = 1, 1
 	policy := testGatePolicy(t)
-	policy.GlobalRatePerSecond = 1
-	policy.GlobalRateBurst = 1
 	if _, err := a.RefreshCapacity(ctx, policy); err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +230,8 @@ func TestGateRedisCapacityBackpressureAndPolicyIncreaseFailClosed(t *testing.T) 
 	if err := b.Check(ctx, 1, policy); !errors.Is(err, ErrGateDenied) {
 		t.Fatalf("queued threshold=%v", err)
 	}
-	policy.QueuedBackpressureThreshold = 2000
+	a.limits.QueuedBackpressureThreshold = 2000
+	b.limits.QueuedBackpressureThreshold = 2000
 	if err := b.Check(ctx, 1, policy); !errors.Is(err, ErrGateUnavailable) {
 		t.Fatalf("policy increased past observed bound=%v", err)
 	}

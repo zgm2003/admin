@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"admin/server/internal/database/testschema"
+	"admin/server/internal/module/ai"
 	providerrequest "admin/server/internal/module/ai/providerRequest"
 	airun "admin/server/internal/module/ai/run"
 	auth "admin/server/internal/module/auth/login"
@@ -268,9 +269,7 @@ func TestPollUsesCompletionTimeForTransferAndNextAttempt(t *testing.T) {
 			if err := db.WithContext(ctx).Create(&task).Error; err != nil {
 				t.Fatal(err)
 			}
-			policy := validMediaPolicy()
-			policy.TransferTimeoutSeconds = 60
-			policyJSON, err := json.Marshal(policy)
+			policyJSON, err := json.Marshal(airun.Policy{UserInflightLimit: 1, UserRatePerSecond: 1, UserRateBurst: 1, MaxQueuedSeconds: 1})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -305,8 +304,9 @@ func TestPollUsesCompletionTimeForTransferAndNextAttempt(t *testing.T) {
 				if err := db.WithContext(ctx).Where("media_task_id=?", task.ID).First(&file).Error; err != nil {
 					t.Fatal(err)
 				}
-				if file.TransferDeadline == nil || !file.TransferDeadline.Equal(completedAt.Add(time.Minute)) || !file.CreatedAt.Equal(completedAt) {
-					t.Fatalf("file createdAt=%s deadline=%v want=%s", file.CreatedAt, file.TransferDeadline, completedAt.Add(time.Minute))
+				wantDeadline := completedAt.Add(time.Duration(ai.TransferTimeoutSeconds) * time.Second)
+				if file.TransferDeadline == nil || !file.TransferDeadline.Equal(wantDeadline) || !file.CreatedAt.Equal(completedAt) {
+					t.Fatalf("file createdAt=%s deadline=%v want=%s", file.CreatedAt, file.TransferDeadline, wantDeadline)
 				}
 				return
 			}

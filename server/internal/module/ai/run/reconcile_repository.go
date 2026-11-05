@@ -1,6 +1,7 @@
 package run
 
 import (
+	"admin/server/internal/module/ai"
 	pr "admin/server/internal/module/ai/providerRequest"
 	"admin/server/internal/module/ai/run/event"
 	"admin/server/internal/module/ai/usage/charge"
@@ -51,11 +52,11 @@ func (r *ReconcileRepository) Review(ctx context.Context, id int64, apply bool, 
 			return e
 		}
 		var policy Policy
-		if json.Unmarshal(row.PolicySnapshot, &policy) != nil || policy.Validate() != nil || policy.MaxModelRounds < 1 || policy.MaxModelRounds > 64 {
+		if json.Unmarshal(row.PolicySnapshot, &policy) != nil || policy.Validate() != nil {
 			return ErrInvalidSnapshot
 		}
 		requests := make([]pr.Fact, 0)
-		if e := lock(tx).Where("run_id=?", id).Order("sequence").Limit(int(policy.MaxModelRounds) + 1).Find(&requests).Error; e != nil {
+		if e := lock(tx).Where("run_id=?", id).Order("sequence").Limit(int(ai.MaxModelRounds) + 1).Find(&requests).Error; e != nil {
 			return e
 		}
 		var toolIDs []int64

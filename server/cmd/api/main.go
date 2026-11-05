@@ -473,7 +473,12 @@ func run(logger *slog.Logger) error {
 	aiRunRepository := airun.NewRepository(postgres.GORM, paymentwallet.NewRepository(postgres.GORM), schedulerRepository)
 	aiRunRepository.SetEvents(runevent.NewRepository(postgres.GORM, realtimeRepository))
 	aiRunService := airun.NewService(aiRunRepository, aiRuntime)
-	aiRunService.SetAdmission(airun.NewPolicyReader(settingService), airun.NewGate(redisClient, aiRunRepository))
+	aiRunService.SetAdmission(airun.NewPolicyReader(settingService), airun.NewGate(redisClient, aiRunRepository, airun.GateLimits{
+		GlobalRatePerSecond:         settings.AIGate.GlobalRatePerSecond,
+		GlobalRateBurst:             settings.AIGate.GlobalRateBurst,
+		QueuedBackpressureThreshold: settings.AIGate.QueuedBackpressureThreshold,
+		ActiveBackpressureThreshold: settings.AIGate.ActiveBackpressureThreshold,
+	}))
 	aiRunHandler := airun.NewHandler(aiRunService)
 	aiQueries := airun.NewQueryService(airun.NewQueryRepository(postgres.GORM))
 	aiQueries.SetSummaryRedis(redisClient.UniversalClient())

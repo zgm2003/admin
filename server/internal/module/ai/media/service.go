@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"admin/server/internal/module/ai"
 	providerrequest "admin/server/internal/module/ai/providerRequest"
 	airun "admin/server/internal/module/ai/run"
 	auth "admin/server/internal/module/auth/login"
@@ -288,7 +289,7 @@ func (s *Service) createURLFile(ctx context.Context, task Task, runRow airun.Mod
 	if json.Unmarshal(runRow.PolicySnapshot, &policy) != nil || policy.Validate() != nil {
 		return airun.ErrPolicyInvalid
 	}
-	deadline := now.Add(time.Duration(policy.TransferTimeoutSeconds) * time.Second)
+	deadline := now.Add(time.Duration(ai.TransferTimeoutSeconds) * time.Second)
 	file := &File{RunID: task.RunID, MediaTaskID: &task.ID, Role: FileRoleGenerated, Ordinal: 0, ImportRequestKey: &requestKey, SourceKind: SourceURL, SourceCiphertext: &sealed, EncryptionKeyID: &encryptionID, SourceRecoverable: 1, TransferDeadline: &deadline, MIMEType: &mimeType, Metadata: metadata, TransferStatus: TransferQueued, TransferAttempts: 0, NextTransferAt: &now, CreatedAt: now, UpdatedAt: now}
 	if err := s.repository.CreateGeneratedFile(ctx, file); err != nil {
 		return err
@@ -333,7 +334,7 @@ func (s *Service) ImportOne(ctx context.Context, payload json.RawMessage) error 
 	if err := json.Unmarshal(runRow.PolicySnapshot, &policy); err != nil || policy.Validate() != nil {
 		return s.finishImportFailure(ctx, file, "INVALID_POLICY", "媒体转存策略无效", now)
 	}
-	constraints, err := mediaConstraints(file, policy, now)
+	constraints, err := mediaConstraints(file, now)
 	if err != nil {
 		return s.finishImportFailure(ctx, file, "INVALID_POLICY", "媒体转存策略无效", now)
 	}
@@ -493,24 +494,24 @@ func (s *Service) retryImport(ctx context.Context, file File, code, message stri
 	return nil
 }
 
-func mediaConstraints(file File, policy airun.Policy, now time.Time) (Constraints, error) {
+func mediaConstraints(file File, now time.Time) (Constraints, error) {
 	allowed := []string{"image/png", "image/jpeg", "image/webp", "image/gif", "audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4", "video/mp4", "video/webm"}
-	maxBytes := policy.VideoMaxBytes
+	maxBytes := ai.VideoMaxBytes
 	if file.MIMEType != nil && strings.TrimSpace(*file.MIMEType) != "" {
 		allowed = []string{*file.MIMEType}
 		switch {
 		case strings.HasPrefix(normalizeMIME(*file.MIMEType), "image/"):
-			maxBytes = policy.ImageMaxBytes
+			maxBytes = ai.ImageMaxBytes
 		case strings.HasPrefix(normalizeMIME(*file.MIMEType), "audio/"):
-			maxBytes = policy.AudioMaxBytes
+			maxBytes = ai.AudioMaxBytes
 		case strings.HasPrefix(normalizeMIME(*file.MIMEType), "video/"):
-			maxBytes = policy.VideoMaxBytes
+			maxBytes = ai.VideoMaxBytes
 		}
 	}
-	if maxBytes <= 0 || policy.DownloadTimeoutSeconds <= 0 || policy.TransferTimeoutSeconds <= 0 {
+	if maxBytes < 1 {
 		return Constraints{}, airun.ErrPolicyInvalid
 	}
-	deadline := now.Add(time.Duration(policy.TransferTimeoutSeconds) * time.Second)
+	deadline := now.Add(time.Duration(ai.TransferTimeoutSeconds) * time.Second)
 	if file.TransferDeadline != nil {
 		deadline = *file.TransferDeadline
 	}
@@ -520,7 +521,7 @@ func mediaConstraints(file File, policy airun.Policy, now time.Time) (Constraint
 	if !deadline.After(now) {
 		return Constraints{}, errors.New("media transfer deadline expired")
 	}
-	return Constraints{MaxBytes: maxBytes, AllowedMIMEs: allowed, DownloadTimeout: time.Duration(policy.DownloadTimeoutSeconds) * time.Second, Deadline: deadline}, nil
+	return Constraints{MaxBytes: maxBytes, AllowedMIMEs: allowed, DownloadTimeout: time.Duration(ai.DownloadTimeoutSeconds) * time.Second, Deadline: deadline}, nil
 }
 
 func generatedName(file File) string {

@@ -239,7 +239,7 @@ func planReconciliation(state ReconcileState, e ReconcileEvidence, operator, dig
 		return p, ErrInvalidSnapshot
 	}
 	var policy Policy
-	if json.Unmarshal(row.PolicySnapshot, &policy) != nil || policy.Validate() != nil || int64(len(state.Requests)) > policy.MaxModelRounds || len(state.Requests) == 0 {
+	if json.Unmarshal(row.PolicySnapshot, &policy) != nil || policy.Validate() != nil || int64(len(state.Requests)) > ai.MaxModelRounds || len(state.Requests) == 0 {
 		return p, ErrInvalidSnapshot
 	}
 	requests := append([]pr.Fact(nil), state.Requests...)

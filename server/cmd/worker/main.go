@@ -219,17 +219,18 @@ func run(logger *slog.Logger) error {
 	aiCredentialLoader := airun.NewCredentialLoader(aiprovider.NewRepository(postgres.GORM), providerCipher)
 	aiTextEngine := airun.NewTextEngine(aiRunRepository, aiCredentialLoader, aiToolRepository, aiToolExecutor, providerrequest.NewResponsesClient(nil), providerrequest.NewChatCompletionsClient(nil))
 	aiTextEngine.SetFileReader(fileService)
-	aiRunGate := airun.NewGate(redisClient, aiRunRepository)
+	aiRunGate := airun.NewGate(redisClient, aiRunRepository, airun.GateLimits{
+		GlobalRatePerSecond:         settings.AIGate.GlobalRatePerSecond,
+		GlobalRateBurst:             settings.AIGate.GlobalRateBurst,
+		QueuedBackpressureThreshold: settings.AIGate.QueuedBackpressureThreshold,
+		ActiveBackpressureThreshold: settings.AIGate.ActiveBackpressureThreshold,
+	})
 	aiTextEngine.SetStreamPressure(aiRunGate)
 	mediaCipher, err := aiprovider.NewCipher(os.Getenv("APP_SECRET"), "media-v1")
 	if err != nil {
 		return err
 	}
-	spoolLimit, err := workerAIPositiveSetting(processContext, settingService, "ai.media.spool_max_bytes_per_worker")
-	if err != nil {
-		return err
-	}
-	mediaSpool, err := aimedia.NewSpooler(os.TempDir(), spoolLimit)
+	mediaSpool, err := aimedia.NewSpooler(os.TempDir(), settings.AIMediaSpoolMaxBytes)
 	if err != nil {
 		return fmt.Errorf("configure AI media spool: %w", err)
 	}
@@ -375,7 +376,7 @@ func warmWorkerAIPolicySettings(ctx context.Context, settings *systemsetting.Ser
 
 func workerAIPositiveSetting(ctx context.Context, settings *systemsetting.Service, key string) (int64, error) {
 	if settings == nil || key == "" {
-		return 0, errors.New("AI media setting reader unavailable")
+		return 0, errors.New("AI setting reader unavailable")
 	}
 	var record systemsetting.Record
 	var err error
@@ -398,7 +399,7 @@ func workerAIPositiveSetting(ctx context.Context, settings *systemsetting.Servic
 		}
 	}
 	if err != nil {
-		return 0, fmt.Errorf("read AI media setting %s: %w", key, err)
+		return 0, fmt.Errorf("read AI setting %s: %w", key, err)
 	}
 	value, err := strconv.ParseInt(record.Value, 10, 64)
 	if err != nil || value < 1 {

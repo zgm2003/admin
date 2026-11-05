@@ -22,8 +22,8 @@ func TestWorkerTimeoutUsesFrozenRunAndTransferDeadlines(t *testing.T) {
 	}
 	loader.row.PolicySnapshot = json.RawMessage(`{"transferTimeoutSeconds":1800}`)
 	got, err = worker.TimeoutForPayload(context.Background(), json.RawMessage(`{"runId":9}`), now)
-	if err != nil || got != 92*time.Minute+30*time.Second {
-		t.Fatalf("updated frozen policy timeout=%s err=%v want=92m30s", got, err)
+	if err != nil || got != 47*time.Minute+30*time.Second {
+		t.Fatalf("legacy policy must not override fixed transfer timeout: %s err=%v", got, err)
 	}
 	loader.row.DeadlineAt = now.Add(-time.Second)
 	got, err = worker.TimeoutForPayload(context.Background(), json.RawMessage(`{"runId":9}`), now)

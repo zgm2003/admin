@@ -150,12 +150,7 @@ func TestRecoverQueuedUsesFrozenQueuePolicyInsteadOfRunDeadline(t *testing.T) {
 	snap := fixtureSnapshot()
 	snap.AcceptedAt = at
 	p := Policy{
-		UserInflightLimit: 2, UserRatePerSecond: 1, UserRateBurst: 1, GlobalRatePerSecond: 1, GlobalRateBurst: 1,
-		QueuedBackpressureThreshold: 1, ActiveBackpressureThreshold: 1, MaxQueuedSeconds: 1, TextTimeoutSeconds: 10,
-		ImageTimeoutSeconds: 10, AudioTimeoutSeconds: 10, VideoTimeoutSeconds: 10, MaxModelRounds: 1, MaxToolCalls: 1,
-		MaxBoundTools: 1, MaxInputAttachments: 1, MaxOutputTokens: 1, MaxTextInputBytes: 1, MaxImages: 1,
-		ImageMaxBytes: 1, AudioMaxBytes: 1, VideoMaxBytes: 1, DownloadTimeoutSeconds: 1, TransferTimeoutSeconds: 1,
-		SpoolMaxBytesPerWorker: 1, EventRetentionDays: 1,
+		UserInflightLimit: 2, UserRatePerSecond: 1, UserRateBurst: 1, MaxQueuedSeconds: 1,
 	}
 	policy, err := json.Marshal(p)
 	if err != nil {

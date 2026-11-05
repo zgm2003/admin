@@ -130,7 +130,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Model, bool, erro
 	if e = p.Validate(); e != nil {
 		return Model{}, false, e
 	}
-	if int64(len(data.Text)) > p.MaxTextInputBytes || (in.Operation != "audio.transcribe" && strings.TrimSpace(data.Text) == "") || int64(len(data.FileIDs)) > p.MaxInputAttachments {
+	if int64(len(data.Text)) > ai.MaxTextInputBytes || (in.Operation != "audio.transcribe" && strings.TrimSpace(data.Text) == "") || int64(len(data.FileIDs)) > ai.MaxInputAttachments {
 		return Model{}, false, apperror.InvalidRequest(errors.New("AI input violates model policy"))
 	}
 	if len(data.FileIDs) > 0 {
@@ -142,9 +142,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Model, bool, erro
 			return Model{}, false, e
 		}
 		for _, file := range data.FileSnapshots {
-			maxBytes := p.ImageMaxBytes
+			maxBytes := ai.ImageMaxBytes
 			if strings.HasPrefix(file.MIMEType, "audio/") {
-				maxBytes = p.AudioMaxBytes
+				maxBytes = ai.AudioMaxBytes
 			}
 			if file.SizeBytes < 1 || file.SizeBytes > maxBytes {
 				return Model{}, false, apperror.InvalidRequest(errors.New("AI input file exceeds frozen policy"))
@@ -160,10 +160,10 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (Model, bool, erro
 	if e != nil {
 		return Model{}, false, e
 	}
-	if int64(len(snap.Tools)) > p.MaxBoundTools {
+	if int64(len(snap.Tools)) > ai.MaxBoundTools {
 		return Model{}, false, ErrInvalidSnapshot
 	}
-	estimate, variable, timeout, e := estimateRun(snap, in.Operation, data, p)
+	estimate, variable, timeout, e := estimateRun(snap, in.Operation, data)
 	if e != nil {
 		if errors.Is(e, ErrInvalidSnapshot) {
 			return Model{}, false, e
@@ -208,7 +208,7 @@ func (s *Service) Find(ctx context.Context, id, userID, platformID int64) (Model
 	return m, nil
 }
 
-func estimateRun(s RuntimeSnapshot, op string, in RunInput, p Policy) (int64, bool, time.Duration, error) {
+func estimateRun(s RuntimeSnapshot, op string, in RunInput) (int64, bool, time.Duration, error) {
 	var config RuntimeConfig
 	if e := json.Unmarshal(s.Config, &config); e != nil {
 		return 0, false, 0, e
@@ -246,7 +246,7 @@ func estimateRun(s RuntimeSnapshot, op string, in RunInput, p Policy) (int64, bo
 		return 0, false, 0, e
 	}
 	lines := make([]usage.LineInput, 0)
-	timeout := p.TextTimeoutSeconds
+	timeout := ai.TextTimeoutSeconds
 	variable := false
 	switch ai.Operation(op) {
 	case ai.OperationText:
@@ -254,9 +254,9 @@ func estimateRun(s RuntimeSnapshot, op string, in RunInput, p Policy) (int64, bo
 		if !ai.TextProtocol(s.Protocol).Valid() || limits.MaxInputTokens < 1 || limits.MaxOutputTokens < 1 {
 			return 0, false, 0, ErrInvalidSnapshot
 		}
-		output := min(p.MaxOutputTokens, limits.MaxOutputTokens)
+		output := limits.MaxOutputTokens
 		if in.MaxOutputTokens != nil {
-			if *in.MaxOutputTokens < 1 || *in.MaxOutputTokens > output {
+			if *in.MaxOutputTokens < 1 || *in.MaxOutputTokens > limits.MaxOutputTokens {
 				return 0, false, 0, errors.New("AI output token limit is invalid")
 			}
 			output = *in.MaxOutputTokens
@@ -273,7 +273,7 @@ func estimateRun(s RuntimeSnapshot, op string, in RunInput, p Policy) (int64, bo
 		}
 		// Durable conversation history can fill the complete configured context.
 		inputBound = limits.MaxInputTokens
-		if p.MaxModelRounds < 1 || inputBound > math.MaxInt64/p.MaxModelRounds || output > math.MaxInt64/p.MaxModelRounds {
+		if inputBound > math.MaxInt64/ai.MaxModelRounds || output > math.MaxInt64/ai.MaxModelRounds {
 			return 0, false, 0, ErrInvalidSnapshot
 		}
 		required := map[string]bool{"input": false, "output": false}
@@ -291,10 +291,10 @@ func estimateRun(s RuntimeSnapshot, op string, in RunInput, p Policy) (int64, bo
 			quantity := int64(0)
 			switch r.UsageKey {
 			case "input":
-				quantity = inputBound * p.MaxModelRounds
+				quantity = inputBound * ai.MaxModelRounds
 				required["input"] = true
 			case "output":
-				quantity = output * p.MaxModelRounds
+				quantity = output * ai.MaxModelRounds
 				required["output"] = true
 			case "cacheInput":
 				continue
@@ -310,11 +310,11 @@ func estimateRun(s RuntimeSnapshot, op string, in RunInput, p Policy) (int64, bo
 			return 0, false, 0, errors.New("AI text price is incomplete")
 		}
 	case ai.OperationImage, ai.OperationImageEdit:
-		timeout = p.ImageTimeoutSeconds
+		timeout = ai.ImageTimeoutSeconds
 		if (op == "image.edit" && len(in.FileIDs) != 1) || (op == "image.generate" && len(in.FileIDs) != 0) {
 			return 0, false, 0, errors.New("AI image attachments are invalid")
 		}
-		if in.Count < 1 || in.Count > p.MaxImages || limits.MaxImages < 1 || in.Count > limits.MaxImages || in.Quality == "" || in.Size == "" {
+		if in.Count < 1 || limits.MaxImages < 1 || in.Count > limits.MaxImages || in.Quality == "" || in.Size == "" {
 			return 0, false, 0, errors.New("AI image options are invalid")
 		}
 		for _, r := range config.Rates {
@@ -334,7 +334,7 @@ func estimateRun(s RuntimeSnapshot, op string, in RunInput, p Policy) (int64, bo
 			return 0, false, 0, errors.New("AI image price is unavailable for the selected quality and size")
 		}
 	case ai.OperationAudio, ai.OperationAudioTranscribe:
-		timeout = p.AudioTimeoutSeconds
+		timeout = ai.AudioTimeoutSeconds
 		if op == "audio.transcribe" && len(in.FileIDs) != 1 {
 			return 0, false, 0, errors.New("AI transcription requires one audio attachment")
 		}

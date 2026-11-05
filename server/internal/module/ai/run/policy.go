@@ -14,35 +14,14 @@ import (
 
 var ErrPolicyInvalid = errors.New("AI engineering policy is unavailable or invalid")
 
-// Policy is the complete, serializable engineering policy frozen for a Run.
-// Values come from generation-checked setting.Reader records, never defaults.
+// Policy is the admin-editable admission policy frozen for a Run. Model
+// capability, agent behavior and engineering limits are intentionally not part
+// of it; they live in ai_provider_model.limits, ai_agent and ai/limits.go.
 type Policy struct {
-	UserInflightLimit           int64 `json:"userInflightLimit"`
-	UserRatePerSecond           int64 `json:"userRatePerSecond"`
-	UserRateBurst               int64 `json:"userRateBurst"`
-	GlobalRatePerSecond         int64 `json:"globalRatePerSecond"`
-	GlobalRateBurst             int64 `json:"globalRateBurst"`
-	QueuedBackpressureThreshold int64 `json:"queuedBackpressureThreshold"`
-	ActiveBackpressureThreshold int64 `json:"activeBackpressureThreshold"`
-	MaxQueuedSeconds            int64 `json:"maxQueuedSeconds"`
-	TextTimeoutSeconds          int64 `json:"textTimeoutSeconds"`
-	ImageTimeoutSeconds         int64 `json:"imageTimeoutSeconds"`
-	AudioTimeoutSeconds         int64 `json:"audioTimeoutSeconds"`
-	VideoTimeoutSeconds         int64 `json:"videoTimeoutSeconds"`
-	MaxModelRounds              int64 `json:"maxModelRounds"`
-	MaxToolCalls                int64 `json:"maxToolCalls"`
-	MaxBoundTools               int64 `json:"maxBoundTools"`
-	MaxInputAttachments         int64 `json:"maxInputAttachments"`
-	MaxOutputTokens             int64 `json:"maxOutputTokens"`
-	MaxTextInputBytes           int64 `json:"maxTextInputBytes"`
-	MaxImages                   int64 `json:"maxImages"`
-	ImageMaxBytes               int64 `json:"imageMaxBytes"`
-	AudioMaxBytes               int64 `json:"audioMaxBytes"`
-	VideoMaxBytes               int64 `json:"videoMaxBytes"`
-	DownloadTimeoutSeconds      int64 `json:"downloadTimeoutSeconds"`
-	TransferTimeoutSeconds      int64 `json:"transferTimeoutSeconds"`
-	SpoolMaxBytesPerWorker      int64 `json:"spoolMaxBytesPerWorker"`
-	EventRetentionDays          int64 `json:"eventRetentionDays"`
+	UserInflightLimit int64 `json:"userInflightLimit"`
+	UserRatePerSecond int64 `json:"userRatePerSecond"`
+	UserRateBurst     int64 `json:"userRateBurst"`
+	MaxQueuedSeconds  int64 `json:"maxQueuedSeconds"`
 }
 
 type policySetting struct {
@@ -52,10 +31,10 @@ type policySetting struct {
 
 func policySettingsFor(p *Policy) []policySetting {
 	return []policySetting{
-		{"ai.run.user_inflight_limit", &p.UserInflightLimit}, {"ai.run.user_rate_per_second", &p.UserRatePerSecond}, {"ai.run.user_rate_burst", &p.UserRateBurst}, {"ai.run.global_rate_per_second", &p.GlobalRatePerSecond}, {"ai.run.global_rate_burst", &p.GlobalRateBurst},
-		{"ai.run.queued_backpressure_threshold", &p.QueuedBackpressureThreshold}, {"ai.run.active_backpressure_threshold", &p.ActiveBackpressureThreshold}, {"ai.run.max_queued_seconds", &p.MaxQueuedSeconds}, {"ai.run.text_timeout_seconds", &p.TextTimeoutSeconds}, {"ai.run.image_timeout_seconds", &p.ImageTimeoutSeconds}, {"ai.run.audio_timeout_seconds", &p.AudioTimeoutSeconds}, {"ai.run.video_timeout_seconds", &p.VideoTimeoutSeconds},
-		{"ai.run.max_model_rounds", &p.MaxModelRounds}, {"ai.run.max_tool_calls", &p.MaxToolCalls}, {"ai.run.max_bound_tools", &p.MaxBoundTools}, {"ai.run.max_input_attachments", &p.MaxInputAttachments}, {"ai.run.max_output_tokens", &p.MaxOutputTokens}, {"ai.run.max_text_input_bytes", &p.MaxTextInputBytes}, {"ai.run.max_images", &p.MaxImages},
-		{"ai.media.image_max_bytes", &p.ImageMaxBytes}, {"ai.media.audio_max_bytes", &p.AudioMaxBytes}, {"ai.media.video_max_bytes", &p.VideoMaxBytes}, {"ai.media.download_timeout_seconds", &p.DownloadTimeoutSeconds}, {"ai.media.transfer_timeout_seconds", &p.TransferTimeoutSeconds}, {"ai.media.spool_max_bytes_per_worker", &p.SpoolMaxBytesPerWorker}, {"ai.run.event_retention_days", &p.EventRetentionDays},
+		{"ai.run.user_inflight_limit", &p.UserInflightLimit},
+		{"ai.run.user_rate_per_second", &p.UserRatePerSecond},
+		{"ai.run.user_rate_burst", &p.UserRateBurst},
+		{"ai.run.max_queued_seconds", &p.MaxQueuedSeconds},
 	}
 }
 
@@ -67,13 +46,7 @@ func (p Policy) Validate() error {
 			return fmt.Errorf("%w: %s", ErrPolicyInvalid, setting.key)
 		}
 	}
-	const maxSeconds = int64(time.Duration(1<<63-1) / time.Second)
-	for _, seconds := range []int64{p.MaxQueuedSeconds, p.TextTimeoutSeconds, p.ImageTimeoutSeconds, p.AudioTimeoutSeconds, p.VideoTimeoutSeconds, p.DownloadTimeoutSeconds, p.TransferTimeoutSeconds} {
-		if seconds > maxSeconds {
-			return ErrPolicyInvalid
-		}
-	}
-	if p.EventRetentionDays > maxSeconds/(24*60*60) {
+	if p.MaxQueuedSeconds > int64(time.Duration(1<<63-1)/time.Second) {
 		return ErrPolicyInvalid
 	}
 	return nil

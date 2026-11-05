@@ -3039,7 +3039,7 @@ CREATE TABLE public.system_setting (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT ck_system_setting_ai_policy CHECK (((NOT ((setting_key)::text = ANY ('{ai.run.user_inflight_limit,ai.run.user_rate_per_second,ai.run.user_rate_burst,ai.run.global_rate_per_second,ai.run.global_rate_burst,ai.run.queued_backpressure_threshold,ai.run.active_backpressure_threshold,ai.run.max_queued_seconds,ai.run.text_timeout_seconds,ai.run.image_timeout_seconds,ai.run.audio_timeout_seconds,ai.run.video_timeout_seconds,ai.run.max_model_rounds,ai.run.max_tool_calls,ai.run.max_bound_tools,ai.run.max_input_attachments,ai.run.max_output_tokens,ai.run.max_text_input_bytes,ai.run.max_images,ai.media.image_max_bytes,ai.media.audio_max_bytes,ai.media.video_max_bytes,ai.media.download_timeout_seconds,ai.media.transfer_timeout_seconds,ai.media.spool_max_bytes_per_worker,ai.run.event_retention_days}'::text[]))) OR (
+    CONSTRAINT ck_system_setting_ai_policy CHECK (((NOT ((setting_key)::text = ANY ('{ai.run.user_inflight_limit,ai.run.user_rate_per_second,ai.run.user_rate_burst,ai.run.max_queued_seconds,ai.run.event_retention_days}'::text[]))) OR (
 CASE
     WHEN (value ~ '^[0-9]{1,19}$'::text) THEN (((value)::numeric >= (1)::numeric) AND ((value)::numeric <= ('9223372036854775807'::bigint)::numeric))
     ELSE false

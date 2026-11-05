@@ -1,6 +1,7 @@
 package run
 
 import (
+	"admin/server/internal/module/ai"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -58,18 +59,13 @@ func (w *Worker) TimeoutForPayload(ctx context.Context, payload json.RawMessage,
 	var transfer time.Duration
 	switch row.Operation {
 	case "image.generate", "image.edit", "audio.speech", "audio.transcribe", "video.generate":
-		var policy struct {
-			TransferTimeoutSeconds int64 `json:"transferTimeoutSeconds"`
-		}
-		if json.Unmarshal(row.PolicySnapshot, &policy) == nil && policy.TransferTimeoutSeconds > 0 {
-			transfer = durationFromSeconds(policy.TransferTimeoutSeconds)
-			if row.Operation == "image.generate" || row.Operation == "image.edit" {
-				var input struct {
-					Count int64 `json:"count"`
-				}
-				if json.Unmarshal(row.InputSnapshot, &input) == nil && input.Count > 1 {
-					transfer = multiplyDuration(transfer, input.Count)
-				}
+		transfer = durationFromSeconds(ai.TransferTimeoutSeconds)
+		if row.Operation == "image.generate" || row.Operation == "image.edit" {
+			var input struct {
+				Count int64 `json:"count"`
+			}
+			if json.Unmarshal(row.InputSnapshot, &input) == nil && input.Count > 1 {
+				transfer = multiplyDuration(transfer, input.Count)
 			}
 		}
 	}

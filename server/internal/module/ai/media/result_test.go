@@ -43,12 +43,11 @@ func TestPrepareResultFileRetainsExplicitFailureWhenSourceCannotBeEncrypted(t *t
 
 func TestImageResultPreparationFailureKeepsTerminalOutputIdentity(t *testing.T) {
 	e := &Engine{media: &Service{cipher: resultCipher{}}}
-	policy := validMediaPolicy()
-	policy.TransferTimeoutSeconds = 0
-	secret := "https://media.example/secret?token=private"
-	now := time.Unix(100, 0).UTC()
+	policy := airun.Policy{UserInflightLimit: 1, UserRatePerSecond: 1, UserRateBurst: 1, MaxQueuedSeconds: 1}
+	secret := "https://blocked.example/secret?token=private"
+	now := time.Time{}
 	safe, files := e.prepareImageResultFiles(airun.Model{ID: 1}, 2, []providerrequest.ImageItem{{URL: secret}}, []string{"media.example"}, policy, now)
-	if len(safe) != 1 || len(files) != 1 || files[0].TransferStatus != TransferFailed || files[0].SourceRecoverable != 0 || files[0].ErrorCode == nil || *files[0].ErrorCode != "INVALID_SOURCE" || files[0].TransferDeadline.After(now) {
+	if len(safe) != 1 || len(files) != 1 || files[0].TransferStatus != TransferFailed || files[0].SourceRecoverable != 0 || files[0].ErrorCode == nil || *files[0].ErrorCode != "INVALID_SOURCE" {
 		t.Fatalf("files=%+v", files)
 	}
 	raw, _ := json.Marshal(struct {

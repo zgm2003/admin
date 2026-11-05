@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"admin/server/internal/database/testschema"
@@ -177,6 +178,81 @@ func TestAICoreSeedRejectsGenerationAndScheduleDriftAtomically(t *testing.T) {
 				t.Fatal("failed seed changed database facts")
 			}
 		})
+	}
+}
+
+func TestAIPolicySlimRemovesEngineeringSettingsAndKeepsRetainedPolicy(t *testing.T) {
+	db, ctx, seedSQL := aiCoreSeedFixture(t)
+	if err := applyAICoreSeed(t, db, ctx, seedSQL); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join("../../../../docs/database/2026-11-05-ai-policy-slim.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	slimSQL := string(raw)
+	if err := applyAICoreSeed(t, db, ctx, slimSQL); err != nil {
+		t.Fatal(err)
+	}
+	var active, removed int64
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_setting WHERE setting_key LIKE 'ai.%' AND deleted_at IS NULL`).Scan(&active).Error; err != nil || active != 5 {
+		t.Fatalf("active AI settings=%d err=%v", active, err)
+	}
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_setting WHERE setting_key LIKE 'ai.%' AND deleted_at IS NOT NULL`).Scan(&removed).Error; err != nil || removed != 21 {
+		t.Fatalf("deleted AI settings=%d err=%v", removed, err)
+	}
+	want := map[string]string{
+		"ai.run.user_inflight_limit": "2",
+		"ai.run.user_rate_per_second": "1",
+		"ai.run.user_rate_burst":      "5",
+		"ai.run.max_queued_seconds":   "60",
+		"ai.run.event_retention_days": "7",
+	}
+	var rows []struct {
+		Key   string `gorm:"column:setting_key"`
+		Value string
+	}
+	if err := db.WithContext(ctx).Raw(`SELECT setting_key,value FROM system_setting WHERE setting_key LIKE 'ai.%' AND deleted_at IS NULL`).Scan(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if want[row.Key] != row.Value {
+			t.Fatalf("retained policy changed: %+v", row)
+		}
+	}
+	var definition string
+	if err := db.WithContext(ctx).Raw(`SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname='ck_system_setting_ai_policy'`).Scan(&definition).Error; err != nil {
+		t.Fatal(err)
+	}
+	for key := range want {
+		if !strings.Contains(definition, key) {
+			t.Fatalf("policy check lost %s", key)
+		}
+	}
+	for _, key := range []string{
+		"ai.run.global_rate_per_second", "ai.run.max_model_rounds", "ai.run.max_output_tokens",
+		"ai.media.image_max_bytes", "ai.media.spool_max_bytes_per_worker",
+	} {
+		if strings.Contains(definition, key) {
+			t.Fatalf("policy check still constrains removed %s", key)
+		}
+	}
+	var generation, outbox int64
+	if err := db.WithContext(ctx).Raw(`SELECT generation FROM system_config_cache_state WHERE namespace='system.setting' AND scope_key='global'`).Scan(&generation).Error; err != nil || generation != 9 {
+		t.Fatalf("setting generation=%d err=%v", generation, err)
+	}
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_config_cache_outbox WHERE namespace='system.setting' AND scope_key='global' AND generation=9 AND published_at IS NULL AND attempts=0`).Scan(&outbox).Error; err != nil || outbox != 1 {
+		t.Fatalf("setting outbox=%d err=%v", outbox, err)
+	}
+	before := aiSeedFacts(t, db, ctx)
+	if err := applyAICoreSeed(t, db, ctx, slimSQL); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.WithContext(ctx).Raw(`SELECT count(*) FROM system_setting WHERE setting_key LIKE 'ai.%' AND deleted_at IS NULL`).Scan(&active).Error; err != nil || active != 5 {
+		t.Fatalf("replay active AI settings=%d err=%v", active, err)
+	}
+	if got := aiSeedFacts(t, db, ctx); got != before {
+		t.Fatal("policy slim replay changed facts")
 	}
 }
 

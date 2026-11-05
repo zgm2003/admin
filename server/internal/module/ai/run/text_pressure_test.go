@@ -84,7 +84,7 @@ func TestTextPressureOverloadWaitHonorsCancellationBeforeOneSecond(t *testing.T)
 
 func TestStreamPressureDoesNotQueryPostgresOrFallbackOnRedisFailure(t *testing.T) {
 	calls := 0
-	g := NewGate(&unavailableGateRedis{}, capacityCounterFunc(func(context.Context, int64, int64) (CapacityCounts, error) { calls++; return CapacityCounts{}, nil }))
+	g := NewGate(&unavailableGateRedis{}, capacityCounterFunc(func(context.Context, int64, int64) (CapacityCounts, error) { calls++; return CapacityCounts{}, nil }), testGateLimits())
 	if _, err := g.StreamBacklog(context.Background()); !errors.Is(err, ErrGateUnavailable) || calls != 0 {
 		t.Fatal(err, calls)
 	}

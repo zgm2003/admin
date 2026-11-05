@@ -25,10 +25,10 @@ func (s policySettings) FindByKey(ctx context.Context, key string) (sharedsettin
 
 func validPolicySettings() policySettings {
 	values := map[string]int64{
-		"ai.run.user_inflight_limit": 2, "ai.run.user_rate_per_second": 1, "ai.run.user_rate_burst": 5, "ai.run.global_rate_per_second": 200, "ai.run.global_rate_burst": 400,
-		"ai.run.queued_backpressure_threshold": 1000, "ai.run.active_backpressure_threshold": 2000, "ai.run.max_queued_seconds": 60, "ai.run.text_timeout_seconds": 180, "ai.run.image_timeout_seconds": 300, "ai.run.audio_timeout_seconds": 300, "ai.run.video_timeout_seconds": 3600,
-		"ai.run.max_model_rounds": 8, "ai.run.max_tool_calls": 16, "ai.run.max_bound_tools": 16, "ai.run.max_input_attachments": 4, "ai.run.max_output_tokens": 4096, "ai.run.max_text_input_bytes": 131072, "ai.run.max_images": 4,
-		"ai.media.image_max_bytes": 10485760, "ai.media.audio_max_bytes": 104857600, "ai.media.video_max_bytes": 524288000, "ai.media.download_timeout_seconds": 300, "ai.media.transfer_timeout_seconds": 900, "ai.media.spool_max_bytes_per_worker": 2147483648, "ai.run.event_retention_days": 7,
+		"ai.run.user_inflight_limit": 2,
+		"ai.run.user_rate_per_second": 1,
+		"ai.run.user_rate_burst":      5,
+		"ai.run.max_queued_seconds":   60,
 	}
 	rows := policySettings{}
 	for key, value := range values {
@@ -43,7 +43,7 @@ func TestPolicyReaderLoadsEveryExplicitSettingWithoutDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if policy.UserInflightLimit != 2 || policy.GlobalRateBurst != 400 || policy.MaxModelRounds != 8 || policy.MaxTextInputBytes != 131072 || policy.SpoolMaxBytesPerWorker != 2147483648 || policy.TransferTimeoutSeconds != 900 || policy.EventRetentionDays != 7 {
+	if policy.UserInflightLimit != 2 || policy.UserRatePerSecond != 1 || policy.UserRateBurst != 5 || policy.MaxQueuedSeconds != 60 {
 		t.Fatalf("policy=%+v", policy)
 	}
 	if err := policy.Validate(); err != nil {
@@ -75,7 +75,7 @@ func TestPolicyReaderRejectsInvalidSettingFacts(t *testing.T) {
 		})
 	}
 	rows := validPolicySettings()
-	row := rows["ai.run.video_timeout_seconds"]
+	row := rows["ai.run.max_queued_seconds"]
 	row.Value = "9223372037"
 	rows[row.Key] = row
 	if _, err := NewPolicyReader(rows).Read(context.Background()); !errors.Is(err, ErrPolicyInvalid) {

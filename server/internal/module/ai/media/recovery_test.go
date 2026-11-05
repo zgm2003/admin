@@ -13,7 +13,7 @@ func TestMediaConstraintsPreserveFrozenDeadline(t *testing.T) {
 	now := time.Unix(100, 0).UTC()
 	deadline := now.Add(time.Second)
 	mime := "image/png"
-	c, err := mediaConstraints(File{MIMEType: &mime, TransferDeadline: &deadline}, validMediaPolicy(), now)
+	c, err := mediaConstraints(File{MIMEType: &mime, TransferDeadline: &deadline}, now)
 	if err != nil || !c.Deadline.Equal(deadline) {
 		t.Fatalf("deadline=%v err=%v", c.Deadline, err)
 	}

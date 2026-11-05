@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"admin/server/internal/module/ai"
 	pr "admin/server/internal/module/ai/providerRequest"
 	"admin/server/internal/module/ai/tool"
 	"github.com/google/uuid"
@@ -120,22 +121,22 @@ func (e *TextEngine) generate(ctx context.Context, row Model, token string) (str
 	if json.Unmarshal(config.Limits, &limits) != nil || limits.MaxInputTokens < 1 || limits.MaxOutputTokens < 1 {
 		return "", "INVALID_LIMITS"
 	}
-	output := min(policy.MaxOutputTokens, limits.MaxOutputTokens)
+	output := limits.MaxOutputTokens
 	if input.MaxOutputTokens != nil {
 		output = *input.MaxOutputTokens
 	}
-	if output < 1 || output > limits.MaxOutputTokens || output > policy.MaxOutputTokens {
+	if output < 1 || output > limits.MaxOutputTokens {
 		return "", "INVALID_LIMITS"
 	}
 	params, err := mergedParams(config.GenerationParams, config.Parameters)
 	if err != nil {
 		return "", "INVALID_PARAMETERS"
 	}
-	history, err := e.repository.TextHistory(ctx, row, policy.MaxTextInputBytes)
+	history, err := e.repository.TextHistory(ctx, row, ai.MaxTextInputBytes)
 	if err != nil {
 		return "", "CONTEXT_HISTORY_UNAVAILABLE"
 	}
-	native, err := e.prepareTextInput(ctx, row, snap.Protocol, history, input.RunInput, policy)
+	native, err := e.prepareTextInput(ctx, row, snap.Protocol, history, input.RunInput)
 	if err != nil {
 		return "", "CONTEXT_INPUT_UNAVAILABLE"
 	}
@@ -158,7 +159,7 @@ func (e *TextEngine) generate(ctx context.Context, row Model, token string) (str
 	deltas := newTextDeltaBatch(ctx, func(writeCtx context.Context, text string) error {
 		return e.repository.AppendTextDelta(writeCtx, row.ID, token, text, e.now().UTC())
 	}, e.pressure)
-	for round := int64(1); round <= policy.MaxModelRounds; round++ {
+	for round := int64(1); round <= ai.MaxModelRounds; round++ {
 		if _, pressureErr := deltas.interval(); pressureErr != nil {
 			return accumulated.String(), "STREAM_PRESSURE_UNAVAILABLE"
 		}
@@ -166,7 +167,7 @@ func (e *TextEngine) generate(ctx context.Context, row Model, token string) (str
 			return accumulated.String(), "CANCELED_OR_LEASE_LOST"
 		}
 		contextBytes, countErr := nativeContextBytes(native)
-		if countErr != nil || contextBytes+int64(len(snap.Prompt)) > policy.MaxTextInputBytes || contextBytes+int64(len(snap.Prompt)) > limits.MaxInputTokens {
+		if countErr != nil || contextBytes+int64(len(snap.Prompt)) > ai.MaxTextInputBytes {
 			return accumulated.String(), "CONTEXT_LIMIT"
 		}
 		request := pr.TextRequest{Config: credential, Prompt: snap.Prompt, Input: native, Tools: definitions, MaxOutputTokens: output, Params: params}
@@ -200,13 +201,13 @@ func (e *TextEngine) generate(ctx context.Context, row Model, token string) (str
 		if len(response.Calls) == 0 {
 			return accumulated.String(), ""
 		}
-		if round == policy.MaxModelRounds {
+		if round == ai.MaxModelRounds {
 			return accumulated.String(), "MODEL_ROUND_LIMIT"
 		}
 		native = append(native, response.OutputItems...)
 		for _, call := range response.Calls {
 			calls++
-			if calls > policy.MaxToolCalls {
+			if calls > ai.MaxToolCalls {
 				return accumulated.String(), "TOOL_CALL_LIMIT"
 			}
 			binding, ok := bound[call.Name]

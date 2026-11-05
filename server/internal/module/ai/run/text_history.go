@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"admin/server/internal/module/ai"
 )
 
 const maxTextHistoryTurns = 100
@@ -86,13 +88,13 @@ func (r *Repository) TextHistory(ctx context.Context, row Model, maxBytes int64)
 	}
 	return out, nil
 }
-func (e *TextEngine) prepareTextInput(ctx context.Context, row Model, protocol int16, history []historyTurn, current RunInput, policy Policy) ([]json.RawMessage, error) {
+func (e *TextEngine) prepareTextInput(ctx context.Context, row Model, protocol int16, history []historyTurn, current RunInput) ([]json.RawMessage, error) {
 	turns := append(append([]historyTurn(nil), history...), historyTurn{Role: "user", Text: current.Text, Files: current.FileSnapshots})
 	attachments := int64(0)
 	for _, turn := range turns {
 		attachments += int64(len(turn.Files))
 	}
-	if attachments > policy.MaxInputAttachments || attachments > 4 {
+	if attachments > ai.MaxInputAttachments {
 		return nil, ErrTextContextLimit
 	}
 	out := make([]json.RawMessage, 0, len(turns))
@@ -130,7 +132,7 @@ func (e *TextEngine) prepareTextInput(ctx context.Context, row Model, protocol i
 			content = append(content, map[string]any{"type": kind, "text": text})
 		}
 		for _, file := range turn.Files {
-			if turn.Role != "user" || e.files == nil || !strings.HasPrefix(file.MIMEType, "image/") || file.SizeBytes < 1 || file.SizeBytes > policy.ImageMaxBytes {
+			if turn.Role != "user" || e.files == nil || !strings.HasPrefix(file.MIMEType, "image/") || file.SizeBytes < 1 || file.SizeBytes > ai.ImageMaxBytes {
 				return nil, ErrInvalidSnapshot
 			}
 			if file.MIMEType != "image/png" && file.MIMEType != "image/jpeg" && file.MIMEType != "image/webp" && file.MIMEType != "image/gif" {
@@ -139,7 +141,7 @@ func (e *TextEngine) prepareTextInput(ctx context.Context, row Model, protocol i
 			if file.SizeBytes > int64((maxTextProtocolBytes-totalBytes)*3/4) {
 				return nil, ErrTextContextLimit
 			}
-			data, mime, _, err := e.files.ReadAIFrozenReference(ctx, row.UserID, row.PlatformID, file, policy.ImageMaxBytes)
+			data, mime, _, err := e.files.ReadAIFrozenReference(ctx, row.UserID, row.PlatformID, file, ai.ImageMaxBytes)
 			if err != nil {
 				return nil, err
 			}

@@ -78,7 +78,7 @@ func TestAudioAdmissionSupportsActualSynchronizedPriceDimensions(t *testing.T) {
 		t.Run(tc.op, func(t *testing.T) {
 			s := fixtureSnapshot()
 			s.Config = json.RawMessage(`{"capabilities":["audio"],"operations":["` + tc.op + `"],"limits":{"maxInputTokens":1000,"maxOutputTokens":100},"rates":` + tc.rates + `}`)
-			estimate, variable, _, err := estimateRun(s, tc.op, tc.input, Policy{AudioTimeoutSeconds: 60, MaxOutputTokens: 100})
+			estimate, variable, _, err := estimateRun(s, tc.op, tc.input)
 			if err != nil || !variable || estimate < 1 {
 				t.Fatalf("estimate=%d variable=%v err=%v", estimate, variable, err)
 			}

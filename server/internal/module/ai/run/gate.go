@@ -49,14 +49,33 @@ type capacityObservation struct {
 	ObservedAtMicros int64 `json:"observedAtMicros"`
 }
 
+// GateLimits is deployment capacity, not a business setting. API and Worker
+// read it from environment configuration so every instance shares one contract.
+type GateLimits struct {
+	GlobalRatePerSecond         int64
+	GlobalRateBurst             int64
+	QueuedBackpressureThreshold int64
+	ActiveBackpressureThreshold int64
+}
+
+func (l GateLimits) validate() error {
+	for _, value := range []int64{l.GlobalRatePerSecond, l.GlobalRateBurst, l.QueuedBackpressureThreshold, l.ActiveBackpressureThreshold} {
+		if value < 1 || value > 1<<53-1 {
+			return gateUnavailable(fmt.Errorf("AI gate deployment limits are invalid"))
+		}
+	}
+	return nil
+}
+
 type Gate struct {
 	redis   GateRedis
 	counter CapacityCounter
+	limits  GateLimits
 	prefix  string
 }
 
-func NewGate(redis GateRedis, counter CapacityCounter) *Gate {
-	return &Gate{redis: redis, counter: counter, prefix: "ai:run:gate:{global}:"}
+func NewGate(redis GateRedis, counter CapacityCounter, limits GateLimits) *Gate {
+	return &Gate{redis: redis, counter: counter, limits: limits, prefix: "ai:run:gate:{global}:"}
 }
 
 // Capacity freshness and both token buckets are evaluated in one Redis
@@ -138,13 +157,16 @@ func (g *Gate) Check(ctx context.Context, userID int64, policy Policy) error {
 	if err := policy.Validate(); err != nil {
 		return gateUnavailable(err)
 	}
+	if err := g.limits.validate(); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	for attempt := 0; attempt < 2; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		raw, err := g.redis.EvalString(ctx, gateCheckScript, []string{g.prefix + "capacity", g.prefix + "user:" + strconv.FormatInt(userID, 10), g.prefix + "rate"}, policy.QueuedBackpressureThreshold, policy.ActiveBackpressureThreshold, policy.UserRatePerSecond, policy.UserRateBurst, policy.GlobalRatePerSecond, policy.GlobalRateBurst)
+		raw, err := g.redis.EvalString(ctx, gateCheckScript, []string{g.prefix + "capacity", g.prefix + "user:" + strconv.FormatInt(userID, 10), g.prefix + "rate"}, g.limits.QueuedBackpressureThreshold, g.limits.ActiveBackpressureThreshold, policy.UserRatePerSecond, policy.UserRateBurst, g.limits.GlobalRatePerSecond, g.limits.GlobalRateBurst)
 		if err != nil {
 			return gateUnavailable(err)
 		}
@@ -191,6 +213,9 @@ func (g *Gate) RefreshCapacity(ctx context.Context, policy Policy) (bool, error)
 	if err := policy.Validate(); err != nil {
 		return false, gateUnavailable(err)
 	}
+	if err := g.limits.validate(); err != nil {
+		return false, err
+	}
 	workCtx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	token := uuid.NewString()
@@ -205,7 +230,7 @@ func (g *Gate) RefreshCapacity(ctx context.Context, policy Policy) (bool, error)
 	if err != nil || observedAt < 1 {
 		return false, gateUnavailable(err)
 	}
-	counts, err := g.counter.CountCapacity(workCtx, policy.QueuedBackpressureThreshold, policy.ActiveBackpressureThreshold)
+	counts, err := g.counter.CountCapacity(workCtx, g.limits.QueuedBackpressureThreshold, g.limits.ActiveBackpressureThreshold)
 	if err != nil {
 		return false, gateUnavailable(err)
 	}
@@ -215,7 +240,7 @@ func (g *Gate) RefreshCapacity(ctx context.Context, policy Policy) (bool, error)
 	if counts.Queued < 0 || counts.Active < 0 || counts.Backlog < 0 || counts.Backlog > 100001 || counts.Queued > 1<<53-1 || counts.Active > 1<<53-1 {
 		return false, gateUnavailable(nil)
 	}
-	raw, err := json.Marshal(capacityObservation{SchemaVersion: 1, Queued: counts.Queued, Active: counts.Active, Backlog: counts.Backlog, QueuedLimit: policy.QueuedBackpressureThreshold, ActiveLimit: policy.ActiveBackpressureThreshold, ObservedAtMicros: observedAt})
+	raw, err := json.Marshal(capacityObservation{SchemaVersion: 1, Queued: counts.Queued, Active: counts.Active, Backlog: counts.Backlog, QueuedLimit: g.limits.QueuedBackpressureThreshold, ActiveLimit: g.limits.ActiveBackpressureThreshold, ObservedAtMicros: observedAt})
 	if err != nil {
 		return false, gateUnavailable(err)
 	}

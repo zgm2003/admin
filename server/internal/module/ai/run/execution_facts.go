@@ -259,9 +259,7 @@ func (r *Repository) finishTextTx(ctx context.Context, tx *gorm.DB, row Model, s
 	if e = tx.Where("run_id=?", id).Order("sequence").Find(&requests).Error; e != nil {
 		return e
 	}
-	var frozen Policy
-	_ = json.Unmarshal(row.PolicySnapshot, &frozen)
-	if frozen.MaxModelRounds > 0 && int64(len(requests)) > frozen.MaxModelRounds {
+	if int64(len(requests)) > ai.MaxModelRounds {
 		return ErrInvalidSnapshot
 	}
 	var unknownTools int64

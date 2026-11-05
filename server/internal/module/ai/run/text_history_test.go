@@ -17,10 +17,9 @@ func TestTextInputRestoresRolesAndInlineImagesWithoutSummaryLeak(t *testing.T) {
 	reader := &fixtureTextFiles{}
 	e := &TextEngine{}
 	e.SetFileReader(reader)
-	policy := Policy{MaxInputAttachments: 4, ImageMaxBytes: 100, MaxTextInputBytes: 1000}
 	history := []historyTurn{{Role: "user", Content: json.RawMessage(`[{"type":"input_text","text":"first"}]`)}, {Role: "assistant", Content: json.RawMessage(`[{"type":"output_text","text":"answer"}]`)}}
 	input := RunInput{Text: "next", FileSnapshots: []InputFileSnapshot{{ID: "1", MIMEType: "image/png", SizeBytes: 4}}}
-	native, err := e.prepareTextInput(context.Background(), Model{UserID: 1, PlatformID: 2}, 1, history, input, policy)
+	native, err := e.prepareTextInput(context.Background(), Model{UserID: 1, PlatformID: 2}, 1, history, input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +39,7 @@ func TestTextInputRestoresRolesAndInlineImagesWithoutSummaryLeak(t *testing.T) {
 func TestTextInputRejectsTooManyHistoricalAttachments(t *testing.T) {
 	e := &TextEngine{}
 	input := RunInput{Text: "next", FileSnapshots: make([]InputFileSnapshot, 5)}
-	if _, err := e.prepareTextInput(context.Background(), Model{}, 2, nil, input, Policy{MaxInputAttachments: 4}); err == nil {
+	if _, err := e.prepareTextInput(context.Background(), Model{}, 2, nil, input); err == nil {
 		t.Fatal("unbounded attachments accepted")
 	}
 }
