@@ -1,7 +1,6 @@
 package file
 
 import (
-	airun "admin/server/internal/module/ai/run"
 	"admin/server/internal/module/auth/login"
 	"admin/server/internal/module/storage/cosConfig"
 	"admin/server/internal/module/storage/uploadRule"
@@ -11,11 +10,10 @@ import (
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 	storagecos "admin/server/internal/storage/cos"
-	objectkey "admin/server/internal/storage/objectKey"
+	"admin/server/internal/storage/objectKey"
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"image"
@@ -25,7 +23,6 @@ import (
 	"mime"
 	"net/url"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -91,271 +88,6 @@ func (s *Service) RegisterUpload(ctx context.Context, id auth.Identity, in uploa
 	m := Model{UserID: id.UserID, PlatformID: id.PlatformID, Kind: KindOriginal, CosConfigID: in.CosConfigID, ConfigVersion: in.ConfigVersion, UploadRuleID: in.UploadRuleID, RuleCode: in.RuleCode, ObjectKey: in.ObjectKey, UploadObjectKey: &in.UploadObjectKey, OriginalName: in.OriginalName, MimeType: in.MimeType, SizeBytes: in.SizeBytes, Status: StatusPending, CredentialExpiresAt: &in.ExpiresAt, CreatedAt: now, UpdatedAt: now}
 	e := s.repository.Create(ctx, &m)
 	return m.ID, mapError(e)
-}
-
-// ImportGeneratedMedia streams a validated AI result into COS and creates a
-// ready storage_file row. The request key and deterministic object key make
-// retries idempotent across worker restarts.
-func (s *Service) ImportGeneratedMedia(ctx context.Context, id auth.Identity, in GeneratedMediaImport) (int64, error) {
-	if !validIdentity(id) || s == nil || in.Body == nil || in.SizeBytes < 1 || in.OriginalName == "" || len(in.OriginalName) > 255 || in.MIME == "" || len(in.MIME) > 255 {
-		return 0, apperror.InvalidRequest(errors.New("generated media import invalid"))
-	}
-	parsed, err := uuid.Parse(in.ImportRequestKey)
-	if err != nil {
-		return 0, apperror.InvalidRequest(errors.New("generated media request key invalid"))
-	}
-	requestKey := parsed.String()
-	mimeType, _, err := mime.ParseMediaType(in.MIME)
-	if err != nil {
-		return 0, apperror.InvalidRequest(errors.New("generated media MIME invalid"))
-	}
-	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
-	if s.repository == nil || s.repository.db == nil {
-		return 0, apperror.DependencyUnavailable(nil)
-	}
-	frozen, err := s.repository.ByRequest(ctx, id, requestKey)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return 0, mapError(err)
-	}
-	if err == nil {
-		if err := generatedImportMatches(frozen, id, requestKey, mimeType, in.SizeBytes); err != nil {
-			return 0, mapError(err)
-		}
-		if frozen.Status == StatusReady {
-			return frozen.ID, nil
-		}
-	}
-	if s.runtime == nil || s.keys == nil || s.cos == nil {
-		return 0, apperror.DependencyUnavailable(errors.New("generated media storage unavailable"))
-	}
-	if frozen.ID == 0 {
-		if s.rules == nil {
-			return 0, apperror.DependencyUnavailable(nil)
-		}
-		var ruleCode string
-		switch {
-		case strings.HasPrefix(mimeType, "image/"):
-			ruleCode = "ai/image"
-		case strings.HasPrefix(mimeType, "audio/"):
-			ruleCode = "ai/audio"
-		case strings.HasPrefix(mimeType, "video/"):
-			ruleCode = "ai/video"
-		default:
-			return 0, apperror.InvalidRequest(errors.New("unsupported generated media MIME"))
-		}
-		target, err := s.rules.FindFileUploadTarget(ctx, id.PlatformID, ruleCode)
-		if err != nil {
-			return 0, mapError(err)
-		}
-		extension := mediaExtension(mimeType, in.OriginalName)
-		// Preserve a supported source extension when MIME has multiple standard spellings.
-		nameExtension := strings.TrimPrefix(strings.ToLower(filepath.Ext(in.OriginalName)), ".")
-		if known, _ := mime.ExtensionsByType(mimeType); len(known) > 0 {
-			for _, candidate := range known {
-				if strings.TrimPrefix(candidate, ".") == nameExtension {
-					extension = nameExtension
-					break
-				}
-			}
-		}
-		allowedExtension := false
-		for _, candidate := range target.AllowedExtensions {
-			if strings.EqualFold(strings.TrimPrefix(candidate, "."), extension) {
-				allowedExtension = true
-				break
-			}
-		}
-		if target.MaxFileSizeBytes < 1 || in.SizeBytes > target.MaxFileSizeBytes || !allowedUploadMIME(mimeType, []string(target.AllowedMimeTypes)) || !allowedExtension {
-			return 0, apperror.InvalidRequest(errors.New("generated media exceeds storage rule"))
-		}
-		runtime, err := s.runtime.Runtime(ctx, target.CosConfigID)
-		if err != nil {
-			return 0, mapError(err)
-		}
-		if _, ok := currentVersion(runtime); !ok {
-			return 0, apperror.DependencyUnavailable(errors.New("generated media COS version unavailable"))
-		}
-		now := s.now().UTC()
-		seed := fmt.Sprintf("%d:%d:%s", id.PlatformID, id.UserID, requestKey)
-		key, err := objectkey.GenerateStable(target.Code, objectkey.Coordinates{PlatformID: id.PlatformID, RuleID: target.RuleID, CosConfigID: target.CosConfigID, Version: runtime.CurrentVersion}, extension, seed, now)
-		if err != nil {
-			return 0, mapError(err)
-		}
-		frozen = Model{UserID: id.UserID, PlatformID: id.PlatformID, Kind: KindOriginal, CosConfigID: target.CosConfigID, ConfigVersion: runtime.CurrentVersion, UploadRuleID: target.RuleID, RuleCode: target.Code, ObjectKey: key, OriginalName: in.OriginalName, MimeType: mimeType, SizeBytes: in.SizeBytes, Status: StatusPending, RequestKey: &requestKey, CreatedAt: now, UpdatedAt: now}
-		// Register the exact physical destination before any remote side effect. A
-		// retry after midnight or a COS version switch must use this persisted key.
-		if createErr := s.repository.Create(ctx, &frozen); createErr != nil {
-			var findErr error
-			frozen, findErr = s.repository.ByRequest(ctx, id, requestKey)
-			if findErr != nil {
-				return 0, mapError(createErr)
-			}
-			if err := generatedImportMatches(frozen, id, requestKey, mimeType, in.SizeBytes); err != nil {
-				return 0, mapError(err)
-			}
-			if frozen.Status == StatusReady {
-				return frozen.ID, nil
-			}
-		}
-	}
-	coordinates, err := objectkey.Parse(frozen.ObjectKey)
-	if err != nil || coordinates.PlatformID != id.PlatformID || coordinates.RuleID != frozen.UploadRuleID || coordinates.CosConfigID != frozen.CosConfigID || coordinates.Version != frozen.ConfigVersion {
-		return 0, conflict(errors.New("generated media destination changed"))
-	}
-	runtime, err := s.runtime.Runtime(ctx, frozen.CosConfigID)
-	if err != nil {
-		return 0, mapError(err)
-	}
-	var version cosconfig.RuntimeVersion
-	for _, candidate := range runtime.Versions {
-		if candidate.Version == frozen.ConfigVersion {
-			version = candidate
-			break
-		}
-	}
-	if version.Version == 0 {
-		return 0, apperror.DependencyUnavailable(errors.New("generated media frozen COS version unavailable"))
-	}
-	secretID, secretKey, err := cosconfig.DecryptCredentials(s.keys.StorageEncryptionKey(), runtime.SecretIDCiphertext, runtime.SecretKeyCiphertext)
-	if err != nil {
-		return 0, mapError(err)
-	}
-	credentials := storagecos.Credentials{AppID: runtime.AppID, SecretID: secretID, SecretKey: secretKey, Bucket: version.Bucket, Region: version.Region}
-	if version.Endpoint != nil {
-		credentials.Endpoint = *version.Endpoint
-	}
-	remote, err := s.cos.HeadObject(ctx, credentials, frozen.ObjectKey)
-	if errors.Is(err, storagecos.ErrObjectNotFound) {
-		access, accessErr := s.repository.RuleAccess(ctx, frozen.UploadRuleID)
-		if accessErr != nil {
-			return 0, mapError(accessErr)
-		}
-		putter, ok := s.cos.(storagecos.StreamPutter)
-		if !ok {
-			return 0, apperror.DependencyUnavailable(errors.New("COS stream import unavailable"))
-		}
-		remote, err = putter.PutStream(ctx, credentials, storagecos.PutStreamRequest{ObjectKey: frozen.ObjectKey, ContentType: mimeType, ContentLength: in.SizeBytes, Body: in.Body, PublicRead: access == "public"})
-	}
-	if err != nil {
-		return 0, mapError(err)
-	}
-	if remote.ETag == "" || remote.Size != in.SizeBytes || !strings.EqualFold(strings.TrimSpace(strings.Split(remote.MIME, ";")[0]), mimeType) {
-		return 0, conflict(errors.New("generated media remote identity mismatch"))
-	}
-	if err = s.repository.Finish(ctx, frozen.ID, remote.ETag, s.now().UTC(), true); err != nil {
-		existing, findErr := s.repository.ByRequest(ctx, id, requestKey)
-		if findErr != nil || existing.Status != StatusReady || existing.Etag != remote.ETag {
-			return 0, mapError(err)
-		}
-		if err := generatedImportMatches(existing, id, requestKey, mimeType, in.SizeBytes); err != nil {
-			return 0, mapError(err)
-		}
-	}
-	return frozen.ID, nil
-}
-
-// ValidateAIReferences verifies ownership and freezes the physical file
-// identity used by a Run. It intentionally returns no mutable storage model
-// pointer; the Run stores this value in its immutable input snapshot.
-func (s *Service) ValidateAIReferences(ctx context.Context, userID, platformID int64, ids []string, operation string) ([]airun.InputFileSnapshot, error) {
-	id := auth.Identity{UserID: userID, PlatformID: platformID}
-	if !validIdentity(id) || len(ids) == 0 || len(ids) > 100 || (operation != "image.edit" && operation != "audio.transcribe" && operation != "text.generate") {
-		return nil, apperror.InvalidRequest(errors.New("AI file references invalid"))
-	}
-	numeric := make([]int64, 0, len(ids))
-	seen := make(map[int64]bool, len(ids))
-	for _, raw := range ids {
-		fileID, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || fileID < 1 || seen[fileID] {
-			return nil, apperror.InvalidRequest(errors.New("AI file reference invalid or duplicated"))
-		}
-		seen[fileID] = true
-		numeric = append(numeric, fileID)
-	}
-	rows, err := s.repository.FindAIInputs(ctx, id, numeric)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	if len(rows) != len(ids) {
-		return nil, apperror.NotFound(nil)
-	}
-	byID := make(map[int64]Model, len(rows))
-	for _, m := range rows {
-		byID[m.ID] = m
-	}
-	out := make([]airun.InputFileSnapshot, 0, len(ids))
-	for _, fileID := range numeric {
-		m := byID[fileID]
-		if m.Kind != KindOriginal || m.Status != StatusReady || m.DeletedAt.Valid || m.ObjectKey == "" || m.Etag == "" || m.SizeBytes < 1 {
-			return nil, apperror.InvalidRequest(errors.New("AI file reference is unavailable"))
-		}
-		prefix := "image/"
-		if operation == "audio.transcribe" {
-			prefix = "audio/"
-		}
-		if !strings.HasPrefix(strings.ToLower(m.MimeType), prefix) {
-			return nil, apperror.InvalidRequest(errors.New("AI file type does not match operation"))
-		}
-		out = append(out, airun.InputFileSnapshot{ID: strconv.FormatInt(m.ID, 10), ObjectKey: m.ObjectKey, MIMEType: m.MimeType, SizeBytes: m.SizeBytes, ETag: m.Etag})
-	}
-	return out, nil
-}
-
-// ReadAIReference returns a bounded copy of an owned ready file for provider
-// multipart requests. The object is fetched through the frozen COS version
-// and conditioned on the stored ETag so a replacement cannot be forwarded.
-func (s *Service) ReadAIReference(ctx context.Context, userID, platformID int64, fileID, maxBytes int64) ([]byte, string, string, error) {
-	id := auth.Identity{UserID: userID, PlatformID: platformID}
-	if !validIdentity(id) || fileID < 1 || maxBytes < 1 {
-		return nil, "", "", apperror.InvalidRequest(errors.New("AI file read invalid"))
-	}
-	m, err := s.repository.Find(ctx, id, fileID)
-	if err != nil {
-		return nil, "", "", mapError(err)
-	}
-	if m.Kind != KindOriginal || m.Status != StatusReady || m.DeletedAt.Valid || m.Etag == "" || m.SizeBytes < 1 || m.SizeBytes > maxBytes {
-		return nil, "", "", apperror.InvalidRequest(errors.New("AI file is unavailable"))
-	}
-	credentials, _, err := s.physical(ctx, m)
-	if err != nil {
-		return nil, "", "", err
-	}
-	data, err := s.cos.ReadObject(ctx, credentials, m.ObjectKey, m.Etag, maxBytes)
-	if err != nil {
-		return nil, "", "", mapError(err)
-	}
-	if int64(len(data)) != m.SizeBytes {
-		return nil, "", "", conflict(errors.New("AI file size changed"))
-	}
-	return data, m.MimeType, m.OriginalName, nil
-}
-
-func currentVersion(runtime cosconfig.RuntimeConfig) (cosconfig.RuntimeVersion, bool) {
-	for _, version := range runtime.Versions {
-		if version.Version == runtime.CurrentVersion {
-			return version, true
-		}
-	}
-	return cosconfig.RuntimeVersion{}, false
-}
-
-func allowedUploadMIME(value string, allowed []string) bool {
-	for _, candidate := range allowed {
-		if strings.EqualFold(strings.TrimSpace(strings.Split(candidate, ";")[0]), value) {
-			return true
-		}
-	}
-	return false
-}
-
-func mediaExtension(mimeType, name string) string {
-	if values, _ := mime.ExtensionsByType(mimeType); len(values) > 0 {
-		return strings.TrimPrefix(values[0], ".")
-	}
-	if ext := filepath.Ext(name); ext != "" {
-		return strings.TrimPrefix(strings.ToLower(ext), ".")
-	}
-	return "bin"
 }
 func (s *Service) List(ctx context.Context, id auth.Identity, q ListQuery) (pagination.Result[FileItem], error) {
 	if !validIdentity(id) || q.Page < 1 || q.PageSize < 1 || q.PageSize > 100 {

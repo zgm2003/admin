@@ -39,8 +39,8 @@ func (s *Service) FileUploadOptions(ctx context.Context, platformID int64, purpo
 	code := "file"
 	switch purpose {
 	case "":
-	case "avatar", "ai/input":
-		code = purpose
+	case "avatar":
+		code = "avatar"
 	default:
 		return nil, apperror.InvalidRequest(errors.New("unsupported file upload purpose"))
 	}
@@ -50,9 +50,6 @@ func (s *Service) FileUploadOptions(ctx context.Context, platformID int64, purpo
 	rows, err := s.repository.FileUploadOptions(ctx, platformID, code)
 	if err != nil {
 		return nil, err
-	}
-	if purpose == "ai/input" && len(rows) == 0 {
-		return nil, apperror.NotFound(errors.New("AI input upload rule is not configured for this platform"))
 	}
 	out := make([]FileUploadOption, 0, len(rows))
 	for _, row := range rows {

@@ -24,14 +24,4 @@ describe('menu icons', () => {
     expect(isMenuIconName('lucide:database-zap')).toBe(true)
     expect(menuIcons['lucide:database-zap'].label).toBe('配置缓存状态')
   })
-
-  it('resolves every icon used by the AI navigation menu', () => {
-    expect(isMenuIconName('lucide:sparkles')).toBe(true)
-    expect(isMenuIconName('lucide:brain-circuit')).toBe(true)
-    expect(isMenuIconName('lucide:server')).toBe(true)
-    expect(isMenuIconName('lucide:bot')).toBe(true)
-    expect(isMenuIconName('lucide:message-square-more')).toBe(true)
-    expect(isMenuIconName('lucide:activity')).toBe(true)
-    expect(isMenuIconName('lucide:settings-2')).toBe(true)
-  })
 })

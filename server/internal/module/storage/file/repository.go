@@ -140,33 +140,11 @@ func (r *Repository) Delete(ctx context.Context, id auth.Identity, fileID int64,
 		if m.Status != StatusReady {
 			return ErrConflict
 		}
-		if e := rejectAIReference(tx, m.ID); e != nil {
-			return e
-		}
 		if e := tx.Model(&m).Updates(map[string]any{"status": StatusCleanup, "updated_at": now}).Error; e != nil {
 			return e
 		}
 		return cleanupJob(ctx, r.scheduler, tx, m.ID, now, now)
 	})
-}
-
-// Both deletion and AI attachment creation lock storage_file first. A Run's
-// immutable media references therefore cannot race with object cleanup.
-func rejectAIReference(tx *gorm.DB, id int64) error {
-	var referenced bool
-	if err := tx.Raw(`SELECT EXISTS(SELECT 1 FROM ai_media_file WHERE storage_file_id=?) OR EXISTS(SELECT 1 FROM ai_agent WHERE avatar_file_id=? AND deleted_at IS NULL)`, id, id).Scan(&referenced).Error; err != nil {
-		return err
-	}
-	if referenced {
-		return ErrConflict
-	}
-	return nil
-}
-
-func (r *Repository) FindAIInputs(ctx context.Context, identity auth.Identity, ids []int64) ([]Model, error) {
-	var rows []Model
-	err := owner(r.db.WithContext(ctx), identity).Where("id IN ?", ids).Order("id").Find(&rows).Error
-	return rows, err
 }
 
 // AdoptAvatarTx participates in the caller's user-row-locked profile transaction.

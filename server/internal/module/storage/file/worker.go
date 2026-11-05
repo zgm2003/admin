@@ -90,9 +90,6 @@ func (r *Repository) ClaimCleanup(ctx context.Context, id int64, now time.Time) 
 		if m.Status == StatusReady {
 			return ErrConflict
 		}
-		if e := rejectAIReference(tx, m.ID); e != nil {
-			return e
-		}
 		if m.OperationLeaseUntil != nil && now.Before(m.OperationLeaseUntil.Add(time.Minute)) {
 			return ErrConflict
 		}

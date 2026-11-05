@@ -43,7 +43,7 @@ func TestPersonalTransactionServiceFailsClosedForInvalidIdentityAndForeignRows(t
 	}
 	baseline := Model{
 		ID: 12, TransactionNo: "PTidentityfixture", UserID: 42, PlatformID: 2,
-		AmountUnits: 3_000_000, BalanceBeforeUnits: -703_000_000, Direction: DirectionCredit, BalanceAfterUnits: -700_000_000, OrderID: ptrInt64(99),
+		AmountUnits: 3_000_000, BalanceAfterUnits: -700_000_000, OrderID: ptrInt64(99),
 		Username: "named-user", PlatformCode: "fixture-platform", CreatedAt: time.Unix(1, 0), UpdatedAt: time.Unix(1, 0),
 	}
 	query := ListQuery{Page: 1, PageSize: 20, UserID: 42, PlatformID: 2}
@@ -92,7 +92,7 @@ func TestPersonalTransactionServicePreservesErrorsAndEmptyLists(t *testing.T) {
 
 func TestAdminTransactionJSONKeepsIdentityAndNullableOrder(t *testing.T) {
 	for _, source := range []struct{ orderID, redeemCodeID *int64 }{{ptrInt64(99), nil}, {nil, ptrInt64(88)}} {
-		repo := &scopedTransactionRepository{row: Model{ID: 12, TransactionNo: "PTfixture", UserID: 42, PlatformID: 2, AmountUnits: 1, BalanceBeforeUnits: -1, Direction: DirectionCredit, BalanceAfterUnits: 0, OrderID: source.orderID, RedeemCodeID: source.redeemCodeID}}
+		repo := &scopedTransactionRepository{row: Model{ID: 12, TransactionNo: "PTfixture", UserID: 42, PlatformID: 2, AmountUnits: 1, BalanceAfterUnits: 0, OrderID: source.orderID, RedeemCodeID: source.redeemCodeID}}
 		projected, err := NewService(repo).Get(context.Background(), 12)
 		if err != nil {
 			t.Fatal(err)
@@ -124,7 +124,7 @@ func TestAdminTransactionJSONKeepsIdentityAndNullableOrder(t *testing.T) {
 }
 
 func TestPersonalTransactionJSONContainsOnlyPersonalFieldsAndAuthenticatedScope(t *testing.T) {
-	repo := &scopedTransactionRepository{row: Model{ID: 12, TransactionNo: "PTfixture", UserID: 42, PlatformID: 2, Username: "private-user", PlatformCode: "private-platform", AmountUnits: 3_000_000, BalanceBeforeUnits: -703_000_000, Direction: DirectionCredit, BalanceAfterUnits: -700_000_000, OrderID: ptrInt64(99), CreatedAt: time.Unix(1, 0)}}
+	repo := &scopedTransactionRepository{row: Model{ID: 12, TransactionNo: "PTfixture", UserID: 42, PlatformID: 2, Username: "private-user", PlatformCode: "private-platform", AmountUnits: 3_000_000, BalanceAfterUnits: -700_000_000, OrderID: ptrInt64(99), CreatedAt: time.Unix(1, 0)}}
 	response := transactionRequest(NewHandler(NewService(repo)).PersonalList, "page=1&pageSize=20", &authcontext.Identity{UserID: 42, PlatformID: 2})
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d: %s", response.Code, response.Body.String())
@@ -146,7 +146,7 @@ func TestPersonalTransactionJSONContainsOnlyPersonalFieldsAndAuthenticatedScope(
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	if !reflect.DeepEqual(keys, []string{"amount", "balanceAfter", "balanceBefore", "createdAt", "direction", "id", "sourceType", "transactionNo"}) {
+	if !reflect.DeepEqual(keys, []string{"amount", "balanceAfter", "balanceBefore", "createdAt", "id", "sourceType", "transactionNo"}) {
 		t.Fatalf("personal transaction fields = %v", keys)
 	}
 	if row["amount"] != "0.03" || row["balanceBefore"] != "-7.03" || row["balanceAfter"] != "-7" || row["sourceType"] != float64(1) {

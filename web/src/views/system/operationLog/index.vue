@@ -10,7 +10,6 @@ import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import { formatTime } from '@/utils/datetime'
 import { usePermissionStore } from '@/store/permission'
-import { displayError } from '@/utils/displayError'
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
@@ -159,7 +158,8 @@ async function loadLogs(): Promise<boolean> {
   } catch (error: unknown) {
     if (request !== requestSequence || !canList.value || locale.value !== requestLocale)
       return false
-    loadError.value = displayError(error, t('operationLog.loadFailed'))
+    loadError.value =
+      error instanceof Error && error.message ? error.message : t('operationLog.loadFailed')
     return false
   } finally {
     if (request === requestSequence) loading.value = false

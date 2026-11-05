@@ -64,7 +64,6 @@ type TaskDefinition struct {
 	ValidateParams     func(json.RawMessage) error
 	Queue              string
 	Timeout            time.Duration
-	TimeoutForPayload  func(context.Context, json.RawMessage, time.Time) (time.Duration, error)
 	MaxAttempts        int
 	Backoff            func(attempt int) time.Duration
 	Execute            TaskExecutor

@@ -74,27 +74,6 @@ func TestPublisherEnqueuesStaticDefinitionAndMarksQueued(t *testing.T) {
 		t.Fatalf("envelope=%+v", envelope)
 	}
 }
-
-func TestPublisherUsesPayloadSpecificTimeout(t *testing.T) {
-	now := time.Date(2026, 11, 3, 0, 0, 0, 0, time.UTC)
-	repository := &publishRepositoryStub{job: PublishableJob{Job: Job{ID: 9, TaskType: "ai.run.execute", Payload: json.RawMessage(`{"runId":9}`), AttemptCount: 0, AvailableAt: now, Status: JobScheduled}, DispatchToken: "lease"}}
-	queue := &queueStub{}
-	definition := testDefinition("ai.run.execute")
-	definition.TimeoutForPayload = func(_ context.Context, payload json.RawMessage, at time.Time) (time.Duration, error) {
-		if string(payload) != `{"runId":9}` || !at.Equal(now) {
-			t.Fatalf("payload=%s at=%s", payload, at)
-		}
-		return 17 * time.Minute, nil
-	}
-	catalog, _ := NewTaskCatalog(definition)
-	publisher := NewPublisher(repository, queue, catalog, nil)
-	if _, err := publisher.RunOnce(context.Background(), now); err != nil {
-		t.Fatal(err)
-	}
-	if queue.options.Timeout != 17*time.Minute {
-		t.Fatalf("timeout=%s want=%s", queue.options.Timeout, 17*time.Minute)
-	}
-}
 func TestPublisherReschedulesRedisFailure(t *testing.T) {
 	now := time.Now().UTC()
 	repository := &publishRepositoryStub{job: PublishableJob{Job: Job{ID: 1, TaskType: "example", AvailableAt: now}, DispatchToken: "lease"}}

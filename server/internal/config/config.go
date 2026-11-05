@@ -21,7 +21,6 @@ type API struct {
 	TrustedProxyMode string
 	Auth             Auth
 	Realtime         Realtime
-	AIGate           AIGate
 }
 
 type Auth struct {
@@ -34,19 +33,9 @@ type Realtime struct {
 	ResumeConcurrency     int
 }
 
-// AIGate is deployment capacity, not admin-editable business policy.
-type AIGate struct {
-	GlobalRatePerSecond         int64
-	GlobalRateBurst             int64
-	QueuedBackpressureThreshold int64
-	ActiveBackpressureThreshold int64
-}
-
 type Worker struct {
-	PostgresDSN          string
-	RedisURL             string
-	AIGate               AIGate
-	AIMediaSpoolMaxBytes int64
+	PostgresDSN string
+	RedisURL    string
 }
 
 type LookupEnv func(string) (string, bool)
@@ -91,10 +80,6 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 	if err != nil {
 		return API{}, err
 	}
-	aiGate, err := loadAIGate(lookupEnv)
-	if err != nil {
-		return API{}, err
-	}
 	return API{
 		HTTPAddr:         httpAddr,
 		PostgresDSN:      postgresDSN,
@@ -105,7 +90,6 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 		TrustedProxyMode: trustedProxyMode,
 		Auth:             auth,
 		Realtime:         realtime,
-		AIGate:           aiGate,
 	}, nil
 }
 
@@ -118,20 +102,7 @@ func LoadWorker(lookupEnv LookupEnv) (Worker, error) {
 	if err != nil {
 		return Worker{}, err
 	}
-	aiGate, err := loadAIGate(lookupEnv)
-	if err != nil {
-		return Worker{}, err
-	}
-	spoolMaxBytes, err := optionalBoundedInt64(lookupEnv, "AI_MEDIA_SPOOL_MAX_BYTES", defaultAIMediaSpoolMaxBytes, 1, 1<<40)
-	if err != nil {
-		return Worker{}, err
-	}
-	return Worker{
-		PostgresDSN:          postgresDSN,
-		RedisURL:             redisURL,
-		AIGate:               aiGate,
-		AIMediaSpoolMaxBytes: spoolMaxBytes,
-	}, nil
+	return Worker{PostgresDSN: postgresDSN, RedisURL: redisURL}, nil
 }
 
 func loadPostgresDSN(lookupEnv LookupEnv) (string, error) {
@@ -244,51 +215,6 @@ func loadRealtime(lookupEnv LookupEnv) (Realtime, error) {
 		MaxConnectionsPerUser: maxConnectionsPerUser,
 		ResumeConcurrency:     resumeConcurrency,
 	}, nil
-}
-
-const (
-	defaultAIGlobalRatePerSecond         int64 = 200
-	defaultAIGlobalRateBurst             int64 = 400
-	defaultAIQueuedBackpressureThreshold int64 = 1000
-	defaultAIActiveBackpressureThreshold int64 = 2000
-	defaultAIMediaSpoolMaxBytes          int64 = 2147483648
-)
-
-func loadAIGate(lookupEnv LookupEnv) (AIGate, error) {
-	rate, err := optionalBoundedInt64(lookupEnv, "AI_GLOBAL_RATE_PER_SECOND", defaultAIGlobalRatePerSecond, 1, 1_000_000)
-	if err != nil {
-		return AIGate{}, err
-	}
-	burst, err := optionalBoundedInt64(lookupEnv, "AI_GLOBAL_RATE_BURST", defaultAIGlobalRateBurst, 1, 10_000_000)
-	if err != nil {
-		return AIGate{}, err
-	}
-	queued, err := optionalBoundedInt64(lookupEnv, "AI_QUEUED_BACKPRESSURE_THRESHOLD", defaultAIQueuedBackpressureThreshold, 1, 10_000_000)
-	if err != nil {
-		return AIGate{}, err
-	}
-	active, err := optionalBoundedInt64(lookupEnv, "AI_ACTIVE_BACKPRESSURE_THRESHOLD", defaultAIActiveBackpressureThreshold, 1, 10_000_000)
-	if err != nil {
-		return AIGate{}, err
-	}
-	return AIGate{
-		GlobalRatePerSecond:         rate,
-		GlobalRateBurst:             burst,
-		QueuedBackpressureThreshold: queued,
-		ActiveBackpressureThreshold: active,
-	}, nil
-}
-
-func optionalBoundedInt64(lookupEnv LookupEnv, key string, defaultValue, minimum, maximum int64) (int64, error) {
-	raw, ok := lookupEnv(key)
-	if !ok || strings.TrimSpace(raw) == "" {
-		return defaultValue, nil
-	}
-	value, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
-	if err != nil || value < minimum || value > maximum {
-		return 0, fmt.Errorf("%s: must be an integer between %d and %d", key, minimum, maximum)
-	}
-	return value, nil
 }
 
 func optionalBoundedInt(lookupEnv LookupEnv, key string, defaultValue, minimum, maximum int) (int, error) {

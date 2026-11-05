@@ -14,7 +14,6 @@ import (
 )
 
 type handlerService interface {
-	Options(context.Context) (Options, error)
 	Get(context.Context, int64) (Value, error)
 	List(context.Context, ListQuery) (pagination.Result[Value], error)
 	PersonalList(context.Context, ListQuery) (pagination.Result[PersonalValue], error)
@@ -23,15 +22,6 @@ type handlerService interface {
 type Handler struct{ service handlerService }
 
 func NewHandler(service handlerService) *Handler { return &Handler{service: service} }
-
-func (h *Handler) Options(c *gin.Context) {
-	result, err := h.service.Options(c.Request.Context())
-	if err != nil {
-		response.Fail(c, err)
-		return
-	}
-	response.OK(c, http.StatusOK, result)
-}
 
 func (h *Handler) List(c *gin.Context) {
 	values, err := url.ParseQuery(c.Request.URL.RawQuery)

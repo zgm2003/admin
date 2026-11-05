@@ -26,7 +26,7 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 历史 SQL、执行记录和 runner 仅作为审计档案，依赖已删除命令的历史 runner 不再支持直接重跑。新的数据库
 变更应基于当前 PostgreSQL 编写独立 forward migration。
 
-当前模块目录包括：`auth`、`health`、`permission`、`user`、`message`、`payment`、`storage`、`system`、`ai`。目录存在不代表
+当前模块目录包括：`auth`、`health`、`permission`、`user`、`message`、`payment`、`storage`、`system`。目录存在不代表
 所有业务都已完成，状态以 `STATUS.md` 和测试为准。
 
 ## 业务身份与跨层定位
@@ -60,13 +60,6 @@ web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
 | `payment/wallet`、`payment/myWallet` | `payment/wallet` | `payment_wallet` |
 | `payment/transaction` | `payment/transaction` | `payment_transaction` |
 | `payment/order` callback tab | `payment/callbackEvent` | `payment_callback_event` |
-| `ai/provider` | `ai/provider`、`ai/provider/model` | `ai_provider`、`ai_provider_version`、`ai_provider_model`、模型价格版本及费率 |
-| `ai/officialModel`、`ai/agent`、`ai/tool` | 同名 AI 模块 | `ai_official_model`、`ai_agent`、模型/工具绑定、`ai_tool`、`ai_tool_version` |
-| `ai/run`、`ai/chat` | `ai/run`、`ai/conversation`、`ai/media`、`ai/usage` | Run、请求/工具调用/事件、会话/消息、媒体任务/文件、用量账单及明细 |
-
-AI 的 API/Worker 装配显式放在 `cmd/api`、`cmd/worker`，配置代际复用 PostgreSQL outbox/Redis；已有 Run
-只读取冻结配置。`cmd/ai-usage-reconcile` 核对未知用量，`cmd/ai-usage-settle` 恢复已知费用结算；两者默认预览、
-显式 apply，均不重发模型生成。具体契约见 `ai-module-design.md`，部署/验收状态只看 `STATUS.md`。
 
 复合代码模块统一使用 lower camel case；数据库仍使用 snake_case，HTTP API 仍使用小写资源段。Mail 是聚合
 页面，后端按表资源拆为 `message/mail/config`、`template`、`log`、`logVerification`、`rateLimitPolicy`、

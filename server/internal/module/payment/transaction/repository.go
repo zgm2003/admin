@@ -21,27 +21,13 @@ func (r *Repository) FindByOrderTx(ctx context.Context, tx *gorm.DB, orderID int
 }
 
 func (r *Repository) CreateTx(ctx context.Context, tx *gorm.DB, row *Model) error {
-	if r == nil || tx == nil || row == nil {
+	if r == nil || tx == nil || row == nil || row.UserID < 1 || row.PlatformID < 1 || row.AmountUnits < 1 || (row.OrderID == nil && row.RedeemCodeID == nil) || (row.OrderID != nil && row.RedeemCodeID != nil) {
 		return errors.New("payment transaction input invalid")
-	}
-	if err := row.Validate(); err != nil {
-		return err
 	}
 	return tx.WithContext(ctx).Create(row).Error
 }
 
 func transactionQuery(db *gorm.DB, query ListQuery) *gorm.DB {
-	if query.Direction != 0 {
-		db = db.Where("payment_transaction.direction = ?", query.Direction)
-	}
-	switch query.SourceType {
-	case SourcePayment:
-		db = db.Where("payment_transaction.order_id IS NOT NULL")
-	case SourceRedeemCode:
-		db = db.Where("payment_transaction.redeem_code_id IS NOT NULL")
-	case SourceAI:
-		db = db.Where("payment_transaction.ai_usage_charge_id IS NOT NULL")
-	}
 	if query.UserID > 0 {
 		db = db.Where("payment_transaction.user_id = ?", query.UserID)
 	}

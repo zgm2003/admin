@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"gorm.io/gorm"
@@ -82,39 +81,6 @@ func (r *Repository) CreditTx(ctx context.Context, tx *gorm.DB, userID, amountUn
 	}
 	before := row.BalanceUnits
 	after, err := checkedAdd(before, amountUnits)
-	if err != nil {
-		return Model{}, 0, err
-	}
-	result := tx.WithContext(ctx).Model(&Model{}).Where("user_id = ?", userID).Updates(map[string]any{"balance_units": after, "updated_at": now})
-	if result.Error != nil {
-		return Model{}, 0, result.Error
-	}
-	if result.RowsAffected != 1 {
-		return Model{}, 0, gorm.ErrRecordNotFound
-	}
-	row.BalanceUnits, row.UpdatedAt = after, now
-	return row, before, nil
-}
-
-func checkedDebit(balance, amount int64) (int64, error) {
-	if amount < 1 || balance < math.MinInt64+amount {
-		return 0, ErrBalanceOverflow
-	}
-	return balance - amount, nil
-}
-
-// DebitTx locks the user's wallet row and settles an already admitted charge.
-// It deliberately permits negative balances; admission is owned by the AI run.
-func (r *Repository) DebitTx(ctx context.Context, tx *gorm.DB, userID, amountUnits int64, now time.Time) (Model, int64, error) {
-	if r == nil || tx == nil || userID < 1 || amountUnits < 1 {
-		return Model{}, 0, errors.New("wallet debit input invalid")
-	}
-	row, err := r.LockOrCreate(ctx, tx, userID, now)
-	if err != nil {
-		return Model{}, 0, err
-	}
-	before := row.BalanceUnits
-	after, err := checkedDebit(before, amountUnits)
 	if err != nil {
 		return Model{}, 0, err
 	}

@@ -12,30 +12,25 @@ import (
 type executionRepository interface {
 	GetJob(context.Context, int64) (Job, error)
 	ClaimRun(context.Context, int64, int, string, string, string, time.Time, time.Duration) (Run, Job, error)
-	RenewRun(context.Context, int64, int, string, time.Time) error
 	CompleteRun(context.Context, int64, int, string, time.Time) error
 	FailRun(context.Context, int64, int, string, string, string, *time.Time, time.Time) error
 }
 
 type Executor struct {
-	repository        executionRepository
-	catalog           TaskCatalog
-	workerID          string
-	now               func() time.Time
-	lease             time.Duration
-	heartbeatInterval time.Duration
+	repository executionRepository
+	catalog    TaskCatalog
+	workerID   string
+	now        func() time.Time
+	lease      time.Duration
 }
 
 func NewExecutor(repository executionRepository, catalog TaskCatalog, workerID string) *Executor {
-	return &Executor{repository: repository, catalog: catalog, workerID: workerID, now: time.Now, lease: 5 * time.Minute, heartbeatInterval: time.Minute}
+	return &Executor{repository: repository, catalog: catalog, workerID: workerID, now: time.Now, lease: 5 * time.Minute}
 }
 
 func (e *Executor) Execute(ctx context.Context, envelope JobEnvelope) error {
 	if e == nil || e.repository == nil || e.workerID == "" {
 		return errors.New("scheduler executor is not configured")
-	}
-	if err := ctx.Err(); err != nil {
-		return err
 	}
 	job, err := e.repository.GetJob(ctx, envelope.JobID)
 	if err != nil {
@@ -55,57 +50,22 @@ func (e *Executor) Execute(ctx context.Context, envelope JobEnvelope) error {
 	if job.AttemptCount+1 != envelope.Attempt || job.PublishToken != envelope.DispatchToken {
 		return fmt.Errorf("stale scheduler delivery: %w", asynq.SkipRetry)
 	}
-	definition, ok := e.catalog.Lookup(job.TaskType)
-	if ok {
-		if err := e.catalog.ValidatePayload(job.TaskType, job.Payload); err != nil {
-			definition.TimeoutForPayload = nil
-		} else if definition.TimeoutForPayload != nil {
-			timeout, resolveErr := definition.TimeoutForPayload(ctx, job.Payload, e.now().UTC())
-			if resolveErr != nil || timeout <= 0 {
-				if resolveErr == nil {
-					resolveErr = ErrInvalidTaskDefinition
-				}
-				return fmt.Errorf("resolve scheduler job timeout: %w", resolveErr)
-			}
-			definition.Timeout = timeout
-		}
-	}
 	token := newToken()
 	now := e.now().UTC()
 	run, claimed, err := e.repository.ClaimRun(ctx, job.ID, envelope.Attempt, envelope.DispatchToken, e.workerID, token, now, e.lease)
 	if err != nil {
 		return err
 	}
+	definition, ok := e.catalog.Lookup(claimed.TaskType)
 	if !ok {
 		return e.finishFailure(ctx, claimed, run, token, "unknown-task-type", nil, now)
 	}
 	if err := e.catalog.ValidatePayload(claimed.TaskType, claimed.Payload); err != nil {
 		return e.finishFailure(ctx, claimed, run, token, "invalid-payload", nil, now)
 	}
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, definition.Timeout)
-	defer timeoutCancel()
-	executionCtx, cancel := context.WithCancelCause(timeoutCtx)
-	defer cancel(nil)
-	heartbeatCtx, stopHeartbeat := context.WithCancel(executionCtx)
-	heartbeatDone := make(chan error, 1)
-	go func() { heartbeatDone <- e.renewLease(heartbeatCtx, claimed, token, cancel) }()
-	if err := executionCtx.Err(); err != nil {
-		stopHeartbeat()
-		<-heartbeatDone
-		return err
-	}
+	executionCtx, cancel := context.WithTimeout(ctx, definition.Timeout)
+	defer cancel()
 	err = definition.Execute(executionCtx, ExecutionContext{JobID: claimed.ID, Attempt: claimed.AttemptCount, MaxAttempts: claimed.MaxAttempts, TaskType: claimed.TaskType, Payload: append([]byte(nil), claimed.Payload...), ScheduledAt: claimed.ScheduledAt, StartedAt: run.StartedAt})
-	stopHeartbeat()
-	heartbeatErr := <-heartbeatDone
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	if heartbeatErr != nil {
-		return heartbeatErr
-	}
-	if executionCtx.Err() != nil {
-		err = context.Cause(executionCtx)
-	}
 	finished := e.now().UTC()
 	if err == nil {
 		return e.repository.CompleteRun(ctx, claimed.ID, claimed.AttemptCount, token, finished)
@@ -129,33 +89,6 @@ func (e *Executor) Execute(ctx context.Context, envelope JobEnvelope) error {
 		retryAt = &value
 	}
 	return e.finishFailure(ctx, claimed, run, token, taskErrorClass(err), retryAt, finished)
-}
-
-func (e *Executor) renewLease(ctx context.Context, job Job, token string, cancel context.CancelCauseFunc) error {
-	ticker := time.NewTicker(e.heartbeatInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			if err := ctx.Err(); err != nil {
-				return nil
-			}
-			// A stalled database operation must not keep the business context
-			// alive until its much longer generation deadline.
-			renewCtx, renewCancel := context.WithTimeout(ctx, e.heartbeatInterval)
-			err := e.repository.RenewRun(renewCtx, job.ID, job.AttemptCount, token, e.now().UTC())
-			renewCancel()
-			if err != nil {
-				if ctx.Err() != nil {
-					return nil
-				}
-				cancel(err)
-				return err
-			}
-		}
-	}
 }
 
 func (e *Executor) finishFailure(ctx context.Context, job Job, run Run, token, class string, retryAt *time.Time, now time.Time) error {

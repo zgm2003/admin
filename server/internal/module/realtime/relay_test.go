@@ -96,7 +96,6 @@ type relayRepositoryStub struct {
 	marked      []int64
 	rescheduled []relayReschedule
 	markErr     error
-	claimLimit  int
 }
 
 type relayReschedule struct {
@@ -105,8 +104,7 @@ type relayReschedule struct {
 	availableAt time.Time
 }
 
-func (s *relayRepositoryStub) ClaimPending(_ context.Context, limit int, _ string, _ time.Time, _ time.Duration) ([]OutboxEvent, error) {
-	s.claimLimit = limit
+func (s *relayRepositoryStub) ClaimPending(context.Context, int, string, time.Time, time.Duration) ([]OutboxEvent, error) {
 	return append([]OutboxEvent(nil), s.events...), nil
 }
 func (s *relayRepositoryStub) MarkPublished(_ context.Context, id int64, _ string, _ time.Time) error {
@@ -122,11 +120,9 @@ func (s *relayRepositoryStub) Reschedule(_ context.Context, id int64, _ string, 
 }
 
 type relayPublisherStub struct {
-	err          error
-	channels     []string
-	payloads     [][]byte
-	budgetErr    error
-	afterPublish func()
+	err      error
+	channels []string
+	payloads [][]byte
 }
 
 func (s *relayPublisherStub) Publish(_ context.Context, channel string, payload []byte) error {
@@ -135,54 +131,5 @@ func (s *relayPublisherStub) Publish(_ context.Context, channel string, payload 
 	}
 	s.channels = append(s.channels, channel)
 	s.payloads = append(s.payloads, append([]byte(nil), payload...))
-	if s.afterPublish != nil {
-		s.afterPublish()
-	}
 	return nil
-}
-
-func (s *relayPublisherStub) EvalString(ctx context.Context, _ string, _ []string, args ...any) (string, error) {
-	if s.budgetErr != nil {
-		return "", s.budgetErr
-	}
-	if err := s.Publish(ctx, args[1].(string), []byte(args[2].(string))); err != nil {
-		return "", err
-	}
-	return "published", nil
-}
-
-func TestRelayClaimsAtMost200Events(t *testing.T) {
-	repository := &relayRepositoryStub{}
-	if _, err := NewRelay(repository, &relayPublisherStub{}, nil).RunOnce(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if repository.claimLimit != 200 {
-		t.Fatalf("claim limit=%d", repository.claimLimit)
-	}
-}
-
-func TestRelayBudgetFailureClosesPublication(t *testing.T) {
-	now := time.Now().UTC()
-	userID := int64(10)
-	repository := &relayRepositoryStub{events: []OutboxEvent{{ID: 1, Event: Event{Sequence: 1, EventID: uuid.NewString(), PlatformID: 2, EventType: EventNotificationCreated, TargetType: TargetUser, TargetUserID: &userID, Payload: json.RawMessage(`{}`), OccurredAt: now}}}}
-	publisher := &relayPublisherStub{budgetErr: errors.New("Redis unavailable")}
-	if n, err := NewRelay(repository, publisher, nil).RunOnce(context.Background()); err != nil || n != 0 {
-		t.Fatalf("n=%d err=%v", n, err)
-	}
-	if len(publisher.payloads) != 0 || len(repository.marked) != 0 || len(repository.rescheduled) != 1 {
-		t.Fatalf("published=%d marked=%v rescheduled=%v", len(publisher.payloads), repository.marked, repository.rescheduled)
-	}
-}
-
-func TestRelayDoesNotMarkAfterPublishCancelsContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	now := time.Now().UTC()
-	userID := int64(10)
-	repository := &relayRepositoryStub{events: []OutboxEvent{{ID: 1, Event: Event{Sequence: 1, EventID: uuid.NewString(), PlatformID: 2, EventType: EventNotificationCreated, TargetType: TargetUser, TargetUserID: &userID, Payload: json.RawMessage(`{}`), OccurredAt: now}}}}
-	publisher := &relayPublisherStub{afterPublish: cancel}
-	NewRelay(repository, publisher, nil).RunOnce(ctx)
-	if len(repository.marked) != 0 || len(repository.rescheduled) != 0 {
-		t.Fatalf("canceled relay mutated persistence: marked=%v rescheduled=%v", repository.marked, repository.rescheduled)
-	}
 }

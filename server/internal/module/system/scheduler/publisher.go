@@ -114,26 +114,13 @@ func (p *Publisher) RunOnce(ctx context.Context, now time.Time) (int, error) {
 			continue
 		}
 		attempt := job.AttemptCount + 1
-		timeout := definition.Timeout
-		if definition.TimeoutForPayload != nil {
-			timeout, err = definition.TimeoutForPayload(ctx, job.Payload, now.UTC())
-			if err != nil || timeout <= 0 {
-				if err == nil {
-					err = ErrInvalidTaskDefinition
-				}
-				delay := publishBackoff(job.AttemptCount + 1)
-				rescheduleErr := p.repository.ReschedulePublish(ctx, job.ID, claimed.DispatchToken, "timeout-unavailable", now.Add(delay), now)
-				iterationErr = errors.Join(iterationErr, fmt.Errorf("resolve scheduler job %d timeout: %w", job.ID, err), rescheduleErr)
-				continue
-			}
-		}
 		envelope := JobEnvelope{SchemaVersion: 1, JobID: job.ID, Attempt: attempt, DispatchToken: claimed.DispatchToken}
 		raw, encodeErr := json.Marshal(envelope)
 		if encodeErr != nil {
 			iterationErr = errors.Join(iterationErr, encodeErr)
 			continue
 		}
-		options := QueueOptions{TaskID: fmt.Sprintf("system-scheduler:%d:%d:%s", job.ID, attempt, claimed.DispatchToken), Queue: definition.Queue, Timeout: timeout, MaxRetry: definition.MaxAttempts - 1, ProcessAt: job.AvailableAt}
+		options := QueueOptions{TaskID: fmt.Sprintf("system-scheduler:%d:%d:%s", job.ID, attempt, claimed.DispatchToken), Queue: definition.Queue, Timeout: definition.Timeout, MaxRetry: definition.MaxAttempts - 1, ProcessAt: job.AvailableAt}
 		enqueueErr := p.queue.Enqueue(ctx, EnvelopeTaskType, raw, options)
 		if enqueueErr == nil || errors.Is(enqueueErr, asynq.ErrTaskIDConflict) {
 			if markErr := p.repository.MarkQueued(ctx, job.ID, claimed.DispatchToken, now); markErr != nil {

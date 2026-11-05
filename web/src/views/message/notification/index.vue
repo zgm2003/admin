@@ -20,7 +20,6 @@ import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn } from '@/components/AppTable'
 import { useNotificationStore } from '@/store/notification'
 import { usePermissionStore } from '@/store/permission'
-import { displayError } from '@/utils/displayError'
 import { formatTime } from '@/utils/datetime'
 
 const access = usePermissionStore(),
@@ -45,7 +44,9 @@ const canRead = computed(() => access.hasPermission('message:notification:read')
 const canDelete = computed(() => access.hasPermission('message:notification:delete'))
 
 function errorMessage(error: unknown): string {
-  return displayError(error, t('notification.loadFailed'))
+  return error instanceof Error && error.message !== ''
+    ? error.message
+    : t('notification.loadFailed')
 }
 
 interface NotificationSearchModel {

@@ -3,6 +3,7 @@ package transaction
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"admin/server/internal/shared/money"
@@ -12,7 +13,6 @@ type PersonalValue struct {
 	ID            int64      `json:"id"`
 	TransactionNo string     `json:"transactionNo"`
 	SourceType    SourceType `json:"sourceType"`
-	Direction     Direction  `json:"direction"`
 	Amount        string     `json:"amount"`
 	BalanceBefore string     `json:"balanceBefore"`
 	BalanceAfter  string     `json:"balanceAfter"`
@@ -21,33 +21,35 @@ type PersonalValue struct {
 
 type Value struct {
 	PersonalValue
-	UserID          int64  `json:"userId"`
-	Username        string `json:"username"`
-	PlatformID      int64  `json:"platformId"`
-	PlatformCode    string `json:"platformCode"`
-	OrderID         *int64 `json:"orderId"`
-	RedeemCodeID    *int64 `json:"redeemCodeId,omitempty"`
-	AIUsageChargeID *int64 `json:"aiUsageChargeId,omitempty"`
+	UserID       int64  `json:"userId"`
+	Username     string `json:"username"`
+	PlatformID   int64  `json:"platformId"`
+	PlatformCode string `json:"platformCode"`
+	OrderID      *int64 `json:"orderId"`
+	RedeemCodeID *int64 `json:"redeemCodeId,omitempty"`
 }
 
 func value(_ context.Context, row Model) (Value, error) {
-	if row.ID < 1 {
+	if row.ID < 1 || row.UserID < 1 || row.PlatformID < 1 || row.AmountUnits < 1 {
 		return Value{}, fmt.Errorf("stored payment transaction is invalid")
 	}
-	if err := row.Validate(); err != nil {
-		return Value{}, err
+	if row.BalanceAfterUnits < math.MinInt64+row.AmountUnits {
+		return Value{}, fmt.Errorf("stored payment transaction balance before overflows")
 	}
 	source := SourcePayment
-	if row.AIUsageChargeID != nil {
-		source = SourceAI
-	} else if row.RedeemCodeID != nil {
+	if row.OrderID == nil {
+		if row.RedeemCodeID == nil {
+			return Value{}, fmt.Errorf("stored payment transaction source missing")
+		}
 		source = SourceRedeemCode
+	} else if row.RedeemCodeID != nil {
+		return Value{}, fmt.Errorf("stored payment transaction has multiple sources")
 	}
 	amount, err := money.FormatRMBUnits(row.AmountUnits)
 	if err != nil {
 		return Value{}, err
 	}
-	before, err := money.FormatRMBUnits(row.BalanceBeforeUnits)
+	before, err := money.FormatRMBUnits(row.BalanceAfterUnits - row.AmountUnits)
 	if err != nil {
 		return Value{}, err
 	}
@@ -55,7 +57,7 @@ func value(_ context.Context, row Model) (Value, error) {
 	if err != nil {
 		return Value{}, err
 	}
-	return Value{PersonalValue: PersonalValue{ID: row.ID, TransactionNo: row.TransactionNo, SourceType: source, Direction: row.Direction, Amount: amount, BalanceBefore: before, BalanceAfter: after, CreatedAt: row.CreatedAt}, UserID: row.UserID, Username: row.Username, PlatformID: row.PlatformID, PlatformCode: row.PlatformCode, OrderID: row.OrderID, RedeemCodeID: row.RedeemCodeID, AIUsageChargeID: row.AIUsageChargeID}, nil
+	return Value{PersonalValue: PersonalValue{ID: row.ID, TransactionNo: row.TransactionNo, SourceType: source, Amount: amount, BalanceBefore: before, BalanceAfter: after, CreatedAt: row.CreatedAt}, UserID: row.UserID, Username: row.Username, PlatformID: row.PlatformID, PlatformCode: row.PlatformCode, OrderID: row.OrderID, RedeemCodeID: row.RedeemCodeID}, nil
 }
 
 type Page struct {

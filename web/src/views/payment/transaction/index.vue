@@ -10,24 +10,14 @@ import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import AppDialog from '@/components/AppDialog/index.vue'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
-import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
 const canList = computed(() => access.hasPermission('payment:transaction:list'))
 const canDetail = computed(() => access.hasPermission('payment:transaction:detail'))
-const filters = ref<
-  SearchFormModel<{
-    userId: string
-    platformId: string
-    direction: number | ''
-    sourceType: number | ''
-  }>
->({
+const filters = ref<SearchFormModel<{ userId: string; platformId: string }>>({
   userId: '',
   platformId: '',
-  direction: '',
-  sourceType: '',
 })
 const query = ref<TransactionQuery>({ page: 1, pageSize: 20 })
 const rows = ref<Transaction[]>([])
@@ -38,20 +28,8 @@ const detail = ref<Transaction | null>(null)
 const detailVisible = ref(false)
 let sequence = 0
 let alive = true
-const {
-  options,
-  error: optionsError,
-  reload: reloadOptions,
-} = useLocalizedOptions<api.TransactionOptions | null>(api.getTransactionOptions, () => null)
 
-const searchFields = computed<
-  SearchField<{
-    userId: string
-    platformId: string
-    direction: number | ''
-    sourceType: number | ''
-  }>[]
->(() => [
+const searchFields = computed<SearchField<{ userId: string; platformId: string }>[]>(() => [
   {
     key: 'userId',
     type: 'input',
@@ -68,26 +46,6 @@ const searchFields = computed<
     resetValue: '',
     width: 180,
   },
-  {
-    key: 'direction',
-    type: 'select-v2',
-    label: t('payment.transaction.direction'),
-    options: options.value === null ? [] : options.value.directions,
-    resetValue: '',
-    clearable: true,
-    disabled: options.value === null,
-    width: 140,
-  },
-  {
-    key: 'sourceType',
-    type: 'select-v2',
-    label: t('payment.transaction.sourceType'),
-    options: options.value === null ? [] : options.value.sourceTypes,
-    resetValue: '',
-    clearable: true,
-    disabled: options.value === null,
-    width: 140,
-  },
 ])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: query.value.page,
@@ -100,17 +58,15 @@ const columns = computed<TableColumn<Transaction>[]>(() => [
   { prop: 'username', label: t('payment.transaction.username'), minWidth: 140 },
   { prop: 'platformCode', label: t('payment.transaction.platformCode'), width: 130 },
   { key: 'sourceType', label: t('payment.transaction.sourceType'), width: 120 },
-  { key: 'direction', label: t('payment.transaction.direction'), width: 100 },
   { prop: 'amount', label: t('payment.transaction.amount'), width: 130 },
   { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 140 },
   { key: 'createdAt', label: t('common.createdAt'), minWidth: 180 },
   { key: 'actions', label: t('common.actions'), width: 90, fixed: 'right' },
 ])
 function source(value: number): string {
-  return options.value?.sourceTypes.find((item) => item.value === value)?.label ?? String(value)
-}
-function direction(value: number): string {
-  return options.value?.directions.find((item) => item.value === value)?.label ?? String(value)
+  if (value === 1) return t('payment.transaction.payment')
+  if (value === 2) return t('payment.transaction.redeemCode')
+  return String(value)
 }
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
@@ -129,8 +85,6 @@ function loadQuery(): TransactionQuery {
   const platformId = positive(filters.value.platformId)
   if (userId !== undefined) next.userId = userId
   if (platformId !== undefined) next.platformId = platformId
-  if (filters.value.direction !== '') next.direction = filters.value.direction
-  if (filters.value.sourceType !== '') next.sourceType = filters.value.sourceType
   return next
 }
 async function load(): Promise<void> {
@@ -159,7 +113,7 @@ function search(): void {
   void load()
 }
 function reset(): void {
-  filters.value = { userId: '', platformId: '', direction: '', sourceType: '' }
+  filters.value = { userId: '', platformId: '' }
   search()
 }
 function updatePagination(value: TablePaginationState): void {
@@ -197,13 +151,6 @@ onBeforeUnmount(() => {
 
 <template>
   <AppPage class="payment-transaction-page">
-    <el-alert
-      v-if="optionsError"
-      :title="t('payment.transaction.optionsFailed')"
-      type="error"
-      :closable="false"
-      ><el-button link @click="reloadOptions">{{ t('common.refresh') }}</el-button></el-alert
-    >
     <AppSearch
       v-model="filters"
       class="management-page__filters"
@@ -229,9 +176,6 @@ onBeforeUnmount(() => {
           source(row.sourceType)
         }}</el-tag></template
       >
-      <template #cell-direction="{ row }: { row: Transaction }">{{
-        direction(row.direction)
-      }}</template>
       <template #cell-createdAt="{ row }: { row: Transaction }">{{
         formatTime(row.createdAt)
       }}</template>
@@ -243,6 +187,7 @@ onBeforeUnmount(() => {
       <template #empty><el-empty :description="t('payment.transaction.empty')" /></template>
     </AppTable>
     <AppDialog v-model="detailVisible" :title="t('payment.transaction.title')" width="620px">
+      
       <el-descriptions v-if="detail" :column="2" border>
         <el-descriptions-item :label="t('payment.transaction.transactionNo')">{{
           detail.transactionNo
@@ -258,12 +203,6 @@ onBeforeUnmount(() => {
         }}</el-descriptions-item>
         <el-descriptions-item :label="t('payment.transaction.amount')">{{
           detail.amount
-        }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.transaction.direction')">{{
-          direction(detail.direction)
-        }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.transaction.aiUsageChargeId')">{{
-          detail.aiUsageChargeId ?? '-'
         }}</el-descriptions-item>
         <el-descriptions-item :label="t('payment.transaction.sourceType')">{{
           source(detail.sourceType)

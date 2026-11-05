@@ -23,25 +23,14 @@ func TestSchedulerOptionsLocalizesRegisteredTasksWithoutDependencies(t *testing.
 		storagefile.CleanupDefinition(nil),
 		storagefile.ScanDefinition(nil),
 	)
-	aiDefinitions, err := scheduler.AIManagementDefinitions()
-	if err != nil {
-		t.Fatal(err)
-	}
-	definitions = append(definitions, aiDefinitions...)
 	wantNames := map[string][2]string{
-		"ai.media.import":                         {"AI 媒体导入", "AI media import"},
-		"ai.media.poll":                           {"AI 媒体轮询", "AI media polling"},
-		"ai.run.event.cleanup":                    {"AI 运行事件清理", "AI run event cleanup"},
-		"ai.run.execute":                          {"AI 运行执行", "AI run execution"},
-		"ai.run.recover":                          {"AI 运行恢复", "AI run recovery"},
-		"ai.usage.settle":                         {"AI 用量结算", "AI usage settlement"},
-		"message.notification.retention.cleanup":  {"站内通知历史清理", "Notification history cleanup"},
-		"message.notificationtask.batch":          {"站内通知批次", "Notification batch"},
-		"payment.order.reconcile":                 {"支付订单巡检", "Payment order reconciliation"},
-		"realtime.retention.cleanup":              {"实时事件历史清理", "Realtime event history cleanup"},
-		"storage.file.cleanup":                    {"文件对象清理", "File object cleanup"},
-		"storage.file.scan":                       {"文件清理巡检", "File cleanup scan"},
-		"system.scheduler.history.cleanup":        {"调度器历史清理", "Scheduler history cleanup"},
+		"message.notification.retention.cleanup": {"站内通知历史清理", "Notification history cleanup"},
+		"message.notificationtask.batch":         {"站内通知批次", "Notification batch"},
+		"payment.order.reconcile":                {"支付订单巡检", "Payment order reconciliation"},
+		"realtime.retention.cleanup":             {"实时事件历史清理", "Realtime event history cleanup"},
+		"storage.file.cleanup":                   {"文件对象清理", "File object cleanup"},
+		"storage.file.scan":                      {"文件清理巡检", "File cleanup scan"},
+		"system.scheduler.history.cleanup":       {"调度器历史清理", "Scheduler history cleanup"},
 	}
 	cases := []struct {
 		name        string

@@ -28,7 +28,6 @@ const (
 	EventRealtimeError            = "realtime.error.v1"
 	EventNotificationCreated      = "notification.created.v1"
 	EventNotificationStateChanged = "notification.stateChanged.v1"
-	EventAIRunChanged             = "ai.run.changed.v1"
 
 	ClientPing   = "realtime.ping.v1"
 	ClientResume = "realtime.resume.v1"
@@ -231,7 +230,7 @@ func ValidateEventInput(input EventInput) error {
 func validServerEventType(value string) bool {
 	switch value {
 	case EventRealtimeConnected, EventRealtimePong, EventRealtimeResumed, EventRealtimeResyncRequired,
-		EventRealtimeError, EventNotificationCreated, EventNotificationStateChanged, EventAIRunChanged:
+		EventRealtimeError, EventNotificationCreated, EventNotificationStateChanged:
 		return true
 	default:
 		return false

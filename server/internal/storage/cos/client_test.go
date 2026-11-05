@@ -2,7 +2,6 @@ package cos
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,27 +10,6 @@ import (
 	"testing"
 	"time"
 )
-
-func TestPutStreamWritesBoundedObjectAndReturnsHeadMetadata(t *testing.T) {
-	var method string
-	var body string
-	client := NewClient(&http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		if r.Method == http.MethodPut && r.Body != nil {
-			method = r.Method
-			data, _ := io.ReadAll(r.Body)
-			body = string(data)
-		}
-		h := http.Header{"Content-Length": []string{"3"}, "Content-Type": []string{"image/png"}, "Etag": []string{"\"new\""}}
-		return &http.Response{StatusCode: 200, Header: h, Body: http.NoBody}, nil
-	})})
-	info, err := client.PutStream(context.Background(), Credentials{AppID: "1", SecretID: "sid", SecretKey: "key", Bucket: "assets", Region: "ap-guangzhou", Endpoint: "https://cos.example.com"}, PutStreamRequest{ObjectKey: "generated/a.png", ContentType: "image/png", ContentLength: 3, Body: strings.NewReader("abc")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if method != http.MethodPut || body != "abc" || info.Key != "generated/a.png" || info.Size != 3 || info.MIME != "image/png" || info.ETag != `"new"` {
-		t.Fatalf("method=%q body=%q info=%+v", method, body, info)
-	}
-}
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 

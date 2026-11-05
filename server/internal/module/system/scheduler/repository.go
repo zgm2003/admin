@@ -431,32 +431,16 @@ func (r *Repository) ClaimRun(ctx context.Context, jobID int64, expectedAttempt 
 	return run, job, err
 }
 
-// RenewRun extends only the current, still-live execution owner. An expired
-// token cannot revive itself while recovery is waiting to claim the job.
-func (r *Repository) RenewRun(ctx context.Context, jobID int64, attempt int, token string, now time.Time) error {
-	if r == nil || r.db == nil || jobID <= 0 || attempt <= 0 || token == "" || now.IsZero() {
-		return ErrClaimLost
-	}
-	result := r.db.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND attempt_count=? AND run_token=? AND run_lease_until>?", jobID, JobRunning, attempt, token, now).Updates(map[string]any{"run_lease_until": now.Add(5 * time.Minute), "updated_at": now})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected != 1 {
-		return ErrClaimLost
-	}
-	return nil
-}
-
 func (r *Repository) CompleteRun(ctx context.Context, jobID int64, attempt int, token string, now time.Time) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		res := tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND attempt_count=? AND run_token=? AND run_lease_until>?", jobID, JobRunning, attempt, token, now).Updates(map[string]any{"status": JobCompleted, "run_token": nil, "run_lease_until": nil, "error_class": "", "last_error": "", "completed_at": now, "updated_at": now})
+		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunSucceeded, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
 			return ErrClaimLost
 		}
-		res = tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunSucceeded, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "updated_at": now})
+		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND run_token=?", jobID, JobRunning, token).Updates(map[string]any{"status": JobCompleted, "run_token": nil, "run_lease_until": nil, "error_class": "", "last_error": "", "completed_at": now, "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
@@ -475,20 +459,20 @@ func (r *Repository) FailRun(ctx context.Context, jobID int64, attempt int, toke
 		class = class[:64]
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		updates := map[string]any{"status": JobFailed, "run_token": nil, "run_lease_until": nil, "error_class": class, "last_error": message, "completed_at": now, "updated_at": now}
-		if retryAt != nil {
-			updates["status"] = JobScheduled
-			updates["available_at"] = *retryAt
-			updates["completed_at"] = nil
-		}
-		res := tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND attempt_count=? AND run_token=? AND run_lease_until>?", jobID, JobRunning, attempt, token, now).Updates(updates)
+		res := tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunFailed, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "error_class": class, "error_message": message, "updated_at": now})
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected != 1 {
 			return ErrClaimLost
 		}
-		res = tx.WithContext(ctx).Model(&Run{}).Where("job_id=? AND attempt_no=? AND status=?", jobID, attempt, RunRunning).Updates(map[string]any{"status": RunFailed, "finished_at": now, "duration_ms": gorm.Expr("GREATEST(0, EXTRACT(EPOCH FROM (? - started_at))*1000)::bigint", now), "error_class": class, "error_message": message, "updated_at": now})
+		updates := map[string]any{"status": JobFailed, "run_token": nil, "run_lease_until": nil, "error_class": class, "last_error": message, "completed_at": now, "updated_at": now}
+		if retryAt != nil {
+			updates["status"] = JobScheduled
+			updates["available_at"] = *retryAt
+			updates["completed_at"] = nil
+		}
+		res = tx.WithContext(ctx).Model(&Job{}).Where("id=? AND status=? AND run_token=?", jobID, JobRunning, token).Updates(updates)
 		if res.Error != nil {
 			return res.Error
 		}
