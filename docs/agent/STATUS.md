@@ -1,5 +1,12 @@
 # 项目状态
 
+### 调度 options 接口 10006 修复（2026-11-04，已验证）
+
+- 现象：`GET /api/admin/v1/system/scheduler/options` 返回 `code=10006`「服务暂未就绪」。
+- 根因：`scheduler/ai.go` 注册了 6 个 AI 任务类型（`ai.run.execute`、`ai.media.poll`、`ai.media.import`、`ai.usage.settle`、`ai.run.recover`、`ai.run.event.cleanup`），`Options()` 会对每个带英文名的任务翻译 `scheduler.tasks.<type>`；i18n 目录缺少这 6 个键，`Translate` 返回错误，handler 将其包装为 `dependencyUnavailable`。
+- 修复：补齐中英文 6 个任务名称键；`cmd/api/scheduler_options_test.go` 的目录加入 `AIManagementDefinitions()` 并断言两种语言下的名称，防止后续新增任务再次漏键。
+- 验证：`go test ./internal/shared/i18n`、`go test ./cmd/api -run '^TestSchedulerOptionsLocalizesRegisteredTasksWithoutDependencies$'` 通过。运行中的 API 是 16:53 启动的旧进程，需重启后生效。
+
 ### Worker 冷缓存启动失败修复（2026-11-04，已验证）
 
 - 现象：`go run ./cmd/worker` 启动数秒后退出。一次为 `runner ai-capacity stopped: AI engineering policy is unavailable or invalid / error.dependencyUnavailable`，另一次更早退出于 `read AI media setting ai.media.spool_max_bytes_per_worker: error.dependencyUnavailable`。

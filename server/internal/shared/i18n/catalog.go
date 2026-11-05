@@ -197,6 +197,12 @@ const (
 	KeySchedulerTaskPaymentReconcile    MessageKey = "scheduler.tasks.payment.order.reconcile"
 	KeySchedulerTaskFileCleanup         MessageKey = "scheduler.tasks.storage.file.cleanup"
 	KeySchedulerTaskFileScan            MessageKey = "scheduler.tasks.storage.file.scan"
+	KeySchedulerTaskAIRunExecute        MessageKey = "scheduler.tasks.ai.run.execute"
+	KeySchedulerTaskAIMediaPoll         MessageKey = "scheduler.tasks.ai.media.poll"
+	KeySchedulerTaskAIMediaImport       MessageKey = "scheduler.tasks.ai.media.import"
+	KeySchedulerTaskAIUsageSettle       MessageKey = "scheduler.tasks.ai.usage.settle"
+	KeySchedulerTaskAIRunRecover        MessageKey = "scheduler.tasks.ai.run.recover"
+	KeySchedulerTaskAIRunEventCleanup   MessageKey = "scheduler.tasks.ai.run.event.cleanup"
 	KeyCachePublishReady                MessageKey = "configCacheStatus.options.publishState.ready"
 	KeyCachePublishPending              MessageKey = "configCacheStatus.options.publishState.pending"
 	KeyCachePublishRetrying             MessageKey = "configCacheStatus.options.publishState.retrying"
@@ -452,6 +458,12 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySchedulerTaskPaymentReconcile:     "支付订单巡检",
 		KeySchedulerTaskFileCleanup:          "文件对象清理",
 		KeySchedulerTaskFileScan:             "文件清理巡检",
+		KeySchedulerTaskAIRunExecute:         "AI 运行执行",
+		KeySchedulerTaskAIMediaPoll:          "AI 媒体轮询",
+		KeySchedulerTaskAIMediaImport:        "AI 媒体导入",
+		KeySchedulerTaskAIUsageSettle:        "AI 用量结算",
+		KeySchedulerTaskAIRunRecover:         "AI 运行恢复",
+		KeySchedulerTaskAIRunEventCleanup:    "AI 运行事件清理",
 		KeyCachePublishReady:                 "已发布",
 		KeyCachePublishPending:               "待发布",
 		KeyCachePublishRetrying:              "重试中",
@@ -704,6 +716,12 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeySchedulerTaskPaymentReconcile:     "Payment order reconciliation",
 		KeySchedulerTaskFileCleanup:          "File object cleanup",
 		KeySchedulerTaskFileScan:             "File cleanup scan",
+		KeySchedulerTaskAIRunExecute:         "AI run execution",
+		KeySchedulerTaskAIMediaPoll:          "AI media polling",
+		KeySchedulerTaskAIMediaImport:        "AI media import",
+		KeySchedulerTaskAIUsageSettle:        "AI usage settlement",
+		KeySchedulerTaskAIRunRecover:         "AI run recovery",
+		KeySchedulerTaskAIRunEventCleanup:    "AI run event cleanup",
 		KeyCachePublishReady:                 "Published",
 		KeyCachePublishPending:               "Pending",
 		KeyCachePublishRetrying:              "Retrying",
