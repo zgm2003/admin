@@ -108,14 +108,16 @@ function resetPreferences(): void {
     :model-value="modelValue"
     class="setting-drawer"
     direction="rtl"
-    size="320px"
+    size="min(400px, 100vw)"
     :with-header="false"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="setting-drawer__content">
       <header class="setting-drawer__header">
         <div class="setting-drawer__title">
-          <el-icon aria-hidden="true"><Setting /></el-icon>
+          <span class="setting-drawer__title-icon" aria-hidden="true">
+            <el-icon><Setting /></el-icon>
+          </span>
           <span>{{ t('layout.settings.title') }}</span>
         </div>
         <el-button
@@ -135,6 +137,25 @@ function resetPreferences(): void {
         :closable="false"
         show-icon
       />
+
+      <div
+        class="setting-drawer__preview"
+        :data-layout="uiPreferences.preferences.layout"
+        aria-hidden="true"
+      >
+        <div class="setting-drawer__preview-shell">
+          <div class="setting-drawer__preview-aside">
+            <i></i><span></span><span></span><span></span>
+          </div>
+          <div class="setting-drawer__preview-header"><span></span><i></i></div>
+          <div class="setting-drawer__preview-body">
+            <div class="setting-drawer__preview-summary">
+              <span></span><span></span><span></span>
+            </div>
+            <div class="setting-drawer__preview-table"><span></span><span></span><span></span></div>
+          </div>
+        </div>
+      </div>
 
       <el-tabs v-model="activeSettingsTab" class="setting-drawer__tabs">
         <el-tab-pane :label="t('layout.settings.theme')" name="theme">
@@ -311,7 +332,8 @@ function resetPreferences(): void {
 <style lang="scss">
 .setting-drawer {
   .el-drawer__body {
-    padding: 16px 18px;
+    padding: 0;
+    overscroll-behavior: contain;
   }
 }
 </style>

@@ -73,5 +73,6 @@ function openRecharge(): void {
   padding: 0;
   border: 0;
   background: transparent;
+  box-shadow: none;
 }
 </style>

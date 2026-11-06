@@ -162,13 +162,49 @@ const bodyStyle = computed(() => ({
 // ElDialog teleports its root without this component's scope attribute.
 // Keep root selectors explicitly namespaced; slot/content styles remain scoped.
 :global(.el-dialog.app-dialog) {
+  --el-dialog-border-radius: var(--admin-radius-md, 12px);
+  --el-dialog-bg-color: var(--admin-surface);
+  --el-dialog-box-shadow: var(--admin-shadow-lg);
+
   display: flex;
   flex-direction: column;
   max-height: 90vh;
+  padding: 0;
+  border: 1px solid var(--admin-border);
 }
 :global(.app-dialog > .el-dialog__header),
 :global(.app-dialog > .el-dialog__footer) {
   flex-shrink: 0;
+}
+:global(.app-dialog > .el-dialog__header) {
+  padding: 20px;
+  border-bottom: 1px solid var(--admin-border);
+}
+:global(.app-dialog:not(.app-dialog--custom-header-padding) > .el-dialog__header.show-close) {
+  padding-right: 56px;
+}
+:global(.app-dialog > .el-dialog__header .el-dialog__title) {
+  color: var(--admin-text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
+}
+:global(.app-dialog > .el-dialog__header .el-dialog__headerbtn) {
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--admin-radius-sm, 8px);
+  transition:
+    color 160ms ease,
+    background-color 160ms ease;
+}
+:global(.app-dialog > .el-dialog__header .el-dialog__headerbtn:hover) {
+  background: var(--admin-surface-soft);
+}
+:global(.app-dialog > .el-dialog__header .el-dialog__headerbtn:focus-visible) {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 :global(.app-dialog > .el-dialog__body) {
   display: flex;
@@ -180,14 +216,18 @@ const bodyStyle = computed(() => ({
 :global(.app-dialog--header-hidden > .el-dialog__header) {
   display: none;
 }
+:global(.app-dialog > .el-dialog__footer) {
+  padding: 16px 20px;
+  background: var(--admin-surface-soft);
+  border-top: 1px solid var(--admin-border);
+  border-bottom-right-radius: inherit;
+  border-bottom-left-radius: inherit;
+}
 :global(.app-dialog--custom-header-padding > .el-dialog__header) {
   padding: var(--app-dialog-header-padding);
 }
 :global(.app-dialog--custom-footer-padding > .el-dialog__footer) {
   padding: var(--app-dialog-footer-padding);
-}
-:global(.app-dialog > .el-dialog__footer) {
-  border-top: 1px solid var(--el-border-color-lighter);
 }
 
 .app-dialog {
@@ -218,6 +258,24 @@ const bodyStyle = computed(() => ({
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  :global(.app-dialog:not(.app-dialog--custom-header-padding) > .el-dialog__header) {
+    padding: 16px;
+  }
+  :global(.app-dialog:not(.app-dialog--custom-header-padding) > .el-dialog__header.show-close) {
+    padding-right: 56px;
+  }
+  :global(.app-dialog:not(.app-dialog--custom-footer-padding) > .el-dialog__footer) {
+    padding: 14px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :global(.app-dialog > .el-dialog__header .el-dialog__headerbtn) {
+    transition: none;
   }
 }
 </style>

@@ -1,11 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { applyPrimaryColor, applyTheme, isSixDigitHexColor, mixHexColor } from '@/utils/theme'
 
 describe('theme', () => {
   beforeEach(() => {
     document.documentElement.classList.remove('dark')
-    document.documentElement.style.removeProperty('color-scheme')
+    document.documentElement.style.cssText = ''
+  })
+
+  afterEach(() => {
+    document.querySelector('[data-theme-palette-fixture]')?.remove()
   })
 
   it('applies the light Element Plus theme', () => {
@@ -28,6 +32,39 @@ describe('theme', () => {
     expect(style.getPropertyValue('--el-color-primary-rgb')).toBe('64, 158, 255')
     expect(style.getPropertyValue('--el-color-primary-light-3')).toBe('#79BBFF')
     expect(style.getPropertyValue('--el-color-primary-light-5')).toBe('#A0CFFF')
+    expect(style.getPropertyValue('--el-color-primary-dark-2')).toBe('#337ECC')
+  })
+
+  it('blends dark primary surfaces with the active theme surface instead of white', () => {
+    document.documentElement.style.setProperty('--el-bg-color', '#191F2A')
+    applyTheme('dark')
+
+    applyPrimaryColor('#409EFF')
+
+    const style = document.documentElement.style
+    expect(style.getPropertyValue('--el-color-primary-light-3')).toBe('#3478BF')
+    expect(style.getPropertyValue('--el-color-primary-light-5')).toBe('#2D5F95')
+    expect(style.getPropertyValue('--el-color-primary-light-9')).toBe('#1D2C3F')
+    expect(style.getPropertyValue('--el-color-primary-dark-2')).toBe('#66B1FF')
+  })
+
+  it('recomputes the selected primary palette when switching between theme modes', () => {
+    const fixture = document.createElement('style')
+    fixture.dataset.themePaletteFixture = ''
+    fixture.textContent = 'html { --el-bg-color: #FFFFFF; } html.dark { --el-bg-color: #191F2A; }'
+    document.head.append(fixture)
+    applyPrimaryColor('#409EFF')
+
+    applyTheme('dark')
+
+    const style = document.documentElement.style
+    expect(style.getPropertyValue('--el-color-primary')).toBe('#409EFF')
+    expect(style.getPropertyValue('--el-color-primary-light-9')).toBe('#1D2C3F')
+    expect(style.getPropertyValue('--el-color-primary-dark-2')).toBe('#66B1FF')
+
+    applyTheme('light')
+
+    expect(style.getPropertyValue('--el-color-primary-light-9')).toBe('#ECF5FF')
     expect(style.getPropertyValue('--el-color-primary-dark-2')).toBe('#337ECC')
   })
 

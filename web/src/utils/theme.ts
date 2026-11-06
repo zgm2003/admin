@@ -23,6 +23,12 @@ export function isSixDigitHexColor(value: unknown): value is string {
 export function applyTheme(theme: ThemeMode): void {
   document.documentElement.classList.toggle('dark', theme === 'dark')
   document.documentElement.style.colorScheme = theme
+
+  // Element Plus changes its semantic surface variables when the root mode
+  // changes. Re-derive the primary palette so a previously selected accent
+  // remains legible in the new surface instead of retaining light-mode tints.
+  const primary = readCssColor('--el-color-primary')
+  if (primary !== null) applyPrimaryColor(primary)
 }
 
 export function mixHexColor(base: string, target: string, weight: number): string {
@@ -47,6 +53,8 @@ export function applyPrimaryColor(color: string): void {
   }
   const normalized = color.toUpperCase()
   const channels = parseHex(normalized)
+  const dark = document.documentElement.classList.contains('dark')
+  const surface = readCssColor('--el-bg-color') ?? (dark ? '#191F2A' : '#FFFFFF')
   const style = document.documentElement.style
   style.setProperty('--el-color-primary', normalized)
   style.setProperty('--el-color-primary-rgb', channels.join(', '))
@@ -59,10 +67,20 @@ export function applyPrimaryColor(color: string): void {
   ] as const) {
     style.setProperty(
       `--el-color-primary-light-${suffix}`,
-      mixHexColor(normalized, '#FFFFFF', weight),
+      mixHexColor(normalized, surface, weight),
     )
   }
-  style.setProperty('--el-color-primary-dark-2', mixHexColor(normalized, '#000000', 0.2))
+  style.setProperty(
+    '--el-color-primary-dark-2',
+    mixHexColor(normalized, dark ? '#FFFFFF' : '#000000', 0.2),
+  )
+}
+
+function readCssColor(name: string): string | null {
+  const computed = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  if (isSixDigitHexColor(computed)) return computed
+  const inline = document.documentElement.style.getPropertyValue(name).trim()
+  return isSixDigitHexColor(inline) ? inline : null
 }
 
 function parseHex(value: string): [number, number, number] {

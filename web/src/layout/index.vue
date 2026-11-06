@@ -18,6 +18,7 @@ import AppAside from './components/AppAside/index.vue'
 import AppFooter from './components/AppFooter/index.vue'
 import AppHeader from './components/AppHeader/index.vue'
 import RouteTabs from './components/RouteTabs/index.vue'
+import SettingDrawer from './components/SettingDrawer/index.vue'
 
 const mobileBreakpoint = 840
 const route = useRoute()
@@ -39,6 +40,7 @@ const isMobile = ref(window.innerWidth <= mobileBreakpoint)
 const logoutPending = ref(false)
 const refreshKey = ref(0)
 const contentFullscreen = ref(false)
+const settingsOpen = ref(false)
 
 const asideWidth = computed(() => (collapsed.value ? '80px' : '248px'))
 const username = computed(() => (auth.user === null ? '' : auth.user.username))
@@ -195,8 +197,8 @@ onBeforeUnmount(() => {
         :show-brand="true"
         :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
         :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
-        :content-fullscreen="contentFullscreen"
         @toggle-menu="toggleMenu"
+        @open-settings="settingsOpen = true"
       />
     </el-header>
 
@@ -227,8 +229,8 @@ onBeforeUnmount(() => {
             :brand-name="brandName"
             :show-breadcrumb="uiPreferences.preferences.showBreadcrumb"
             :show-menu-toggle="uiPreferences.preferences.showMenuToggle"
-            :content-fullscreen="contentFullscreen"
             @toggle-menu="toggleMenu"
+            @open-settings="settingsOpen = true"
           />
         </el-header>
 
@@ -290,6 +292,8 @@ onBeforeUnmount(() => {
         </el-footer>
       </el-container>
     </div>
+
+    <SettingDrawer v-model="settingsOpen" :content-fullscreen="contentFullscreen" />
 
     <el-drawer
       v-if="!contentFullscreen"

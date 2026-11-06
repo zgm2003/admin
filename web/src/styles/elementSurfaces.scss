@@ -1,0 +1,93 @@
+/* Shared Element Plus surfaces. Business views own their content and layout. */
+.el-button {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.el-button--primary:not(.is-text, .is-link, .is-plain, .is-disabled) {
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--el-color-primary) 16%, transparent);
+}
+
+.el-form-item__label {
+  color: var(--admin-text-soft);
+  font-weight: 500;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner,
+.el-input-number {
+  border-radius: var(--admin-radius-sm);
+}
+
+.el-input__inner,
+.el-textarea__inner {
+  font-variant-numeric: tabular-nums;
+}
+
+.el-select__popper.el-popper.is-light,
+.el-dropdown__popper,
+.el-picker__popper,
+.el-popover.el-popper {
+  border-radius: var(--admin-radius-md);
+  box-shadow: var(--admin-shadow-md);
+}
+
+.el-dropdown-menu {
+  padding: 6px;
+
+  .el-dropdown-menu__item {
+    min-height: 34px;
+    border-radius: var(--admin-radius-sm);
+  }
+}
+
+.el-card,
+.el-alert,
+.el-message,
+.el-notification,
+.el-message-box {
+  border-radius: var(--admin-radius-md);
+}
+
+.el-card {
+  --el-card-border-color: var(--admin-border);
+}
+
+.el-message-box {
+  padding: 20px;
+  border-color: var(--admin-border);
+  box-shadow: var(--admin-shadow-lg);
+
+  &__title {
+    font-family: var(--admin-font-display);
+    font-weight: 650;
+  }
+
+  &__btns {
+    padding-top: 20px;
+    gap: 8px;
+  }
+}
+
+.el-descriptions {
+  --el-descriptions-table-border: 1px solid var(--admin-border);
+  --el-descriptions-item-bordered-label-background: var(--admin-surface-soft);
+}
+
+.el-empty__description p {
+  color: var(--admin-text-muted);
+}
+
+.el-loading-mask {
+  background-color: color-mix(in srgb, var(--admin-surface) 85%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+.el-overlay {
+  background-color: rgb(15 23 42 / 38%);
+}
+
+html.dark .el-overlay {
+  background-color: rgb(0 0 0 / 56%);
+}

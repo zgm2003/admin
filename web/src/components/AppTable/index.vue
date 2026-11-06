@@ -240,6 +240,8 @@ function onSelectionChange(selection: Row[]): void {
   display: flex;
   min-width: 0;
   flex-direction: column;
+  gap: 12px;
+
   &--fixed-footer {
     height: 100%;
     min-height: 0;
@@ -247,9 +249,11 @@ function onSelectionChange(selection: Row[]): void {
   }
   &__toolbar {
     display: flex;
+    min-height: 32px;
+    align-items: center;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 8px;
   }
   &__toolbar-left,
   &__toolbar-right {
@@ -258,6 +262,41 @@ function onSelectionChange(selection: Row[]): void {
     align-items: center;
     gap: 8px;
   }
+
+  &__toolbar-right {
+    margin-left: auto;
+  }
+
+  > :deep(.el-table) {
+    --el-table-border-color: var(--admin-border);
+    --el-table-text-color: var(--admin-text);
+    --el-table-header-text-color: var(--admin-text-soft);
+    --el-table-row-hover-bg-color: var(--el-color-primary-light-9);
+
+    border-radius: var(--admin-radius-sm, 8px);
+
+    .el-table__cell {
+      padding-top: 10px;
+      padding-bottom: 10px;
+    }
+
+    th.el-table__cell {
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .el-table__empty-block {
+      min-height: 160px;
+    }
+
+    .el-button.is-link,
+    .el-button.is-text {
+      min-height: 28px;
+      padding: 4px 0;
+      border-radius: 4px;
+    }
+  }
+
   &__table--fixed {
     flex: 1 1 auto;
     min-height: 0;
@@ -266,11 +305,23 @@ function onSelectionChange(selection: Row[]): void {
     display: flex;
     flex-shrink: 0;
     justify-content: flex-end;
-    margin-top: 8px;
+    padding-top: 14px;
+    border-top: 1px solid var(--admin-border);
+
+    :deep(.el-pagination) {
+      --el-pagination-button-bg-color: var(--admin-surface-soft);
+      --el-pagination-hover-color: var(--el-color-primary);
+    }
   }
+
   &__error {
-    padding: 12px;
+    padding: 20px;
     color: var(--el-color-danger);
+    line-height: 1.5;
+  }
+
+  &__cell-slot {
+    min-width: 0;
   }
 }
 @media (max-width: 768px) {
@@ -283,6 +334,11 @@ function onSelectionChange(selection: Row[]): void {
     &__toolbar-right {
       flex-wrap: wrap;
     }
+
+    &__toolbar-right {
+      margin-left: 0;
+    }
+
     &__pagination {
       justify-content: space-between;
       overflow-x: auto;

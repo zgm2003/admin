@@ -117,8 +117,7 @@ async function loadProfile(): Promise<void> {
   try {
     applyProfile(await getAccountProfile())
   } catch {
-    loadError.value =
-      t('user.profile.loadFailed')
+    loadError.value = t('user.profile.loadFailed')
   } finally {
     loading.value = false
   }
@@ -276,7 +275,9 @@ onBeforeUnmount(stopPasswordCountdown)
 
 <template>
   <section class="account-profile" data-testid="account-profile-page">
-    <div v-if="loadError"><el-button type="primary" plain @click="loadProfile">{{ t('common.refresh') }}</el-button></div>
+    <div v-if="loadError">
+      <el-button type="primary" plain @click="loadProfile">{{ t('common.refresh') }}</el-button>
+    </div>
 
     <ProfileHero
       :name="heroName"
@@ -383,7 +384,7 @@ onBeforeUnmount(stopPasswordCountdown)
     gap: 4px;
     background: var(--admin-surface);
     border: 1px solid var(--admin-border);
-    border-radius: 8px;
+    border-radius: var(--admin-radius-md);
     box-shadow: var(--admin-shadow-sm);
   }
 
@@ -395,13 +396,13 @@ onBeforeUnmount(stopPasswordCountdown)
     font-weight: 650;
     white-space: nowrap;
     border: 0;
-    border-radius: 4px;
+    border-radius: var(--admin-radius-sm);
     background: transparent;
     cursor: pointer;
     transition:
-      color 0.16s ease,
-      background-color 0.16s ease,
-      box-shadow 0.16s ease;
+      color var(--admin-motion-fast) ease,
+      background-color var(--admin-motion-fast) ease,
+      box-shadow var(--admin-motion-fast) ease;
   }
 
   &__tab:hover {
@@ -430,7 +431,7 @@ onBeforeUnmount(stopPasswordCountdown)
     padding: 26px 28px;
     background: var(--admin-surface);
     border: 1px solid var(--admin-border);
-    border-radius: 8px;
+    border-radius: var(--admin-radius-md);
     box-shadow: var(--admin-shadow-sm);
   }
 

@@ -40,18 +40,18 @@ const initial = computed(() => props.name.slice(0, 1).toUpperCase() || 'A')
   min-width: 0;
   padding: 30px 32px;
   gap: 20px;
-  color: var(--el-color-white);
-  background: var(--el-color-primary);
-  border: 1px solid var(--el-color-primary-dark-2);
-  border-radius: 8px;
-  box-shadow: var(--admin-shadow-md);
+  color: var(--admin-text);
+  background: linear-gradient(115deg, var(--el-color-primary-light-9), var(--admin-surface) 75%);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-md);
+  box-shadow: var(--admin-shadow-sm);
 
   &__avatar {
     flex: 0 0 auto;
     color: var(--el-color-primary);
-    background: rgb(255 255 255 / 94%);
-    border: 3px solid rgb(255 255 255 / 55%);
-    box-shadow: 0 10px 24px rgb(15 23 42 / 22%);
+    background: var(--admin-surface);
+    border: 3px solid var(--el-color-primary-light-8);
+    box-shadow: var(--admin-shadow-sm);
     font-size: 26px;
     font-weight: 800;
   }
@@ -73,7 +73,7 @@ const initial = computed(() => props.name.slice(0, 1).toUpperCase() || 'A')
 
   &__copy p,
   &__copy span {
-    color: rgb(255 255 255 / 78%);
+    color: var(--admin-text-soft);
     font-size: 13px;
   }
 

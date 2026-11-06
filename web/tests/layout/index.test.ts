@@ -183,6 +183,22 @@ describe('admin layout', () => {
     expect(wrapper.find('[data-testid="settings-transition-section"]').exists()).toBe(true)
   })
 
+  it('keeps the settings drawer open and mounted when switching layout modes', async () => {
+    const { wrapper } = await mountLayout()
+    await wrapper.get('[data-testid="open-settings"]').trigger('click')
+    const drawer = wrapper.findComponent({ name: 'SettingDrawer' })
+    const instanceId = drawer.vm.$.uid
+
+    for (const layout of ['top', 'side'] as const) {
+      useUIPreferencesStore(pinia).update({ layout })
+      await wrapper.vm.$nextTick()
+
+      const currentDrawer = wrapper.findComponent({ name: 'SettingDrawer' })
+      expect(currentDrawer.props('modelValue')).toBe(true)
+      expect(currentDrawer.vm.$.uid).toBe(instanceId)
+    }
+  })
+
   it('switches the current interface language from the Header', async () => {
     const { wrapper } = await mountLayout()
     await flushPromises()

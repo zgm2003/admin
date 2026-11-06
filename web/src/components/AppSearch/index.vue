@@ -168,7 +168,8 @@ function reset(): void {
           :disabled="field.disabled"
           :clearable="field.clearable ?? true"
           :data-testid="field.testId"
-          :style="{ width: resolveWidth(field.width) }"
+          class="search-form__control"
+          :style="{ '--search-field-width': resolveWidth(field.width) }"
           @update:model-value="setSearchValue(field.key, $event)"
         />
         <el-date-picker
@@ -181,7 +182,8 @@ function reset(): void {
           :end-placeholder="field.endPlaceholder ?? field.placeholder"
           :clearable="field.clearable ?? true"
           :data-testid="field.testId"
-          :style="{ width: resolveWidth(field.width) }"
+          class="search-form__control"
+          :style="{ '--search-field-width': resolveWidth(field.width) }"
           @update:model-value="setSearchValue(field.key, $event, true)"
         />
         <el-select-v2
@@ -193,12 +195,13 @@ function reset(): void {
           :clearable="field.clearable ?? true"
           filterable
           :data-testid="field.testId"
-          :style="{ width: resolveWidth(field.width) }"
+          class="search-form__control"
+          :style="{ '--search-field-width': resolveWidth(field.width) }"
           @update:model-value="setSearchValue(field.key, $event)"
         />
       </el-form-item>
     </template>
-    <el-form-item>
+    <el-form-item class="search-form__actions">
       <el-space wrap size="small">
         <el-button type="primary" :data-testid="queryTestId" @click="emitForm('query')">{{
           resolvedQueryLabel
@@ -224,10 +227,69 @@ function reset(): void {
 .search-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 0 12px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: var(--admin-surface-soft);
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-md, 12px);
 
   :deep(.el-form-item) {
-    margin-bottom: 12px;
+    min-width: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+  }
+
+  :deep(.el-form-item__label) {
+    color: var(--admin-text-soft);
+    font-weight: 500;
+  }
+
+  &__control {
+    width: var(--search-field-width);
+    max-width: 100%;
+  }
+
+  &__actions {
+    margin-left: auto;
+  }
+
+  &__error {
+    flex-basis: 100%;
+    margin-bottom: 4px;
+    color: var(--el-color-danger);
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-form {
+    padding: 12px;
+
+    :deep(.el-form-item) {
+      width: 100%;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    :deep(.el-form-item__label) {
+      justify-content: flex-start;
+      height: auto;
+      padding: 0 0 6px;
+      line-height: 1.5;
+    }
+
+    :deep(.el-form-item__content) {
+      min-width: 0;
+    }
+
+    &__control {
+      width: 100%;
+    }
+
+    &__actions {
+      margin-left: 0;
+    }
   }
 }
 </style>

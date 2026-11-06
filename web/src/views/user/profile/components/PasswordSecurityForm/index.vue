@@ -177,7 +177,7 @@ function updatePasswordCode(value: string): void {
   padding: 26px 28px;
   background: var(--admin-surface);
   border: 1px solid var(--admin-border);
-  border-radius: 8px;
+  border-radius: var(--admin-radius-md);
   box-shadow: var(--admin-shadow-sm);
 
   &--narrow {
