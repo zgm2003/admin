@@ -5,7 +5,10 @@ import { resolve } from 'node:path'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
-export function createViteConfig(mode: string): ViteUserConfig {
+export function createViteConfig(
+  mode: string,
+  command: 'serve' | 'build' = 'serve',
+): ViteUserConfig {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
@@ -50,13 +53,16 @@ export function createViteConfig(mode: string): ViteUserConfig {
       port: 16300,
       strictPort: true,
       open: true,
-      proxy: {
-        '/api': {
-          target: env.VITE_API_BASE_URL,
-          changeOrigin: true,
-          ws: true,
-        },
-      },
+      proxy:
+        command === 'serve'
+          ? {
+              '/api': {
+                target: readProxyTarget(env.API_PROXY_TARGET),
+                changeOrigin: true,
+                ws: true,
+              },
+            }
+          : undefined,
     },
     build: {
       rollupOptions: {
@@ -115,6 +121,26 @@ export function createViteConfig(mode: string): ViteUserConfig {
   }
 }
 
+function readProxyTarget(value: string | undefined): string {
+  let target: URL
+  try {
+    target = new URL(value ?? '')
+  } catch {
+    throw new Error('API_PROXY_TARGET must be a valid HTTP(S) origin')
+  }
+  if (
+    !['http:', 'https:'].includes(target.protocol) ||
+    target.username !== '' ||
+    target.password !== '' ||
+    target.pathname !== '/' ||
+    target.search !== '' ||
+    target.hash !== ''
+  ) {
+    throw new Error('API_PROXY_TARGET must be an HTTP(S) origin without credentials or a path')
+  }
+  return target.origin
+}
+
 const elementPlusChunkGroups: Readonly<Record<string, string>> = {
   aside: 'layout',
   breadcrumb: 'navigation',
@@ -166,4 +192,4 @@ const elementPlusChunkGroups: Readonly<Record<string, string>> = {
   upload: 'form',
 }
 
-export default defineConfig(({ mode }) => createViteConfig(mode))
+export default defineConfig(({ mode, command }) => createViteConfig(mode, command))

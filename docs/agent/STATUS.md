@@ -1,5 +1,14 @@
 # 项目状态
 
+## 前端同源反向代理（2026-11-06，代码与定向验证完成）
+
+- 目标：管理前端统一通过当前站点 `/api/...` 访问 Go API，开发走 Vite 反代，生产由 Nginx 接管；不改变 API、DTO、权限、认证与错误通知协议。
+- 工作区开始时干净；默认请求客户端已从后端绝对地址改为同源根路径，Vite 以仅开发服务读取的 `API_PROXY_TARGET` 转发 HTTP 和 WebSocket，保留完整路径，生产构建不依赖上游地址。本机被忽略的 `.env` 与 `.env.example` 已同步。
+- 已新增默认请求、登录与刷新同源回归、代理参数/非法配置与生产构建配置测试，先观察到 16 项预期失败；新增 `web/nginx.conf.example` 并同步 README 与架构运输约定。
+- 已实测隔离 Vite/HTTP fixture：完整路径、query、认证头、双向 Cookie、上游 503 与 WebSocket Upgrade/ticket 均通过；现有开发服务 `/api/admin/v1/auth/policy` 已返回后端 503/code=10006（认证平台服务暂不可用），说明代理可达，但原后端依赖问题仍未解决。未做真实登录验收。
+- 实际通过：`pnpm vitest run vite.config.test.ts tests/utils/request.test.ts tests/utils/requestLoginRecovery.test.ts tests/realtime/protocol.test.ts --pool=threads --maxWorkers=1`（4 文件 78 项）、在子进程清空 `API_PROXY_TARGET` 后的 `pnpm build`（含类型检查，4488 modules，保留既有富文本大包提示）、受影响代码 ESLint/Prettier、`pnpm check:architecture`（0 findings）和 `git diff --check`。
+- Nginx 模板在隔离临时配置中替换占位值后 `nginx -t` 通过，含完整 API 路径、WebSocket、SPA 路由回退与足以承载现有 2MiB XLSX/base64 导入的 4MiB 请求上限；首次检查仅因临时 prefix 缺少 temp 目录失败，补齐后通过。未运行全量 Vitest、真实登录或生产 Nginx 流量验收，未启动/重载 Nginx、启停既有 API/Worker/Vite 或提交 Git。
+
 ## 前端视觉与交互统一（2026-11-06，代码与定向验证完成）
 
 - 目标：按维护者授权优化整个管理前端，统一同类模块的面板、筛选、表格、弹窗与应用壳，保持系统外观设置为唯一主题入口。

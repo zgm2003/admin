@@ -62,6 +62,12 @@ describe('Unauthorized recovery from the login page', () => {
         httpStatus: 401,
       })
 
+      expect(transport.mock.calls[0]?.[0]).toMatchObject({
+        baseURL: '/',
+        url: '/api/admin/v1/auth/refresh',
+        withCredentials: true,
+      })
+
       expect(assign).not.toHaveBeenCalled()
       expect(useAuthStore(pinia).status).toBe('anonymous')
       expect(useAuthStore(pinia).errorMessage).toBe('')

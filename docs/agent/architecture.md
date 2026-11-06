@@ -312,6 +312,10 @@ DTO。入队和消费边界都必须校验载荷，任务 Handler 不直接写�
 web/src/views/** -> web/src/api/<module>.ts -> web/src/utils/request.ts -> Go API
 ```
 
+浏览器请求固定使用同源 `/api/...`，实时通道使用同站点的 `ws/wss`。开发由 Vite 读取仅服务端可见的
+`API_PROXY_TARGET` 反代完整路径；生产由承载 `web/dist` 的 Nginx 转发 HTTP 与 WebSocket 到 Go API，
+参考 `web/nginx.conf.example`。构建不绑定后端地址，API 与静态文件仍可部署在不同机器。
+
 Router 和 Access Store 根据后端快照动态注册业务页面。API 模块只保留 DTO 类型和泛型 HTTP 调用，不做逐接口 DTO 解析或业务规则重算；页面
 只编排视图状态。Element Plus 树/表格行 key 统一为字符串，不能混用数字 ID。
 

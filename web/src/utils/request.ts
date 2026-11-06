@@ -80,7 +80,7 @@ function buildRequestClient(
   onUnauthorized: () => void,
 ): RequestClientBundle {
   if (baseURL.trim() === '') {
-    throw new ProtocolError('VITE_API_BASE_URL is required')
+    throw new ProtocolError('API base URL is required')
   }
 
   const axiosConfig: AxiosRequestConfig = { baseURL, withCredentials: true }
@@ -262,11 +262,7 @@ function handleUnauthorized(): void {
   window.location.assign(`/login?redirect=${encodeURIComponent(redirect)}`)
 }
 
-const defaultBundle = buildRequestClient(
-  import.meta.env.VITE_API_BASE_URL,
-  undefined,
-  handleUnauthorized,
-)
+const defaultBundle = buildRequestClient('/', undefined, handleUnauthorized)
 const client = defaultBundle.client
 
 export async function refreshAccessCredential(): Promise<AccessCredential> {

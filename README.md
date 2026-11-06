@@ -50,10 +50,12 @@ API 使用以上变量；`TRUSTED_PROXIES` 必须明确填写 `none` 或逗号�
 前端读取 `web/.env`：
 
 ```dotenv
-VITE_API_BASE_URL=http://localhost:16301
+API_PROXY_TARGET=http://localhost:16301
 ```
 
-开发环境中 Vite 将 `/api` 和 WebSocket 请求代理到 `VITE_API_BASE_URL`；生产构建仍由浏览器直接访问 Go API。
+浏览器始终使用当前站点的 `/api/...`，HTTP 与 WebSocket 都走同源入口。开发时由 Vite 将完整路径转发到
+`API_PROXY_TARGET`；该变量仅供开发代理读取，不打包到浏览器，必须是无路径、凭据、query 或 fragment 的
+HTTP(S) origin。生产构建不依赖该变量，由 Nginx 反向代理到 Go API。
 
 模板分别位于 `server/.env.example` 和 `web/.env.example`。本机凭据只修改被忽略的 `.env`，不要把真实密码写入模板。
 
@@ -79,6 +81,17 @@ pnpm dev
 `pnpm dev` 使用固定端口启动 Vite，并自动打开浏览器。
 
 本地页面为 `http://localhost:16300`，API 为 `http://localhost:16301`。Vite 使用固定端口并开启 `strictPort`，端口被占用时会明确退出，不会自动切换。
+
+### Nginx 部署
+
+在 `web/` 运行 `pnpm build` 后，部署 `web/dist/`，将 [`web/nginx.conf.example`](web/nginx.conf.example)
+放入 Nginx 的 `http {}` 配置（例如 `conf.d/admin.conf`）。替换 `HOST` 为对外域名、`TARGET` 为 dist 的绝对
+目录；API 在其他机器时修改 `proxy_pass`。执行 `nginx -t` 检查后再加载配置。
+
+模板保留完整 `/api/...` 路径、WebSocket Upgrade 和前端路由刷新回退，API 错误不会回退成 HTML。
+配置 HTTPS 时在同一站点加入证书与 TLS 监听，并将后端 `AUTH_COOKIE_SECURE` 设为 `1`；
+`CORS_ORIGIN` 使用浏览器实际访问的完整 origin（协议、域名和非默认端口），`TRUSTED_PROXIES` 按实际代理
+IP/CIDR 配置。代理透传浏览器 Origin，不改写认证来源校验。
 
 Canvas 对外前端直接复用 `D:\github-project\infinite-canvas\web`，接入本项目的 Canvas 平台认证：
 

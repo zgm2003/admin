@@ -1,4 +1,4 @@
-import {
+import axios, {
   AxiosError,
   AxiosHeaders,
   CanceledError,
@@ -32,6 +32,39 @@ describe('generic request methods', () => {
     received = undefined
     useAuthStore(pinia).$reset()
   })
+
+  it('uses the page origin for API requests without duplicating the API prefix', async () => {
+    await request.get('/api/admin/v1/system/setting', { adapter, params: { page: 2 } })
+    expect(received?.baseURL).toBe('/')
+    expect(received?.withCredentials).toBe(true)
+    const uri = axios.getUri(received)
+    expect(uri).toBe('/api/admin/v1/system/setting?page=2')
+    expect(new URL(uri, 'https://admin.test/user/profile').toString()).toBe(
+      'https://admin.test/api/admin/v1/system/setting?page=2',
+    )
+  })
+
+  it.each(['/api/admin/v1/auth/login', '/api/admin/v1/auth/refresh'])(
+    'keeps %s same-origin and does not attach a stale bearer token',
+    async (url) => {
+      const credential = {
+        accessToken: 'memory-token',
+        expiresIn: 900,
+        isNewUser: false,
+        passwordSetRequired: false,
+      }
+      useAuthStore(pinia).setCredential(credential)
+      await request.post(url, undefined, {
+        adapter: async (config) => {
+          received = config
+          return successResponse(config, { code: 0, data: credential, message: 'ok' })
+        },
+      })
+      expect(axios.getUri(received)).toBe(url)
+      expect(received?.withCredentials).toBe(true)
+      expect(AxiosHeaders.from(received?.headers).has('Authorization')).toBe(false)
+    },
+  )
 
   it.each(['get', 'post', 'put', 'patch', 'delete'] as const)(
     '%s returns typed envelope data without filtering backend fields',
@@ -204,7 +237,9 @@ describe('createRequestClient', () => {
         message: '用户名已存在',
       })
 
-    await expect(client.post('/api/admin/v1/protected', undefined, { adapter })).rejects.toMatchObject({
+    await expect(
+      client.post('/api/admin/v1/protected', undefined, { adapter }),
+    ).rejects.toMatchObject({
       code: 10005,
     })
     expect(ElNotification.error).toHaveBeenCalledOnce()
@@ -264,7 +299,9 @@ describe('createRequestClient', () => {
       })
     const client = createRequestClient('http://localhost:16301')
 
-    await expect(client.post('/api/admin/v1/auth/login', undefined, { adapter })).rejects.toMatchObject({
+    await expect(
+      client.post('/api/admin/v1/auth/login', undefined, { adapter }),
+    ).rejects.toMatchObject({
       code: 10002,
     })
     expect(ElNotification.error).not.toHaveBeenCalled()
@@ -541,7 +578,11 @@ describe('createRequestClient', () => {
       throw apiFailure(config, 401, 10002, '未登录或登录已失效')
     }
     const client = createRequestClient('http://localhost:16301', adapter)
-    for (const url of ['/api/admin/v1/auth/login', '/api/admin/v1/auth/refresh', '/api/admin/v1/auth/logout']) {
+    for (const url of [
+      '/api/admin/v1/auth/login',
+      '/api/admin/v1/auth/refresh',
+      '/api/admin/v1/auth/logout',
+    ]) {
       await expect(client.post(url)).rejects.toMatchObject({ code: 10002 })
     }
     expect(refreshCalls).toBe(1)
