@@ -4,7 +4,9 @@ import "github.com/gin-gonic/gin"
 
 func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, origin gin.HandlerFunc, authenticate gin.HandlerFunc) {
 	authRoutes := routes.Group("/auth")
-	authRoutes.GET("/login-config", origin, handler.LoginConfig)
+	// login-config is read-only public metadata. A same-origin browser GET does
+	// not send Origin, so requiring it here blocks login behind the /api proxy.
+	authRoutes.GET("/login-config", handler.LoginConfig)
 	authRoutes.POST("/send-code", origin, handler.SendCode)
 	authRoutes.POST("/login", origin, handler.Login)
 	authRoutes.POST("/password/forgot", origin, handler.ForgotPassword)
@@ -17,7 +19,7 @@ func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, origin gin.H
 // RegisterCanvasRoutes declares the Canvas API surface independently.
 func RegisterCanvasRoutes(routes *gin.RouterGroup, handler *Handler, origin gin.HandlerFunc, authenticate gin.HandlerFunc) {
 	authRoutes := routes.Group("/auth")
-	authRoutes.GET("/login-config", origin, handler.LoginConfig)
+	authRoutes.GET("/login-config", handler.LoginConfig)
 	authRoutes.POST("/send-code", origin, handler.SendCode)
 	authRoutes.POST("/login", origin, handler.Login)
 	authRoutes.POST("/password/forgot", origin, handler.ForgotPassword)

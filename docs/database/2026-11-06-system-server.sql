@@ -45,7 +45,7 @@ BEGIN
 
     IF page_id IS NULL THEN
         INSERT INTO permission_menu (platform_id,parent_id,menu_type,name,code,i18n_key,path,component_path,icon,sort_order,status,is_hidden)
-        VALUES (platform.id,directory_id,'page','服务器概览','system:server:view','navigation.systemServer','/system/server','system/server','Monitor',60,1,0)
+        VALUES (platform.id,directory_id,'page','服务器概览','system:server:view','navigation.systemServer','/system/server','system/server','lucide:server',60,1,0)
         RETURNING id INTO page_id;
         changed := true;
     END IF;
