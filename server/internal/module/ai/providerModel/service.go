@@ -281,9 +281,6 @@ func (s *Service) validateConfiguration(ctx context.Context, vendor int16, input
 		}
 		official = &value
 	}
-	if input.PricingMode == pricing.ModeOfficialToken && official == nil {
-		return nil, invalid(fmt.Errorf("token pricing requires an official model"))
-	}
 	if input.Status == yesno.Yes && input.PricingMode == pricing.ModeOfficialToken && official == nil {
 		return nil, invalid(fmt.Errorf("enabled token model requires an official model"))
 	}

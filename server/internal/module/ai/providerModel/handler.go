@@ -56,7 +56,7 @@ func (h *Handler) List(c *gin.Context) {
 }
 
 func (h *Handler) Get(c *gin.Context) {
-	providerID, err := providerID(c)
+	pid, err := providerID(c)
 	if err != nil {
 		response.Fail(c, err)
 		return
@@ -66,7 +66,7 @@ func (h *Handler) Get(c *gin.Context) {
 		response.Fail(c, err)
 		return
 	}
-	result, err := h.service.Get(c.Request.Context(), providerID, modelID)
+	result, err := h.service.Get(c.Request.Context(), pid, modelID)
 	if err != nil {
 		response.Fail(c, err)
 		return

@@ -189,12 +189,12 @@ async function submit(): Promise<void> {
     localError.value = t('ai.providerModel.displayNameRequired')
     return
   }
-  if (isTokenMode.value && form.value.officialModelId === null) {
+  if (form.value.status === 1 && isTokenMode.value && form.value.officialModelId === null) {
     localError.value = t('ai.providerModel.officialRequired')
     return
   }
   if (!isTokenMode.value) {
-    if (prices.value.length === 0) {
+    if (form.value.status === 1 && prices.value.length === 0) {
       localError.value = t('ai.providerModel.priceRequired')
       return
     }

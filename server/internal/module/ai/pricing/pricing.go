@@ -68,6 +68,10 @@ func CalculateToken(usage TokenUsage, prices TokenPrices, ratePPM int64) (int64,
 	if prices.Input < 0 || prices.Output < 0 || ratePPM < 0 || ratePPM > 100000000 {
 		return 0, ErrInvalidUsage
 	}
+	if (prices.CacheRead != nil && *prices.CacheRead < 0) ||
+		(prices.CacheWrite != nil && *prices.CacheWrite < 0) {
+		return 0, ErrInvalidUsage
+	}
 	if usage.CacheRead > 0 && prices.CacheRead == nil {
 		return 0, fmt.Errorf("%w: cache read", ErrMissingPrice)
 	}
@@ -100,8 +104,7 @@ func CalculateToken(usage TokenUsage, prices TokenPrices, ratePPM int64) (int64,
 	if base < 0 {
 		return 0, ErrOverflow
 	}
-	actual := roundDivide(base, 1)
-	actual = applyPPM(actual, ratePPM)
+	actual := applyPPM(base, ratePPM)
 	if actual < 0 {
 		return 0, ErrOverflow
 	}

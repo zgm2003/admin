@@ -66,8 +66,8 @@ func safeValue(ctx context.Context, row Model, prices []Price, official *Officia
 		!row.Source.Valid() || !yesno.IsValid(row.Status) || row.Version < 1 {
 		return SafeValue{}, dependency(fmt.Errorf("provider model row is invalid"))
 	}
-	if row.PricingMode == pricing.ModeOfficialToken && row.OfficialModelID == nil {
-		return SafeValue{}, dependency(fmt.Errorf("token provider model has no official model"))
+	if row.Status == yesno.Yes && row.PricingMode == pricing.ModeOfficialToken && row.OfficialModelID == nil {
+		return SafeValue{}, dependency(fmt.Errorf("enabled token provider model has no official model"))
 	}
 	status := option.New(ctx, row.Status, "停用", "Disabled")
 	if row.Status == yesno.Yes {

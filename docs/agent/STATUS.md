@@ -1747,3 +1747,15 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - `/api/admin/v1/ai/provider/options` 的 `protocols` 现在返回 4 项；前端下拉无需硬编码，由后端选项驱动。
 - 已通过供应商包测试、`cmd/api` 构建；`docs/database/current.sql` 已刷新。
 - 当前 16301 仍是旧 API 进程，需重启后页面才能看到 OpenAI Responses；该选项只解决协议配置，真正调用适配在后续模型绑定/调用层实现。
+
+### AI 计费基础：供应商倍率、缓存价与模型定价（2026-11-09）
+
+- 供应商新增 `token_rate_multiplier_ppm`，仅作用于 `pricing_mode=1` 的官方 token 计费模型；1,000,000 = 1.0x，官方通道默认 1.0，反代可配置 0.2。
+- 官方模型新增 `model_kind` 与缓存读写价格（CNY/USD micros）；缓存价使用 NULL 表示未配置，未知缓存 token 计费必须失败，不能按输入价重复收费。
+- 新增 `ai_provider_model` 与统一媒体价格表 `ai_provider_model_price`：模型支持 chat/image/video/audio、官方 token 倍率或供应商单位价格，价格档位按 `tier_key` 区分质量、分辨率等。
+- 新增模型同步：OpenAI、Anthropic、Gemini 的模型列表拉取；同步结果自动匹配官方模型，未匹配模型默认停用，不做静默启用。删除供应商会级联软删除其模型与价格。
+- 新增计费纯函数 `internal/module/ai/pricing`：token 四桶（未缓存输入、缓存读、缓存写、输出）乘以供应商倍率；图片/视频/音频/按次按供应商单位价格计算，不乘 token 倍率。
+- 前端供应商页面增加 Token 倍率字段和“模型”入口；模型弹窗支持拉取、搜索、配置官方映射、图片质量/视频分辨率等档位价格；官方模型价格弹窗增加缓存读写价。
+- API：`GET /api/admin/v1/ai/provider/:id/models`、`GET /options`、`POST /sync`、`PUT /:modelId`；权限动作 `ai:provider:model:list/sync/update`，admin `menu_version=29`，菜单缓存已清理。
+- 已执行 `2026-11-09-ai-billing-foundation.sql` 与 `2026-11-09-ai-provider-model-menu.sql`；`docs/database/current.sql` 已按 public schema 重新导出。
+- 验证：供应商、供应商模型、官方模型、pricing、cmd/api 测试通过；前端 `pnpm typecheck`、定向 ESLint、`pnpm build` 通过；真实页面验证供应商 Token 倍率展示、模型弹窗和图片质量价格保存，临时数据已清理。
