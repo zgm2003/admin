@@ -1730,3 +1730,12 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 已执行 expand 迁移 `2026-11-09-ai-official-model-vendor.sql`，现有 37 行回填为 OpenAI；旧 `vendor_code/vendor_name` 在滚动部署期间保留为可空列。后端停止后已执行收缩迁移 `2026-11-09-ai-official-model-vendor-cleanup.sql`，旧列已删除，最终只保留 `vendor smallint`。
 - 服务级校验：同步插入 14 行、更新 37 行，厂商分布 37/7/7，51 个模型人民币价均等于官方数字。
 - 后端官方模型包、`cmd/api` 测试通过；前端 `pnpm typecheck`、`pnpm build`、定向 ESLint 通过。当前 16301 仍是旧 API 进程，需要重启后前端数字 vendor 契约才生效。
+
+### AI 供应商配置（2026-11-09）
+
+- 新增 `ai_provider` 表：同一厂商可配置多条通道；字段为 `vendor/protocol SMALLINT + CHECK`，不设 `code`，使用自增 `id` 作为稳定标识。
+- API：`GET/POST /api/admin/v1/ai/provider`、`GET /options`、`GET/PUT/DELETE /:id`、`PATCH /:id/status`；权限动作：查看、详情、新增、编辑、启停、删除。
+- API Key 使用独立 `ai-provider:v1:` AES-GCM 封装，只写不读；编辑留空保留原密钥，响应只返回 `apiKeyConfigured`。
+- 表迁移 `2026-11-09-ai-provider.sql` 和菜单迁移 `2026-11-09-ai-provider-menu.sql` 已执行；admin `menu_version=28`，旧菜单状态缓存已清理。
+- 后端请求/服务/真实 PostgreSQL 生命周期验证通过；临时端口 API 验证创建、列表、编辑、启停、删除通过；前端 `pnpm typecheck`、`pnpm build`、定向 ESLint 通过。
+- 当前 16301 仍是 14:29 启动的旧 API，供应商路由返回 404；需要重启加载新代码。`docs/database/current.sql` 已刷新。

@@ -15,6 +15,7 @@ import (
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/ai/officialModel"
+	aiprovider "admin/server/internal/module/ai/provider"
 	authcaptcha "admin/server/internal/module/auth/captcha"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
@@ -81,6 +82,7 @@ import (
 
 type routerDependencies struct {
 	AIOfficialModel    *officialmodel.Handler
+	AIProvider         *aiprovider.Handler
 	PaymentConfig      *paymentconfig.Handler
 	PaymentPackage     *rechargepackage.Handler
 	PaymentOrder       *paymentorder.Handler
@@ -238,6 +240,8 @@ func run(logger *slog.Logger) error {
 	paymentConfigService.SetCache(paymentconfig.NewCache(redisClient, configGenerationStore))
 	officialModelRepository := officialmodel.NewRepository(postgres.GORM)
 	officialModelService := officialmodel.NewService(officialModelRepository)
+	providerRepository := aiprovider.NewRepository(postgres.GORM)
+	providerService := aiprovider.NewService(providerRepository, keys)
 	paymentPackageRepository := rechargepackage.NewRepository(postgres.GORM)
 	paymentPackageService := rechargepackage.NewService(paymentPackageRepository)
 	paymentWalletRepository := paymentwallet.NewRepository(postgres.GORM)
@@ -516,6 +520,7 @@ func run(logger *slog.Logger) error {
 		}),
 		COSConfig:          cosconfig.NewHandler(cosConfigService),
 		AIOfficialModel:    officialmodel.NewHandler(officialModelService),
+		AIProvider:         aiprovider.NewHandler(providerService),
 		PaymentConfig:      paymentconfig.NewHandler(paymentConfigService),
 		PaymentPackage:     rechargepackage.NewHandler(paymentPackageService),
 		PaymentOrder:       paymentorder.NewHandler(paymentOrderService),
@@ -672,6 +677,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	if dependencies.AIOfficialModel != nil {
 		officialmodel.RegisterAdminRoutes(adminRoutes, dependencies.AIOfficialModel, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIProvider != nil {
+		aiprovider.RegisterAdminRoutes(adminRoutes, dependencies.AIProvider, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.PaymentConfig != nil {
 		paymentconfig.RegisterAdminRoutes(adminRoutes, dependencies.PaymentConfig, dependencies.Authenticate, dependencies.RequirePermission)
