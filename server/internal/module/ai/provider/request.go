@@ -2,7 +2,9 @@ package provider
 
 import (
 	"fmt"
+	"math"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -29,25 +31,27 @@ type ListQuery struct {
 }
 
 type CreateInput struct {
-	Name      string
-	Vendor    Vendor
-	Protocol  Protocol
-	BaseURL   string
-	APIKey    string
-	TimeoutMS int32
-	SortOrder int32
-	Status    yesno.Value
+	Name         string
+	Vendor       Vendor
+	Protocol     Protocol
+	BaseURL      string
+	APIKey       string
+	TimeoutMS    int32
+	SortOrder    int32
+	Status       yesno.Value
+	TokenRatePPM int64
 }
 
 type UpdateInput struct {
-	Name      string
-	Vendor    Vendor
-	Protocol  Protocol
-	BaseURL   string
-	APIKey    *string
-	TimeoutMS int32
-	SortOrder int32
-	Status    yesno.Value
+	Name         string
+	Vendor       Vendor
+	Protocol     Protocol
+	BaseURL      string
+	APIKey       *string
+	TimeoutMS    int32
+	SortOrder    int32
+	Status       yesno.Value
+	TokenRatePPM *int64
 }
 
 type StatusInput struct {
@@ -55,14 +59,15 @@ type StatusInput struct {
 }
 
 type createRequest struct {
-	Name      *string      `json:"name"`
-	Vendor    *Vendor      `json:"vendor"`
-	Protocol  *Protocol    `json:"protocol"`
-	BaseURL   *string      `json:"baseUrl"`
-	APIKey    *string      `json:"apiKey"`
-	TimeoutMS *int32       `json:"timeoutMs"`
-	SortOrder *int32       `json:"sortOrder"`
-	Status    *yesno.Value `json:"status"`
+	Name                *string      `json:"name"`
+	Vendor              *Vendor      `json:"vendor"`
+	Protocol            *Protocol    `json:"protocol"`
+	BaseURL             *string      `json:"baseUrl"`
+	APIKey              *string      `json:"apiKey"`
+	TimeoutMS           *int32       `json:"timeoutMs"`
+	SortOrder           *int32       `json:"sortOrder"`
+	Status              *yesno.Value `json:"status"`
+	TokenRateMultiplier *string      `json:"tokenRateMultiplier"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
@@ -103,21 +108,30 @@ func (r createRequest) input() (CreateInput, error) {
 		}
 		status = *r.Status
 	}
+	tokenRatePPM := int64(1000000)
+	if r.TokenRateMultiplier != nil {
+		tokenRatePPM, err = parseRateMultiplier(*r.TokenRateMultiplier)
+		if err != nil {
+			return CreateInput{}, fmt.Errorf("tokenRateMultiplier: %w", err)
+		}
+	}
 	return CreateInput{
 		Name: name, Vendor: *r.Vendor, Protocol: *r.Protocol,
 		BaseURL: baseURL, APIKey: apiKey, TimeoutMS: timeout, SortOrder: sortOrder, Status: status,
+		TokenRatePPM: tokenRatePPM,
 	}, nil
 }
 
 type updateRequest struct {
-	Name      *string      `json:"name"`
-	Vendor    *Vendor      `json:"vendor"`
-	Protocol  *Protocol    `json:"protocol"`
-	BaseURL   *string      `json:"baseUrl"`
-	APIKey    *string      `json:"apiKey"`
-	TimeoutMS *int32       `json:"timeoutMs"`
-	SortOrder *int32       `json:"sortOrder"`
-	Status    *yesno.Value `json:"status"`
+	Name                *string      `json:"name"`
+	Vendor              *Vendor      `json:"vendor"`
+	Protocol            *Protocol    `json:"protocol"`
+	BaseURL             *string      `json:"baseUrl"`
+	APIKey              *string      `json:"apiKey"`
+	TimeoutMS           *int32       `json:"timeoutMs"`
+	SortOrder           *int32       `json:"sortOrder"`
+	Status              *yesno.Value `json:"status"`
+	TokenRateMultiplier *string      `json:"tokenRateMultiplier"`
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
@@ -158,9 +172,18 @@ func (r updateRequest) input() (UpdateInput, error) {
 	if *r.SortOrder < 0 || *r.SortOrder > maxSortOrder {
 		return UpdateInput{}, fmt.Errorf("sortOrder must be between 0 and %d", maxSortOrder)
 	}
+	var tokenRatePPM *int64
+	if r.TokenRateMultiplier != nil {
+		value, err := parseRateMultiplier(*r.TokenRateMultiplier)
+		if err != nil {
+			return UpdateInput{}, fmt.Errorf("tokenRateMultiplier: %w", err)
+		}
+		tokenRatePPM = &value
+	}
 	return UpdateInput{
 		Name: name, Vendor: *r.Vendor, Protocol: *r.Protocol, BaseURL: baseURL,
 		APIKey: apiKey, TimeoutMS: *r.TimeoutMS, SortOrder: *r.SortOrder, Status: *r.Status,
+		TokenRatePPM: tokenRatePPM,
 	}, nil
 }
 
@@ -226,6 +249,28 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 		query.Status = &status
 	}
 	return query, nil
+}
+
+var rateMultiplierPattern = regexp.MustCompile(`^(?:100(?:\.0{1,6})?|\d{1,2}(?:\.\d{1,6})?)$`)
+
+func parseRateMultiplier(value string) (int64, error) {
+	value = strings.TrimSpace(value)
+	if !rateMultiplierPattern.MatchString(value) {
+		return 0, fmt.Errorf("must be between 0 and 100 with at most 6 decimal places")
+	}
+	number, err := strconv.ParseFloat(value, 64)
+	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) || number < 0 || number > 100 {
+		return 0, fmt.Errorf("must be between 0 and 100")
+	}
+	ppm := int64(math.Round(number * 1000000))
+	if ppm < 0 || ppm > 100000000 {
+		return 0, fmt.Errorf("must be between 0 and 100")
+	}
+	return ppm, nil
+}
+
+func formatRateMultiplier(ppm int64) string {
+	return strconv.FormatFloat(float64(ppm)/1000000, 'f', -1, 64)
 }
 
 func validateName(value string) (string, error) {

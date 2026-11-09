@@ -6,5 +6,6 @@ export interface ProviderForm {
   apiKey: string
   timeoutMs: number
   sortOrder: number
+  tokenRateMultiplier: string
   status: number
 }

@@ -22,6 +22,7 @@ type UpdateValues struct {
 	TimeoutMS        int32
 	SortOrder        int32
 	Status           yesno.Value
+	TokenRatePPM     *int64
 	UpdatedAt        time.Time
 }
 
@@ -61,6 +62,9 @@ func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues) 
 		"name": values.Name, "vendor": values.Vendor, "protocol": values.Protocol,
 		"base_url": values.BaseURL, "timeout_ms": values.TimeoutMS,
 		"sort_order": values.SortOrder, "status": values.Status, "updated_at": values.UpdatedAt,
+	}
+	if values.TokenRatePPM != nil {
+		updates["token_rate_multiplier_ppm"] = *values.TokenRatePPM
 	}
 	if values.APIKeyCiphertext != nil && values.EncryptionKeyID != nil {
 		updates["api_key_ciphertext"] = *values.APIKeyCiphertext

@@ -16,21 +16,22 @@ type Actions struct {
 }
 
 type SafeValue struct {
-	ID               int64       `json:"id"`
-	Name             string      `json:"name"`
-	Vendor           Vendor      `json:"vendor"`
-	VendorName       string      `json:"vendorName"`
-	Protocol         Protocol    `json:"protocol"`
-	ProtocolName     string      `json:"protocolName"`
-	BaseURL          string      `json:"baseUrl"`
-	TimeoutMS        int32       `json:"timeoutMs"`
-	SortOrder        int32       `json:"sortOrder"`
-	Status           yesno.Value `json:"status"`
-	StatusName       string      `json:"statusName"`
-	APIKeyConfigured bool        `json:"apiKeyConfigured"`
-	Actions          Actions     `json:"actions"`
-	CreatedAt        time.Time   `json:"createdAt"`
-	UpdatedAt        time.Time   `json:"updatedAt"`
+	ID                  int64       `json:"id"`
+	Name                string      `json:"name"`
+	Vendor              Vendor      `json:"vendor"`
+	VendorName          string      `json:"vendorName"`
+	Protocol            Protocol    `json:"protocol"`
+	ProtocolName        string      `json:"protocolName"`
+	BaseURL             string      `json:"baseUrl"`
+	TimeoutMS           int32       `json:"timeoutMs"`
+	SortOrder           int32       `json:"sortOrder"`
+	TokenRateMultiplier string      `json:"tokenRateMultiplier"`
+	Status              yesno.Value `json:"status"`
+	StatusName          string      `json:"statusName"`
+	APIKeyConfigured    bool        `json:"apiKeyConfigured"`
+	Actions             Actions     `json:"actions"`
+	CreatedAt           time.Time   `json:"createdAt"`
+	UpdatedAt           time.Time   `json:"updatedAt"`
 }
 
 func safeValue(ctx context.Context, row Model) (SafeValue, error) {
@@ -49,6 +50,9 @@ func safeValue(ctx context.Context, row Model) (SafeValue, error) {
 	if row.TimeoutMS < 1000 || row.TimeoutMS > maxTimeoutMS || row.SortOrder < 0 || row.SortOrder > maxSortOrder {
 		return SafeValue{}, dependency(fmt.Errorf("provider row has invalid timeout or sort order"))
 	}
+	if row.TokenRatePPM < 0 || row.TokenRatePPM > 100000000 {
+		return SafeValue{}, dependency(fmt.Errorf("provider row has invalid token rate multiplier"))
+	}
 	status := option.New(ctx, row.Status, "停用", "Disabled")
 	if row.Status == yesno.Yes {
 		status = option.New(ctx, row.Status, "启用", "Enabled")
@@ -59,7 +63,8 @@ func safeValue(ctx context.Context, row Model) (SafeValue, error) {
 		Protocol:     row.Protocol,
 		ProtocolName: option.New(ctx, row.Protocol, protocolLabelZH(row.Protocol), protocolLabelEN(row.Protocol)).Label,
 		BaseURL:      row.BaseURL, TimeoutMS: row.TimeoutMS, SortOrder: row.SortOrder,
-		Status: row.Status, StatusName: status.Label,
+		TokenRateMultiplier: formatRateMultiplier(row.TokenRatePPM),
+		Status:              row.Status, StatusName: status.Label,
 		APIKeyConfigured: true,
 		Actions:          Actions{Update: true, Status: true, Delete: true},
 		CreatedAt:        row.CreatedAt, UpdatedAt: row.UpdatedAt,

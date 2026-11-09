@@ -79,8 +79,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		return 0, invalid(fmt.Errorf("apiKey: %w", err))
 	}
 	if input.TimeoutMS < 1000 || input.TimeoutMS > maxTimeoutMS ||
-		input.SortOrder < 0 || input.SortOrder > maxSortOrder {
-		return 0, invalid(fmt.Errorf("timeoutMs or sortOrder is invalid"))
+		input.SortOrder < 0 || input.SortOrder > maxSortOrder ||
+		input.TokenRatePPM < 0 || input.TokenRatePPM > 100000000 {
+		return 0, invalid(fmt.Errorf("timeoutMs, sortOrder or tokenRateMultiplier is invalid"))
 	}
 	ciphertext, encryptionKeyID, err := secretkey.EncryptProviderValue(s.keys.ProviderEncryptionKey(), apiKey)
 	if err != nil {
@@ -91,7 +92,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		Name: name, Vendor: input.Vendor, Protocol: input.Protocol,
 		BaseURL: baseURL, APIKeyCiphertext: ciphertext, EncryptionKeyID: encryptionKeyID,
 		TimeoutMS: input.TimeoutMS, SortOrder: input.SortOrder, Status: input.Status,
-		CreatedAt: now, UpdatedAt: now,
+		TokenRatePPM: input.TokenRatePPM, CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
 		return 0, mapError(err)
@@ -118,6 +119,9 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		input.SortOrder < 0 || input.SortOrder > maxSortOrder {
 		return invalid(fmt.Errorf("timeoutMs or sortOrder is invalid"))
 	}
+	if input.TokenRatePPM != nil && (*input.TokenRatePPM < 0 || *input.TokenRatePPM > 100000000) {
+		return invalid(fmt.Errorf("tokenRateMultiplier is invalid"))
+	}
 	var ciphertext, encryptionKeyID *string
 	if input.APIKey != nil {
 		apiKey, err := validateAPIKey(*input.APIKey, true)
@@ -134,7 +138,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		Name: name, Vendor: input.Vendor, Protocol: input.Protocol, BaseURL: baseURL,
 		APIKeyCiphertext: ciphertext, EncryptionKeyID: encryptionKeyID,
 		TimeoutMS: input.TimeoutMS, SortOrder: input.SortOrder, Status: input.Status,
-		UpdatedAt: s.now().UTC(),
+		TokenRatePPM: input.TokenRatePPM, UpdatedAt: s.now().UTC(),
 	}); err != nil {
 		return mapError(err)
 	}

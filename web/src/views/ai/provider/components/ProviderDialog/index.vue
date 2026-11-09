@@ -35,6 +35,14 @@ const rules = computed<FormRules<ProviderForm>>(() => ({
     props.model === null
       ? [{ required: true, message: t('ai.provider.apiKeyRequired'), trigger: 'blur' }]
       : [],
+  tokenRateMultiplier: [
+    { required: true, message: t('ai.provider.tokenRateRequired'), trigger: 'blur' },
+    {
+      pattern: /^(?:100(?:\.0{1,6})?|\d{1,2}(?:\.\d{1,6})?)$/,
+      message: t('ai.provider.tokenRateRule'),
+      trigger: 'blur',
+    },
+  ],
 }))
 
 function emptyForm(): ProviderForm {
@@ -46,6 +54,7 @@ function emptyForm(): ProviderForm {
     apiKey: '',
     timeoutMs: 60000,
     sortOrder: 0,
+    tokenRateMultiplier: '1.0',
     status: 0,
   }
 }
@@ -65,6 +74,7 @@ watch(
         apiKey: '',
         timeoutMs: props.model.timeoutMs,
         sortOrder: props.model.sortOrder,
+        tokenRateMultiplier: props.model.tokenRateMultiplier,
         status: props.model.status,
       }
     }
@@ -85,6 +95,7 @@ async function submit(): Promise<void> {
     name: form.value.name.trim(),
     baseUrl: form.value.baseUrl.trim(),
     apiKey: form.value.apiKey.trim(),
+    tokenRateMultiplier: form.value.tokenRateMultiplier.trim(),
   })
 }
 </script>
@@ -147,6 +158,20 @@ async function submit(): Promise<void> {
           </el-select>
         </el-form-item>
       </div>
+
+      <el-form-item prop="tokenRateMultiplier" :label="t('ai.provider.tokenRateMultiplier')">
+        <el-input
+          v-model="form.tokenRateMultiplier"
+          maxlength="12"
+          :placeholder="t('ai.provider.tokenRatePlaceholder')"
+          data-testid="ai-provider-token-rate"
+        >
+          <template #append>x</template>
+        </el-input>
+        <p class="ai-provider-dialog__hint">
+          {{ t('ai.provider.tokenRateHint') }}
+        </p>
+      </el-form-item>
 
       <el-form-item prop="baseUrl" :label="t('ai.provider.baseUrl')">
         <el-input

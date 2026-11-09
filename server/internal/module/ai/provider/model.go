@@ -17,6 +17,7 @@ type Model struct {
 	EncryptionKeyID  string         `gorm:"column:encryption_key_id;type:varchar(64);not null"`
 	TimeoutMS        int32          `gorm:"column:timeout_ms;not null"`
 	SortOrder        int32          `gorm:"column:sort_order;not null"`
+	TokenRatePPM     int64          `gorm:"column:token_rate_multiplier_ppm;not null"`
 	Status           yesno.Value    `gorm:"column:status;type:smallint;not null"`
 	CreatedAt        time.Time      `gorm:"column:created_at;type:timestamptz;not null"`
 	UpdatedAt        time.Time      `gorm:"column:updated_at;type:timestamptz;not null"`

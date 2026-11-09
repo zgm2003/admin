@@ -27,6 +27,33 @@ func TestCreateRequestInputUsesHTTPSAndDefaults(t *testing.T) {
 	}
 }
 
+func TestCreateRequestParsesTokenMultiplier(t *testing.T) {
+	name := "proxy"
+	baseURL := "https://api.example.com/v1"
+	key := "sk-test"
+	vendor, protocol := VendorOpenAI, ProtocolOpenAI
+	rate := "0.2"
+	input, err := (createRequest{
+		Name: &name, Vendor: &vendor, Protocol: &protocol,
+		BaseURL: &baseURL, APIKey: &key, TokenRateMultiplier: &rate,
+	}).input()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.TokenRatePPM != 200000 {
+		t.Fatalf("TokenRatePPM = %d, want 200000", input.TokenRatePPM)
+	}
+	for _, invalid := range []string{"-1", "100.1", "abc", "1.0000001"} {
+		bad := invalid
+		if _, err := (createRequest{
+			Name: &name, Vendor: &vendor, Protocol: &protocol,
+			BaseURL: &baseURL, APIKey: &key, TokenRateMultiplier: &bad,
+		}).input(); err == nil {
+			t.Fatalf("multiplier %q accepted", invalid)
+		}
+	}
+}
+
 func TestCreateRequestRejectsNonHTTPSAndMissingKey(t *testing.T) {
 	name := "proxy"
 	vendor, protocol := VendorOpenAI, ProtocolOpenAI

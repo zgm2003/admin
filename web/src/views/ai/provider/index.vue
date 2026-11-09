@@ -14,6 +14,7 @@ import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
 import ProviderDialog from './components/ProviderDialog/index.vue'
 import type { ProviderForm } from './components/ProviderDialog/types'
+import ProviderModelDialog from './components/ProviderModelDialog/index.vue'
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
@@ -42,6 +43,8 @@ const loadError = ref('')
 const busyID = ref<number | null>(null)
 const dialogVisible = ref(false)
 const editing = ref<AiProvider | null>(null)
+const modelDialogVisible = ref(false)
+const modelProvider = ref<AiProvider | null>(null)
 const submitting = ref(false)
 const formError = ref('')
 let sequence = 0
@@ -52,6 +55,7 @@ const canCreate = computed(() => access.hasPermission('ai:provider:create'))
 const canUpdate = computed(() => access.hasPermission('ai:provider:update'))
 const canStatus = computed(() => access.hasPermission('ai:provider:status'))
 const canDelete = computed(() => access.hasPermission('ai:provider:delete'))
+const canModels = computed(() => access.hasPermission('ai:provider:model:list'))
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: query.value.page,
   pageSize: query.value.pageSize,
@@ -91,11 +95,11 @@ const columns = computed<TableColumn<AiProvider>[]>(() => [
   { key: 'provider', label: t('ai.provider.provider'), minWidth: 290 },
   { key: 'vendor', label: t('ai.provider.vendor'), width: 100 },
   { key: 'protocol', label: t('ai.provider.protocol'), width: 140 },
+  { key: 'tokenRate', label: t('ai.provider.tokenRateMultiplier'), width: 110 },
   { key: 'apiKey', label: t('ai.provider.apiKey'), width: 110 },
-  { key: 'timeout', label: t('ai.provider.timeout'), width: 100 },
   { key: 'status', label: t('ai.provider.status'), width: 90 },
   { key: 'updatedAt', label: t('ai.provider.updatedAt'), width: 170 },
-  { key: 'actions', label: t('common.actions'), width: 220, fixed: 'right' },
+  { key: 'actions', label: t('common.actions'), width: 280, fixed: 'right' },
 ])
 
 function state(): 'loading' | 'error' | 'empty' | 'success' {
@@ -165,6 +169,12 @@ function openEdit(row: AiProvider): void {
   dialogVisible.value = true
 }
 
+function openModels(row: AiProvider): void {
+  if (!canModels.value) return
+  modelProvider.value = row
+  modelDialogVisible.value = true
+}
+
 async function save(payload: ProviderForm): Promise<void> {
   if (submitting.value) return
   submitting.value = true
@@ -180,6 +190,7 @@ async function save(payload: ProviderForm): Promise<void> {
         apiKey: payload.apiKey,
         timeoutMs: payload.timeoutMs,
         sortOrder: payload.sortOrder,
+        tokenRateMultiplier: payload.tokenRateMultiplier,
         status: payload.status,
       })
     } else {
@@ -192,6 +203,7 @@ async function save(payload: ProviderForm): Promise<void> {
         ...(payload.apiKey ? { apiKey: payload.apiKey } : {}),
         timeoutMs: payload.timeoutMs,
         sortOrder: payload.sortOrder,
+        tokenRateMultiplier: payload.tokenRateMultiplier,
         status: payload.status,
       })
     }
@@ -338,6 +350,9 @@ onBeforeUnmount(() => {
       <template #cell-protocol="{ row }: { row: AiProvider }">
         <span>{{ row.protocolName }}</span>
       </template>
+      <template #cell-tokenRate="{ row }: { row: AiProvider }">
+        <el-tag type="warning" effect="plain">{{ row.tokenRateMultiplier }}x</el-tag>
+      </template>
       <template #cell-apiKey="{ row }: { row: AiProvider }">
         <el-tag :type="row.apiKeyConfigured ? 'success' : 'info'" effect="plain">
           {{ row.apiKeyConfigured ? t('ai.provider.keyConfigured') : t('ai.provider.keyMissing') }}
@@ -355,6 +370,15 @@ onBeforeUnmount(() => {
         <span class="ai-provider-page__muted">{{ formatDate(row.updatedAt) }}</span>
       </template>
       <template #cell-actions="{ row }: { row: AiProvider }">
+        <el-button
+          v-if="canModels"
+          link
+          type="primary"
+          :disabled="busyID !== null"
+          @click="openModels(row)"
+        >
+          {{ t('ai.provider.models') }}
+        </el-button>
         <el-button
           v-if="canUpdate && row.actions.update"
           link
@@ -399,6 +423,12 @@ onBeforeUnmount(() => {
       :submitting="submitting"
       :error="formError"
       @save="save"
+    />
+
+    <ProviderModelDialog
+      v-if="modelProvider"
+      v-model="modelDialogVisible"
+      :provider="modelProvider"
     />
   </AppPage>
 </template>

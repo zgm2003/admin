@@ -1,0 +1,437 @@
+<!-- 组件：供应商模型同步与配置 -->
+
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElMessageBox } from 'element-plus/es/components/message-box/index'
+import { ElNotification } from 'element-plus/es/components/notification/index'
+
+import * as api from '@/api/ai/providerModel'
+import type {
+  AiProviderModel,
+  ProviderModelOptions,
+  ProviderModelQuery,
+  UpdateProviderModelInput,
+} from '@/api/ai/providerModel'
+import type { AiProvider } from '@/api/ai/provider'
+import { usePermissionStore } from '@/store/permission'
+import type { TableColumn, TablePaginationState } from '@/components/AppTable'
+import AppDialog from '@/components/AppDialog/index.vue'
+import ModelEditDialog from './ModelEditDialog.vue'
+
+defineOptions({ name: 'AIProviderModelDialog' })
+
+const props = defineProps<{ provider: AiProvider }>()
+const visible = defineModel<boolean>({ required: true })
+const { t, locale } = useI18n()
+const access = usePermissionStore()
+
+const rows = ref<AiProviderModel[]>([])
+const total = ref(0)
+const query = ref<ProviderModelQuery>({ page: 1, pageSize: 20 })
+const keyword = ref('')
+const kindFilter = ref<number | ''>('')
+const statusFilter = ref<number | ''>('')
+const loading = ref(false)
+const loadError = ref('')
+const options = ref<ProviderModelOptions>({
+  modelKinds: [],
+  pricingModes: [],
+  priceUnits: [],
+  officialModels: [],
+})
+const optionsLoading = ref(false)
+const syncing = ref(false)
+const editVisible = ref(false)
+const editing = ref<AiProviderModel | null>(null)
+const submitting = ref(false)
+const editError = ref('')
+let sequence = 0
+
+const canSync = computed(() => access.hasPermission('ai:provider:model:sync'))
+const canUpdate = computed(() => access.hasPermission('ai:provider:model:update'))
+const pagination = computed<TablePaginationState>(() => ({
+  currentPage: query.value.page,
+  pageSize: query.value.pageSize,
+  total: total.value,
+}))
+const columns = computed<TableColumn<AiProviderModel>[]>(() => [
+  { key: 'model', label: t('ai.providerModel.model'), minWidth: 250 },
+  { key: 'kind', label: t('ai.providerModel.modelKind'), width: 90 },
+  { key: 'pricing', label: t('ai.providerModel.pricing'), width: 180 },
+  { key: 'official', label: t('ai.providerModel.officialModel'), minWidth: 220 },
+  { key: 'status', label: t('ai.providerModel.status'), width: 90 },
+  { key: 'lastSeenAt', label: t('ai.providerModel.lastSeenAt'), width: 160 },
+  { key: 'actions', label: t('common.actions'), width: 90, fixed: 'right' },
+])
+
+function resultState(): 'loading' | 'error' | 'empty' | 'success' {
+  if (loading.value || optionsLoading.value) return 'loading'
+  if (loadError.value) return 'error'
+  return rows.value.length > 0 ? 'success' : 'empty'
+}
+
+async function loadOptions(): Promise<void> {
+  optionsLoading.value = true
+  try {
+    options.value = await api.getProviderModelOptions(props.provider.id)
+  } finally {
+    optionsLoading.value = false
+  }
+}
+
+async function load(): Promise<void> {
+  const current = ++sequence
+  loading.value = true
+  loadError.value = ''
+  try {
+    const result = await api.getProviderModels(props.provider.id, query.value)
+    if (current === sequence) {
+      rows.value = result.list
+      total.value = result.total
+    }
+  } catch {
+    if (current === sequence) {
+      rows.value = []
+      total.value = 0
+      loadError.value = t('ai.providerModel.requestFailed')
+    }
+  } finally {
+    if (current === sequence) loading.value = false
+  }
+}
+
+function applyFilters(): void {
+  query.value = {
+    page: 1,
+    pageSize: query.value.pageSize,
+    ...(keyword.value.trim() ? { keyword: keyword.value.trim() } : {}),
+    ...(kindFilter.value !== '' ? { modelKind: kindFilter.value } : {}),
+    ...(statusFilter.value !== '' ? { status: statusFilter.value } : {}),
+  }
+  void load()
+}
+
+function resetFilters(): void {
+  keyword.value = ''
+  kindFilter.value = ''
+  statusFilter.value = ''
+  query.value = { page: 1, pageSize: query.value.pageSize }
+  void load()
+}
+
+function updatePagination(value: TablePaginationState): void {
+  query.value = {
+    ...query.value,
+    page: value.pageSize === query.value.pageSize ? value.currentPage : 1,
+    pageSize: value.pageSize,
+  }
+  void load()
+}
+
+async function sync(): Promise<void> {
+  if (!canSync.value || syncing.value) return
+  try {
+    await ElMessageBox.confirm(
+      t('ai.providerModel.syncConfirm', { name: props.provider.name }),
+      t('confirm.title'),
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  syncing.value = true
+  try {
+    const result = await api.syncProviderModels(props.provider.id)
+    ElNotification.success({
+      title: t('ai.providerModel.syncDone'),
+      message: t('ai.providerModel.syncSummary', {
+        total: result.total,
+        inserted: result.inserted,
+        updated: result.updated,
+        deactivated: result.deactivated,
+        unmatched: result.unmatched,
+      }),
+    })
+    await load()
+  } catch {
+    // request.ts owns the API error notification.
+  } finally {
+    syncing.value = false
+  }
+}
+
+function openEdit(row: AiProviderModel): void {
+  if (!canUpdate.value) return
+  editing.value = row
+  editError.value = ''
+  editVisible.value = true
+}
+
+async function saveModel(payload: UpdateProviderModelInput): Promise<void> {
+  if (!editing.value || submitting.value) return
+  submitting.value = true
+  editError.value = ''
+  try {
+    await api.updateProviderModel(props.provider.id, editing.value.id, payload)
+    editVisible.value = false
+    ElNotification.success({ title: t('ai.providerModel.saved') })
+    await load()
+  } catch {
+    // request.ts owns the API error notification.
+  } finally {
+    submitting.value = false
+  }
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat(locale.value, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+watch(
+  () => [visible.value, props.provider.id] as const,
+  ([open]) => {
+    if (!open) return
+    sequence++
+    rows.value = []
+    total.value = 0
+    keyword.value = ''
+    kindFilter.value = ''
+    statusFilter.value = ''
+    query.value = { page: 1, pageSize: 20 }
+    void Promise.all([loadOptions(), load()])
+  },
+  { immediate: true },
+)
+
+watch(visible, (open) => {
+  if (!open) {
+    editing.value = null
+    editError.value = ''
+  }
+})
+</script>
+
+<template>
+  <AppDialog
+    v-model="visible"
+    :title="t('ai.providerModel.title', { name: provider.name })"
+    width="1040px"
+    :close-on-click-modal="false"
+    :show-close="!syncing && !submitting"
+  >
+    <div class="ai-provider-model">
+      <div class="ai-provider-model__toolbar">
+        <div class="ai-provider-model__filters">
+          <el-input
+            v-model="keyword"
+            clearable
+            :placeholder="t('ai.providerModel.keywordPlaceholder')"
+            class="ai-provider-model__keyword"
+            @keyup.enter="applyFilters"
+          />
+          <el-select v-model="kindFilter" clearable :placeholder="t('ai.providerModel.allKinds')">
+            <el-option
+              v-for="item in options.modelKinds"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+          <el-select
+            v-model="statusFilter"
+            clearable
+            :placeholder="t('ai.providerModel.allStatuses')"
+          >
+            <el-option :label="t('ai.providerModel.enabled')" :value="1" />
+            <el-option :label="t('ai.providerModel.disabled')" :value="0" />
+          </el-select>
+          <el-button @click="applyFilters">{{ t('common.search') }}</el-button>
+          <el-button text @click="resetFilters">{{ t('common.reset') }}</el-button>
+        </div>
+        <el-button
+          v-if="canSync"
+          type="primary"
+          :loading="syncing"
+          :disabled="loading || submitting"
+          @click="sync"
+        >
+          {{ t('ai.providerModel.sync') }}
+        </el-button>
+      </div>
+
+      <el-alert
+        v-if="loadError"
+        :title="loadError"
+        type="error"
+        :closable="false"
+        class="ai-provider-model__alert"
+      />
+
+      <AppTable
+        :columns="columns"
+        :data="rows"
+        :loading="loading"
+        :pagination="pagination"
+        :row-key="(row: AiProviderModel) => String(row.id)"
+        :result-state="resultState()"
+        :status-message="loadError"
+        :aria-label="t('ai.providerModel.title', { name: provider.name })"
+        @refresh="load"
+        @update:pagination="updatePagination"
+      >
+        <template #cell-model="{ row }: { row: AiProviderModel }">
+          <div class="ai-provider-model__identity">
+            <strong>{{ row.displayName }}</strong>
+            <span>{{ row.upstreamModel }}</span>
+          </div>
+        </template>
+        <template #cell-kind="{ row }: { row: AiProviderModel }">
+          <el-tag effect="plain">{{ row.kindName }}</el-tag>
+        </template>
+        <template #cell-pricing="{ row }: { row: AiProviderModel }">
+          <div class="ai-provider-model__pricing">
+            <span>{{ row.pricingName }}</span>
+            <small>{{ row.unitName }}</small>
+          </div>
+        </template>
+        <template #cell-official="{ row }: { row: AiProviderModel }">
+          <div v-if="row.officialModel" class="ai-provider-model__pricing">
+            <span>{{ row.officialModel.displayName }}</span>
+            <small>{{ row.officialModel.modelKey }}</small>
+          </div>
+          <el-tag v-else type="warning" effect="plain">
+            {{ t('ai.providerModel.unmatched') }}
+          </el-tag>
+        </template>
+        <template #cell-status="{ row }: { row: AiProviderModel }">
+          <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="plain">
+            {{ row.statusName }}
+          </el-tag>
+        </template>
+        <template #cell-lastSeenAt="{ row }: { row: AiProviderModel }">
+          <span class="ai-provider-model__muted">{{ formatDate(row.lastSeenAt) }}</span>
+        </template>
+        <template #cell-actions="{ row }: { row: AiProviderModel }">
+          <el-button
+            v-if="canUpdate && row.actions.update"
+            link
+            type="primary"
+            :disabled="submitting || syncing"
+            @click="openEdit(row)"
+          >
+            {{ t('common.edit') }}
+          </el-button>
+        </template>
+        <template #empty>
+          <el-empty :description="t('ai.providerModel.empty')">
+            <el-button v-if="canSync" type="primary" :loading="syncing" @click="sync">
+              {{ t('ai.providerModel.sync') }}
+            </el-button>
+          </el-empty>
+        </template>
+      </AppTable>
+
+      <p class="ai-provider-model__hint">{{ t('ai.providerModel.hint') }}</p>
+    </div>
+
+    <template #footer>
+      <el-button :disabled="syncing || submitting" @click="visible = false">
+        {{ t('common.close') }}
+      </el-button>
+    </template>
+  </AppDialog>
+
+  <ModelEditDialog
+    v-if="editing"
+    v-model="editVisible"
+    :model="editing"
+    :options="options"
+    :submitting="submitting"
+    :error="editError"
+    @save="saveModel"
+  />
+</template>
+
+<style scoped lang="scss">
+.ai-provider-model {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  &__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  &__filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  &__keyword {
+    width: 220px;
+  }
+
+  &__identity,
+  &__pricing {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+
+    span,
+    small {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    span {
+      color: var(--admin-text);
+      font-size: 13px;
+    }
+
+    small {
+      color: var(--admin-text-muted);
+      font-size: 11px;
+    }
+  }
+
+  &__muted {
+    color: var(--admin-text-muted);
+    font-size: 12px;
+  }
+
+  &__hint {
+    margin: 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+  }
+
+  &__alert {
+    margin-bottom: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .ai-provider-model__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ai-provider-model__keyword {
+    width: 100%;
+  }
+}
+</style>

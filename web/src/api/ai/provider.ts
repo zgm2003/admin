@@ -17,6 +17,7 @@ export interface AiProvider {
   baseUrl: string
   timeoutMs: number
   sortOrder: number
+  tokenRateMultiplier: string
   status: number
   statusName: string
   apiKeyConfigured: boolean
@@ -50,6 +51,7 @@ export interface CreateProviderInput {
   apiKey: string
   timeoutMs: number
   sortOrder: number
+  tokenRateMultiplier: string
   status: number
 }
 
@@ -61,6 +63,7 @@ export interface UpdateProviderInput {
   apiKey?: string
   timeoutMs: number
   sortOrder: number
+  tokenRateMultiplier: string
   status: number
 }
 
