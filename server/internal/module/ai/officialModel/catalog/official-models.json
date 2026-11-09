@@ -1,0 +1,303 @@
+{
+  "catalogVersion": "openai-2026-11-04",
+  "sourceUrl": "https://developers.openai.com/api/docs/pricing",
+  "verifiedAt": "2026-11-04T00:00:00Z",
+  "models": [
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-6-astra",
+      "displayName": "gpt-6-astra",
+      "inputUsdPerMillion": "10.00",
+      "outputUsdPerMillion": "50.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-6.1-sol",
+      "displayName": "gpt-6.1-sol",
+      "inputUsdPerMillion": "2.00",
+      "outputUsdPerMillion": "10.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-6.1-terra",
+      "displayName": "gpt-6.1-terra",
+      "inputUsdPerMillion": "1.00",
+      "outputUsdPerMillion": "5.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-6-luna",
+      "displayName": "gpt-6-luna",
+      "inputUsdPerMillion": "0.10",
+      "outputUsdPerMillion": "0.50"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-6-sol",
+      "displayName": "gpt-6-sol",
+      "inputUsdPerMillion": "2.00",
+      "outputUsdPerMillion": "10.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.6-sol",
+      "displayName": "gpt-5.6-sol",
+      "inputUsdPerMillion": "4.00",
+      "outputUsdPerMillion": "20.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.6-terra",
+      "displayName": "gpt-5.6-terra",
+      "inputUsdPerMillion": "2.00",
+      "outputUsdPerMillion": "12.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.6-luna",
+      "displayName": "gpt-5.6-luna",
+      "inputUsdPerMillion": "0.20",
+      "outputUsdPerMillion": "1.20"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.5",
+      "displayName": "gpt-5.5",
+      "inputUsdPerMillion": "5.00",
+      "outputUsdPerMillion": "30.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.5-pro",
+      "displayName": "gpt-5.5-pro",
+      "inputUsdPerMillion": "30.00",
+      "outputUsdPerMillion": "180.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.4",
+      "displayName": "gpt-5.4",
+      "inputUsdPerMillion": "2.50",
+      "outputUsdPerMillion": "15.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.4-pro",
+      "displayName": "gpt-5.4-pro",
+      "inputUsdPerMillion": "30.00",
+      "outputUsdPerMillion": "180.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.4-mini",
+      "displayName": "gpt-5.4-mini",
+      "inputUsdPerMillion": "0.75",
+      "outputUsdPerMillion": "4.50"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.4-nano",
+      "displayName": "gpt-5.4-nano",
+      "inputUsdPerMillion": "0.20",
+      "outputUsdPerMillion": "1.25"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.2",
+      "displayName": "gpt-5.2",
+      "inputUsdPerMillion": "1.75",
+      "outputUsdPerMillion": "14.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.2-pro",
+      "displayName": "gpt-5.2-pro",
+      "inputUsdPerMillion": "21.00",
+      "outputUsdPerMillion": "168.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5.1",
+      "displayName": "gpt-5.1",
+      "inputUsdPerMillion": "1.25",
+      "outputUsdPerMillion": "10.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5",
+      "displayName": "gpt-5",
+      "inputUsdPerMillion": "1.25",
+      "outputUsdPerMillion": "10.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5-mini",
+      "displayName": "gpt-5-mini",
+      "inputUsdPerMillion": "0.25",
+      "outputUsdPerMillion": "2.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5-nano",
+      "displayName": "gpt-5-nano",
+      "inputUsdPerMillion": "0.05",
+      "outputUsdPerMillion": "0.40"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-5-pro",
+      "displayName": "gpt-5-pro",
+      "inputUsdPerMillion": "15.00",
+      "outputUsdPerMillion": "120.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4.1",
+      "displayName": "gpt-4.1",
+      "inputUsdPerMillion": "2.00",
+      "outputUsdPerMillion": "8.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4.1-mini",
+      "displayName": "gpt-4.1-mini",
+      "inputUsdPerMillion": "0.40",
+      "outputUsdPerMillion": "1.60"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4.1-nano",
+      "displayName": "gpt-4.1-nano",
+      "inputUsdPerMillion": "0.10",
+      "outputUsdPerMillion": "0.40"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4o",
+      "displayName": "gpt-4o",
+      "inputUsdPerMillion": "2.50",
+      "outputUsdPerMillion": "10.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4o-2024-05-13",
+      "displayName": "gpt-4o-2024-05-13",
+      "inputUsdPerMillion": "5.00",
+      "outputUsdPerMillion": "15.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4o-mini",
+      "displayName": "gpt-4o-mini",
+      "inputUsdPerMillion": "0.15",
+      "outputUsdPerMillion": "0.60"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "o1",
+      "displayName": "o1",
+      "inputUsdPerMillion": "15.00",
+      "outputUsdPerMillion": "60.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "o1-pro",
+      "displayName": "o1-pro",
+      "inputUsdPerMillion": "150.00",
+      "outputUsdPerMillion": "600.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "o3-pro",
+      "displayName": "o3-pro",
+      "inputUsdPerMillion": "20.00",
+      "outputUsdPerMillion": "80.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "o3",
+      "displayName": "o3",
+      "inputUsdPerMillion": "2.00",
+      "outputUsdPerMillion": "8.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "o4-mini",
+      "displayName": "o4-mini",
+      "inputUsdPerMillion": "1.10",
+      "outputUsdPerMillion": "4.40"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "o3-mini",
+      "displayName": "o3-mini",
+      "inputUsdPerMillion": "1.10",
+      "outputUsdPerMillion": "4.40"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4-turbo-2024-04-09",
+      "displayName": "gpt-4-turbo-2024-04-09",
+      "inputUsdPerMillion": "10.00",
+      "outputUsdPerMillion": "30.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-4-0613",
+      "displayName": "gpt-4-0613",
+      "inputUsdPerMillion": "30.00",
+      "outputUsdPerMillion": "60.00"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-3.5-turbo",
+      "displayName": "gpt-3.5-turbo",
+      "inputUsdPerMillion": "0.50",
+      "outputUsdPerMillion": "1.50"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-3.5-turbo-0125",
+      "displayName": "gpt-3.5-turbo-0125",
+      "inputUsdPerMillion": "0.50",
+      "outputUsdPerMillion": "1.50"
+    }
+  ]
+}
