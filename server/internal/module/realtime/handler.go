@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
 	auth "admin/server/internal/module/auth/login"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/origins"
 	"admin/server/internal/shared/response"
 	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
@@ -16,13 +18,17 @@ import (
 )
 
 type Handler struct {
-	service     *Service
-	connections *ConnectionSet
-	origin      string
+	service        *Service
+	connections    *ConnectionSet
+	allowedOrigins []string
 }
 
 func NewHandler(service *Service, connections *ConnectionSet, origin string) *Handler {
-	return &Handler{service: service, connections: connections, origin: origin}
+	allowed, err := origins.Parse(origin)
+	if err != nil {
+		panic(fmt.Sprintf("invalid realtime origin allowlist: %v", err))
+	}
+	return &Handler{service: service, connections: connections, allowedOrigins: allowed}
 }
 
 func (h *Handler) Ticket(c *gin.Context) {
@@ -43,7 +49,7 @@ func (h *Handler) Ticket(c *gin.Context) {
 }
 
 func (h *Handler) AdminWebSocket(c *gin.Context) {
-	if c.GetHeader("Origin") != h.origin {
+	if !origins.Contains(h.allowedOrigins, c.GetHeader("Origin")) {
 		c.Status(http.StatusForbidden)
 		return
 	}
@@ -57,7 +63,7 @@ func (h *Handler) AdminWebSocket(c *gin.Context) {
 		return
 	}
 	conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
-		OriginPatterns: []string{h.origin},
+		OriginPatterns: h.allowedOrigins,
 	})
 	if err != nil {
 		return

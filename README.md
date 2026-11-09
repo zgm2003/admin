@@ -37,7 +37,7 @@ AI 和开发者共同遵守根 [`AGENTS.md`](AGENTS.md) 的硬规则。任务路
 HTTP_ADDR=:16301
 POSTGRES_DSN=host=127.0.0.1 user=postgres password=postgres dbname=admin port=5432 sslmode=disable TimeZone=Asia/Shanghai
 REDIS_URL=redis://127.0.0.1:6379/0
-CORS_ORIGIN=http://localhost:16300
+CORS_ORIGIN=http://localhost:16300,http://127.0.0.1:16300
 TRUSTED_PROXIES=none
 APP_SECRET=replace_with_at_least_64_random_characters_before_running_api_server
 AUTH_COOKIE_SECURE=0

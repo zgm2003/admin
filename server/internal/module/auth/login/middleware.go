@@ -9,6 +9,7 @@ import (
 	projectmiddleware "admin/server/internal/middleware"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/shared/apperror"
+	"admin/server/internal/shared/origins"
 	"admin/server/internal/shared/response"
 	"github.com/gin-gonic/gin"
 )
@@ -20,8 +21,12 @@ type authenticator interface {
 }
 
 func RequireOrigin(allowedOrigin string) gin.HandlerFunc {
+	allowed, err := origins.Parse(allowedOrigin)
+	if err != nil {
+		panic(fmt.Sprintf("invalid auth origin allowlist: %v", err))
+	}
 	return func(context *gin.Context) {
-		if context.GetHeader("Origin") != allowedOrigin {
+		if !origins.Contains(allowed, context.GetHeader("Origin")) {
 			response.Fail(context, apperror.Forbidden(fmt.Errorf("request Origin is not allowed")))
 			return
 		}

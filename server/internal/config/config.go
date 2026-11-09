@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"admin/server/internal/shared/origins"
 	"github.com/jackc/pgx/v5"
 	goredis "github.com/redis/go-redis/v9"
 )
@@ -61,7 +62,8 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 	if err != nil {
 		return API{}, err
 	}
-	if err := validateOrigin(corsOrigin); err != nil {
+	corsOrigins, err := origins.Parse(corsOrigin)
+	if err != nil {
 		return API{}, fmt.Errorf("CORS_ORIGIN: %w", err)
 	}
 	appSecret, err := loadAppSecret(lookupEnv)
@@ -72,7 +74,7 @@ func LoadAPI(lookupEnv LookupEnv) (API, error) {
 	if err != nil {
 		return API{}, err
 	}
-	auth, err := loadAuth(lookupEnv, corsOrigin)
+	auth, err := loadAuth(lookupEnv, corsOrigins)
 	if err != nil {
 		return API{}, err
 	}
@@ -176,7 +178,7 @@ func loadTrustedProxies(lookupEnv LookupEnv) ([]string, string, error) {
 	return values, "allowlist", nil
 }
 
-func loadAuth(lookupEnv LookupEnv, corsOrigin string) (Auth, error) {
+func loadAuth(lookupEnv LookupEnv, corsOrigins []string) (Auth, error) {
 	value, err := required(lookupEnv, "AUTH_COOKIE_SECURE")
 	if err != nil {
 		return Auth{}, err
@@ -185,9 +187,18 @@ func loadAuth(lookupEnv LookupEnv, corsOrigin string) (Auth, error) {
 		return Auth{}, fmt.Errorf("AUTH_COOKIE_SECURE: must be 0 or 1")
 	}
 
-	origin, err := url.Parse(corsOrigin)
+	origin, err := url.Parse(corsOrigins[0])
 	if err != nil {
 		return Auth{}, fmt.Errorf("CORS_ORIGIN: invalid origin: %w", err)
+	}
+	for _, candidate := range corsOrigins[1:] {
+		other, err := url.Parse(candidate)
+		if err != nil {
+			return Auth{}, fmt.Errorf("CORS_ORIGIN: invalid origin: %w", err)
+		}
+		if other.Scheme != origin.Scheme {
+			return Auth{}, fmt.Errorf("CORS_ORIGIN: all origins must use the same scheme")
+		}
 	}
 	wantSecure := origin.Scheme == "https"
 	cookieSecure := value == "1"
@@ -269,20 +280,6 @@ func validateHTTPAddr(value string) error {
 	portNumber, err := strconv.Atoi(port)
 	if err != nil || portNumber < 1 || portNumber > 65535 {
 		return fmt.Errorf("invalid port %q", port)
-	}
-	return nil
-}
-
-func validateOrigin(value string) error {
-	origin, err := url.Parse(value)
-	if err != nil {
-		return fmt.Errorf("invalid origin: %w", err)
-	}
-	if (origin.Scheme != "http" && origin.Scheme != "https") || origin.Host == "" {
-		return fmt.Errorf("origin must use http or https with a host")
-	}
-	if origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" {
-		return fmt.Errorf("origin must not contain credentials, path, query, or fragment")
 	}
 	return nil
 }
