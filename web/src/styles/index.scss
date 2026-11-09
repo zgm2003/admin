@@ -63,12 +63,12 @@ button,
 
 button:focus-visible,
 [role='button']:focus-visible,
-.el-button:focus-visible,
-.el-input__wrapper:focus-within,
-.el-textarea__inner:focus-visible {
+.el-button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--el-color-primary) 60%, transparent);
   outline-offset: 2px;
 }
+
+/* Element Plus inputs and textareas already render their own focus box-shadow. */
 
 a:focus-visible {
   outline: 2px solid $color-action;
