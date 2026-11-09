@@ -1,6 +1,46 @@
 import type { AppMessageKey } from './zh-CN'
 
 export const enUS = {
+  'navigation.systemServer': 'Server overview',
+  'system.server.title': 'Server overview',
+  'system.server.scope': 'Responding API instance · OS-visible resources, not cluster totals',
+  'system.server.duration': '{days}d {hours}h {minutes}m',
+  'system.server.cores': '{count} logical cores · 200ms sample',
+  'system.server.capacity': '{available} available / {total} total',
+  'system.server.cpu': 'CPU usage',
+  'system.server.memory': 'Memory usage',
+  'system.server.disk': 'Disk usage',
+  'system.server.hostname': 'Hostname',
+  'system.server.os': 'OS / architecture',
+  'system.server.hostUptime': 'Host uptime',
+  'system.server.processUptime': 'API uptime',
+  'system.server.runtime': 'Go runtime',
+  'system.server.goroutines': 'Goroutines',
+  'system.server.heap': 'API heap memory',
+  'system.server.diskPath': 'Sampled filesystem directory',
+  'system.server.sampledAt': 'Sampled at',
+  'system.server.manualRefresh': 'Manual refresh · 5-second sample cache',
+  'system.server.loading': 'Collecting server metrics…',
+  'system.server.loadFailed': 'Server metrics unavailable. Try refreshing shortly',
+  'dashboard.overview': 'Operations overview',
+  'dashboard.subtitle': 'Service health, server resources and project architecture, in one place.',
+  'dashboard.operations': 'Operations',
+  'dashboard.project': 'About this project',
+  'dashboard.projectTitle': 'One console, connected services',
+  'dashboard.projectDescription':
+    'A unified administration console. The web interface, business API and background tasks work together with centrally managed data and permissions.',
+  'dashboard.architecture.web': 'Vue Router, Pinia and Element Plus power the interface',
+  'dashboard.architecture.proxy': 'Same-origin entry: Vite in development, Nginx in production',
+  'dashboard.architecture.server': 'API serves business requests; Worker runs background jobs',
+  'dashboard.architecture.data':
+    'PostgreSQL owns business facts; Redis supports caching and Asynq queues',
+  'dashboard.capabilities':
+    'Capabilities · Users and sessions, authentication and permissions, messaging, object storage, payments and scheduling. Available pages depend on your access.',
+  'dashboard.permissions':
+    'Access boundaries · Server metrics are visible to all signed-in users. Page entry and management actions are authorized independently and checked again by the API.',
+  'dashboard.deployment': 'Deployment conventions',
+  'dashboard.deploymentDescription':
+    'Nginx serves the frontend build and forwards /api paths unchanged to Go API, preserving WebSocket upgrades. API, Worker, PostgreSQL and Redis run independently. BaoTa can manage the website and certificates. This describes the deployment approach, not its current status.',
   'common.enable': 'Enable',
   'common.disable': 'Disable',
   'common.status': 'Status',
@@ -1204,8 +1244,6 @@ export const enUS = {
   'menu.success.deleted': 'Menu node deleted',
   'menu.success.refreshHint':
     'Management data is updated. Refresh the page to update the sidebar and routes.',
-  'dashboard.eyebrow': 'SYSTEM OVERVIEW',
-  'dashboard.title': 'Dashboard',
   'dashboard.refresh': 'Refresh status',
   'dashboard.liveStatus': 'Live status',
   'dashboard.dependencies': 'Dependencies',

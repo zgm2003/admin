@@ -10,9 +10,9 @@ export interface Readiness {
 }
 
 export async function getHealth(): Promise<HealthStatus> {
-  return request.get<HealthStatus>('/health')
+  return request.get<HealthStatus>('/api/health')
 }
 
 export async function getReadiness(): Promise<Readiness> {
-  return request.get<Readiness>('/ready')
+  return request.get<Readiness>('/api/ready')
 }

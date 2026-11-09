@@ -13,7 +13,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getHealth()
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/health')
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/health')
   })
   it('getHealth propagates request failures unchanged', async () => {
     const error = new Error('request failed')
@@ -25,7 +25,7 @@ describe('thin API HTTP contract', () => {
     vi.mocked(request.get).mockResolvedValue(dataFromServer)
     const result = await api.getReadiness()
     expect(result).toBe(dataFromServer)
-    expect(request.get).toHaveBeenCalledExactlyOnceWith('/ready')
+    expect(request.get).toHaveBeenCalledExactlyOnceWith('/api/ready')
   })
   it('getReadiness propagates request failures unchanged', async () => {
     const error = new Error('request failed')

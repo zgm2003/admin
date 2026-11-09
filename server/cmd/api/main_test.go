@@ -25,6 +25,7 @@ import (
 	"admin/server/internal/module/storage/uploadRule"
 	systemconfigcachestatus "admin/server/internal/module/system/configCacheStatus"
 	"admin/server/internal/module/system/operationLog"
+	systemserver "admin/server/internal/module/system/server"
 	"admin/server/internal/module/user/account"
 	"admin/server/internal/module/user/profile"
 	usersession "admin/server/internal/module/user/session"
@@ -399,17 +400,17 @@ func routeSetDiff(routes []gin.RouteInfo, want map[string]int) (map[string]int, 
 
 func TestRouteSetDiffRejectsUnexpectedRoutes(t *testing.T) {
 	remaining, unexpected := routeSetDiff([]gin.RouteInfo{
-		{Method: http.MethodGet, Path: "/health"},
-		{Method: http.MethodGet, Path: "/health"},
+		{Method: http.MethodGet, Path: "/api/health"},
+		{Method: http.MethodGet, Path: "/api/health"},
 		{Method: http.MethodGet, Path: "/api/canvas/v1/unexpected"},
 	}, map[string]int{
-		"GET /health": 1,
-		"GET /ready":  1,
+		"GET /api/health": 1,
+		"GET /api/ready":  1,
 	})
-	if remaining["GET /ready"] != 1 {
-		t.Fatalf("missing route count = %d", remaining["GET /ready"])
+	if remaining["GET /api/ready"] != 1 {
+		t.Fatalf("missing route count = %d", remaining["GET /api/ready"])
 	}
-	if !reflect.DeepEqual(unexpected, []string{"GET /health", "GET /api/canvas/v1/unexpected"}) {
+	if !reflect.DeepEqual(unexpected, []string{"GET /api/health", "GET /api/canvas/v1/unexpected"}) {
 		t.Fatalf("unexpected routes = %#v", unexpected)
 	}
 }
@@ -421,6 +422,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		CORSOrigin:        "http://localhost:16300",
 		Logger:            logger,
 		Health:            health.NewHandler(readyService{}),
+		Server:            systemserver.NewHandler(nil),
 		Auth:              auth.NewHandler(apiAuthService{}, false),
 		AuthPlatform:      authplatform.NewHandler(apiAuthPlatformService{}),
 		Permission:        permission.NewHandler(apiAccessService{}),
@@ -441,6 +443,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	})
 
 	want := map[string]int{
+		"GET /api/admin/v1/system/server":                   1,
 		"GET /api/admin/v1/auth/policy":                     1,
 		"GET /api/admin/v1/auth/login-config":               1,
 		"POST /api/admin/v1/auth/send-code":                 1,
@@ -466,8 +469,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		"GET /api/admin/v1/user/loginlog/options":           1,
 		"GET /api/admin/v1/storage/cosconfig/options":       1,
 
-		"GET /health":                                             1,
-		"GET /ready":                                              1,
+		"GET /api/health":                                         1,
+		"GET /api/ready":                                          1,
 		"GET /api/canvas/v1/auth/policy":                          1,
 		"GET /api/canvas/v1/auth/login-config":                    1,
 		"POST /api/canvas/v1/auth/send-code":                      1,
@@ -554,6 +557,8 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		method string
 		path   string
 	}{
+		{method: http.MethodGet, path: "/health"},
+		{method: http.MethodGet, path: "/ready"},
 		{method: http.MethodGet, path: "/api/canvas/v1/auth-platforms"},
 		{method: http.MethodGet, path: "/api/canvas/v1/menus"},
 		{method: http.MethodGet, path: "/api/canvas/v1/roles"},
@@ -581,7 +586,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 	}
 
 	recorder = httptest.NewRecorder()
-	request = httptest.NewRequest(http.MethodGet, "/health", nil)
+	request = httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	request.Header.Set("Accept-Language", "en-US")
 	router.ServeHTTP(recorder, request)
 	if got := recorder.Header().Get("Content-Language"); got != "en-US" {
@@ -592,6 +597,7 @@ func TestBuildRouterRegistersFoundationRoutesOnce(t *testing.T) {
 		method string
 		path   string
 	}{
+		{method: http.MethodGet, path: "/api/admin/v1/system/server"},
 		{method: http.MethodGet, path: "/api/admin/v1/access"},
 		{method: http.MethodGet, path: "/api/admin/v1/permission/menu"},
 	} {

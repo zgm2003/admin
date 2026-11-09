@@ -135,6 +135,9 @@ func TestPlatformRoutesDoNotRegisterLegacySharedOrUnknownPrefixes(t *testing.T) 
 	gin.SetMode(gin.TestMode)
 	router := buildRouter(platformRouteDependencies())
 	for _, route := range router.Routes() {
+		if route.Method == http.MethodGet && (route.Path == "/api/health" || route.Path == "/api/ready") {
+			continue // Public probes have no authentication platform.
+		}
 		if strings.HasPrefix(route.Path, "/api/") && !strings.HasPrefix(route.Path, "/api/admin/v1/") && !strings.HasPrefix(route.Path, "/api/canvas/v1/") {
 			t.Errorf("unscoped API remains: %s %s", route.Method, route.Path)
 		}

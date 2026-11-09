@@ -4,6 +4,17 @@
 
 ## 组件与入口
 
+首页与 `system/server` 共用服务器概览组件，数据流为 view → api/system/server → request → authenticated
+route → handler → service → OS collector。按维护者确认，`GET /api/admin/v1/system/server` 只要求管理端登录，
+首页所有已登录用户均可查看，不创建 detail action；`/system/server` 可选动态页面单独使用
+`system:server:view`。运维配置和写操作不变，无新增指标表、数据库查询或集群聚合。
+采集只包含当前 API 进程与其 OS 可见资源；每实例最多一个并发采集，成功或 OS 故障冷却 5 秒，预算 3 秒，
+失败不使用过期快照，取消请求不持有失败冷却；前端不轮询。公共 `/api/health`、`/api/ready` 不返回主机详情，统一经 Vite/Nginx `/api` 反代。
+采集任务继承请求上下文；即使底层系统调用不响应取消，请求也在预算内退出，未结束任务仍占唯一采集槽，
+不累积后台任务。磁盘按 API 工作目录所在文件系统采集，不假设 Linux 根盘就是部署盘。
+菜单 forward migration 由维护者停机运行 `server/migrate-system-server.ps1` 或对应 Go 命令，事务提交后
+单调发布 Redis admin 菜单版本并核验，不清空缓存、不自动给普通角色授权。
+
 ```text
 web (Vue 3) -> Go API (Gin/GORM) -> PostgreSQL
                     |       |

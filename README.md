@@ -110,8 +110,26 @@ API 和 Worker 启动时都不会执行数据库迁移、数据预设或回填�
 
 ## 健康检查
 
-- `GET /health`：只证明 API 进程存活，不访问 PostgreSQL 或 Redis。
-- `GET /ready`：同时探测 PostgreSQL 和 Redis；任一不可用时返回 HTTP 503。
+- `GET /api/health`：只证明 API 进程存活，不访问 PostgreSQL 或 Redis。
+- `GET /api/ready`：同时探测 PostgreSQL 和 Redis；任一不可用时返回 HTTP 503。
+
+首页提供服务状态、服务器资源、项目介绍与当前授权的运维入口。服务器指标来自响应请求的 API 实例，包含
+CPU、主机内存、工作目录所在文件系统的磁盘使用量及 Go 运行时；不代表 Worker 或整个集群。仅手动刷新，
+每实例合并采集并缓存 5 秒，采集预算 3 秒，失败不显示旧指标。页面跟随系统品牌、语言、明暗和主色设置。
+
+首次启用服务器菜单，由维护者停止全部 API/Worker 后执行（脚本不会操作服务）：
+
+```powershell
+cd D:\admin\server
+.\migrate-system-server.ps1 -ServicesStopped -AuditDirectory ..\docs\database\backups\system-server
+```
+
+工具在事务内执行 `docs/database/2026-11-06-system-server.sql`，核验 page 形状后同步 Redis 菜单版本，
+记录 SQL 摘要与前后版本；可安全重跑。非 Windows 可在 `server` 下直接执行
+`go run ./cmd/migrate-system-server -services-stopped -audit-dir TARGET`。失败时按审计修复后重跑，再启动服务。
+首页服务器指标对所有已登录的管理端用户开放，接口 `GET /api/admin/v1/system/server` 只要求登录，
+不新增详情 action。独立 `/system/server` 页面仍使用 `system:server:view`，普通角色需显式授权页面；
+该迁移只增加可选的系统菜单入口，不是首页读取指标的前置条件。运维配置和写操作继续使用各自的权限。
 
 Redis 就绪表示 Asynq 的队列存储可访问，不代表 Worker 一定正在消费。首期直接检查 Worker 进程和日志，不伪造 Worker 心跳。
 

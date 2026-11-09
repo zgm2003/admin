@@ -1,5 +1,19 @@
 # 项目状态
 
+## 首页运维与项目介绍、API 前缀收口（2026-11-06，代码与定向验证完成）
+
+- 范围：修复首页健康探针被 Vite SPA 回退为 HTML，探针统一 `/api/health`、`/api/ready`；首页新增真实服务器概览、项目介绍及精确权限入口，复用主题与同一服务器面板。
+- 工作区开始时干净。数据流为 view → api/system/server → request → authenticated route → handler → service → OS collector；不新增业务表、不启停现有服务、不提交 Git。
+- 权限映射按维护者最新回复落实：`GET /api/admin/v1/system/server` 只要求管理端登录，首页服务器指标所有登录用户可见，不创建 detail action。可选 `/system/server` 动态页面单独使用 page `system:server:view`；运维入口同时检查精确 page 授权与动态路由，配置和写操作保留原权限。
+- 容量与故障约定：指标仅代表响应请求的 API 实例及其 OS 可见资源；无自动轮询；每实例采集最多一个并发，成功快照与 OS 失败冷却 5 秒，采集预算 3 秒，取消请求不保留失败冷却；失败清空旧值并允许重试，无指标 PostgreSQL 回源。多实例不做虚构聚合。公共探针不返回主机详情。
+- 交付审查补充修复：磁盘直接采集工作目录所在文件系统，不误取 Linux 根盘；对不响应 context 的底层调用，请求仍在 3 秒预算内退出，未结束任务继续占唯一槽，避免无界 goroutine；调用方取消和截止时间都不污染后续冷却。三项回归先观察到失败，修复后模块全部测试通过。
+- 首页和独立页复用 `AppServerOverview`，呈现 CPU、内存、工作目录所在文件系统的磁盘、运行时与采样时间；项目介绍包括技术组成及可展开的同源部署说明。品牌、双语、明暗与主色消费既有设置，未放松 HTTP envelope 校验。
+- 先观察到登录无 action 的后端/前端断言及菜单 action 数量断言失败，再实施最新权限约定。实际通过：`go test -p 1 ./cmd/migrate-system-server ./internal/module/system/server ./internal/module/health ./cmd/api -count=1 -timeout=180s`（四包，含真实 PostgreSQL 隔离 schema 的幂等/冲突回滚）；同四包 `go vet -p 1`；`go build -p 1 ./cmd/api ./cmd/worker ./cmd/migrate-system-server`（Windows 与 `GOOS=linux GOARCH=amd64` 均通过）；修改 Go 文件 gofmt。
+- 前端实际通过：`pnpm vitest run tests/api/health.test.ts tests/api/system/server.test.ts tests/views/dashboard/index.test.ts --pool=threads --maxWorkers=1`（3 文件 17 项）、受影响代码 ESLint/Prettier、`pnpm check:architecture`（0 findings）、`pnpm build`（含类型检查，保留既有富文本大包提示）与 `git diff --check`。
+- 浏览器使用独立 `dashboard-qa` 会话执行 `playwright-cli -s=dashboard-qa run-code --filename=tests/browser/dashboardOverview.mjs`：真实 Dashboard 组件配隔离 HTTP fixture，明暗 × 1440/768/390/320px 均无横向溢出，主色、部署展开、503 清旧值与重试、取消页面授权后仍显示指标/隐藏入口、英文切换均通过，无 page error；截图已检查。不是实际登录后的端到端验收。
+- 菜单迁移 `docs/database/2026-11-06-system-server.sql` 与 `server/migrate-system-server.ps1` 仅增加可选独立页面，事务校验并单调发布 Redis admin 菜单版本，不是首页前置；真实 public 迁移未执行，Redis 发布的故障分支以测试替身验证。未刷新 current.sql、清缓存、启停任何现有服务或提交 Git；新接口需维护者重新运行最新版 API，外部探针同步改为 `/api/health`、`/api/ready`。
+- 未运行全仓 Go/Vitest 或真实 Redis CAS/生产 Nginx 流量验收；`go build -p 1 ./...` 已执行但被既有忽略目录 `server/tmp/schedulerFailureFixture/main.go:269` 的 `plan.IsEnabled` 未定义阻塞，未修改该无关临时程序。原 Redis 偶发超时/503 未在本轮修复。
+
 ## 前端同源反向代理（2026-11-06，代码与定向验证完成）
 
 - 目标：管理前端统一通过当前站点 `/api/...` 访问 Go API，开发走 Vite 反代，生产由 Nginx 接管；不改变 API、DTO、权限、认证与错误通知协议。

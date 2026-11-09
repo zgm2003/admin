@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>Dashboard regression fixture</title>
+  <div id="app" style="overflow: auto"></div>
+  <script type="module">
+    import { createApp } from 'vue'
+    import ElementPlus from 'element-plus'
+    import 'element-plus/dist/index.css'
+    import 'element-plus/theme-chalk/dark/css-vars.css'
+    import '@/styles/index.scss'
+    import Dashboard from '@/views/dashboard/index.vue'
+    import { pinia } from '@/store'
+    import { usePermissionStore } from '@/store/permission'
+    import { useBrandStore } from '@/store/brand'
+    import { appI18n, setLocale } from '@/i18n'
+    import { createMemoryHistory, createRouter } from 'vue-router'
+    import { applyTheme, applyPrimaryColor } from '@/utils/theme'
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: Dashboard },
+        { path: '/system/server', name: 'access:system:server:view', component: Dashboard },
+      ],
+    })
+    const permission = usePermissionStore(pinia)
+    permission.permissionCodes = ['system:server:view']
+    useBrandStore(pinia).apply({
+      titleZhCN: '智澜管理系统',
+      titleEnUS: 'Admin console',
+      defaultAvatar: '',
+    })
+    setLocale('zh-CN')
+    applyPrimaryColor('#409EFF')
+    window.dashboardQA = { permission, applyTheme, applyPrimaryColor, setLocale }
+    createApp(Dashboard).use(pinia).use(router).use(appI18n).use(ElementPlus).mount('#app')
+  </script>
+</html>

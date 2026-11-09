@@ -55,6 +55,7 @@ import (
 	"admin/server/internal/module/system/operationLog"
 	"admin/server/internal/module/system/queueMonitor"
 	"admin/server/internal/module/system/scheduler"
+	systemserver "admin/server/internal/module/system/server"
 	systemsetting "admin/server/internal/module/system/setting"
 	account "admin/server/internal/module/user/account"
 	useremail "admin/server/internal/module/user/email"
@@ -89,6 +90,7 @@ type routerDependencies struct {
 	TrustedProxies     []string
 	Logger             *slog.Logger
 	Health             *health.Handler
+	Server             *systemserver.Handler
 	Auth               *auth.Handler
 	Captcha            *authcaptcha.Handler
 	AuthPlatform       *authplatform.Handler
@@ -172,6 +174,7 @@ func main() {
 }
 
 func run(logger *slog.Logger) error {
+	startedAt := time.Now()
 	if err := i18n.ValidateCatalogs(); err != nil {
 		return fmt.Errorf("validate i18n catalogs: %w", err)
 	}
@@ -222,6 +225,7 @@ func run(logger *slog.Logger) error {
 	}
 
 	healthService := health.NewService(postgres, redisClient)
+	serverService := systemserver.NewService(systemserver.NewCollector(startedAt))
 	userRepository := account.NewRepository(postgres.GORM)
 	configGenerationRepository := configcache.NewRepository(postgres.GORM)
 	configGenerationStore := configcache.NewStore(redisClient)
@@ -481,6 +485,7 @@ func run(logger *slog.Logger) error {
 		TrustedProxies: settings.TrustedProxies,
 		Logger:         logger,
 		Health:         health.NewHandler(healthService),
+		Server:         systemserver.NewHandler(serverService),
 		Auth:           auth.NewHandler(authService, settings.Auth.CookieSecure),
 		Captcha:        authcaptcha.NewHandler(captchaService),
 		AuthPlatform:   authplatform.NewHandler(authPlatformService),
@@ -633,6 +638,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 		callbackevent.RegisterAdminProviderRoutes(adminTransports, dependencies.PaymentCallback)
 	}
 	adminRoutes := router.Group("/api/admin/v1", authclient.Require(), authclient.RequirePlatform("admin"))
+	if dependencies.Server != nil {
+		systemserver.RegisterAdminRoutes(adminRoutes, dependencies.Server, dependencies.Authenticate)
+	}
 	auth.RegisterAdminRoutes(adminRoutes, dependencies.Auth, dependencies.AuthOrigin, dependencies.Authenticate)
 	if dependencies.Captcha != nil {
 		authcaptcha.RegisterAdminRoutes(adminRoutes, dependencies.Captcha, dependencies.AuthOrigin)

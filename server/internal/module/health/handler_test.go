@@ -31,7 +31,7 @@ func TestHealthDoesNotProbeDependencies(t *testing.T) {
 	router := testRouter(service)
 	recorder := httptest.NewRecorder()
 
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/health", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/health", nil))
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d", recorder.Code)
@@ -45,7 +45,7 @@ func TestReadyReturnsDependencyStateAndPassesRequestContext(t *testing.T) {
 	service := &readinessService{result: health.Readiness{PostgreSQL: "up", Redis: "up"}}
 	router := testRouter(service)
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	request := httptest.NewRequest(http.MethodGet, "/api/ready", nil)
 
 	router.ServeHTTP(recorder, request)
 
@@ -70,7 +70,7 @@ func TestReadyReturnsUnifiedUnavailableError(t *testing.T) {
 	router := testRouter(service)
 	recorder := httptest.NewRecorder()
 
-	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/ready", nil))
 
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d body=%s", recorder.Code, recorder.Body)
