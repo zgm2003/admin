@@ -21,6 +21,8 @@ type UpdatePriceInput struct {
 	ExpectedVersion int64
 	InputCNYMicros  int64
 	OutputCNYMicros int64
+	CacheReadCNY    *int64
+	CacheWriteCNY   *int64
 }
 
 type ResetPriceInput struct {
@@ -31,6 +33,8 @@ type updatePriceRequest struct {
 	ExpectedVersion *int64  `json:"expectedVersion"`
 	InputCNY        *string `json:"inputCnyPerMillion"`
 	OutputCNY       *string `json:"outputCnyPerMillion"`
+	CacheReadCNY    *string `json:"cacheReadCnyPerMillion"`
+	CacheWriteCNY   *string `json:"cacheWriteCnyPerMillion"`
 }
 
 func (r updatePriceRequest) input() (UpdatePriceInput, error) {
@@ -48,7 +52,29 @@ func (r updatePriceRequest) input() (UpdatePriceInput, error) {
 	if err != nil {
 		return UpdatePriceInput{}, fmt.Errorf("outputCnyPerMillion: %w", err)
 	}
-	return UpdatePriceInput{ExpectedVersion: *r.ExpectedVersion, InputCNYMicros: input, OutputCNYMicros: output}, nil
+	cacheRead, err := parseOptionalMicros(r.CacheReadCNY)
+	if err != nil {
+		return UpdatePriceInput{}, fmt.Errorf("cacheReadCnyPerMillion: %w", err)
+	}
+	cacheWrite, err := parseOptionalMicros(r.CacheWriteCNY)
+	if err != nil {
+		return UpdatePriceInput{}, fmt.Errorf("cacheWriteCnyPerMillion: %w", err)
+	}
+	return UpdatePriceInput{
+		ExpectedVersion: *r.ExpectedVersion, InputCNYMicros: input, OutputCNYMicros: output,
+		CacheReadCNY: cacheRead, CacheWriteCNY: cacheWrite,
+	}, nil
+}
+
+func parseOptionalMicros(raw *string) (*int64, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil, nil
+	}
+	value, err := parseMicros(*raw)
+	if err != nil {
+		return nil, err
+	}
+	return &value, nil
 }
 
 type resetPriceRequest struct {

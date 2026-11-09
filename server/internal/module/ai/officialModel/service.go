@@ -11,7 +11,7 @@ import (
 type repository interface {
 	Count(context.Context, ListQuery) (int64, error)
 	List(context.Context, ListQuery) ([]Model, error)
-	UpdatePrice(context.Context, int64, int64, int64, int64, time.Time) error
+	UpdatePrice(context.Context, int64, int64, int64, int64, *int64, *int64, time.Time) error
 	ResetPrice(context.Context, int64, int64, time.Time) error
 	SyncCatalog(context.Context, Catalog, time.Time) (SyncResult, error)
 }
@@ -56,10 +56,13 @@ func (s *Service) UpdatePrice(ctx context.Context, id int64, input UpdatePriceIn
 	if s == nil || s.repository == nil {
 		return dependency(fmt.Errorf("official model repository missing"))
 	}
-	if id < 1 || input.ExpectedVersion < 1 || input.InputCNYMicros < 0 || input.OutputCNYMicros < 0 {
+	if id < 1 || input.ExpectedVersion < 1 || input.InputCNYMicros < 0 || input.OutputCNYMicros < 0 ||
+		(input.CacheReadCNY != nil && *input.CacheReadCNY < 0) ||
+		(input.CacheWriteCNY != nil && *input.CacheWriteCNY < 0) {
 		return invalid(fmt.Errorf("price input is invalid"))
 	}
-	return mapError(s.repository.UpdatePrice(ctx, id, input.ExpectedVersion, input.InputCNYMicros, input.OutputCNYMicros, s.now().UTC()))
+	return mapError(s.repository.UpdatePrice(ctx, id, input.ExpectedVersion, input.InputCNYMicros,
+		input.OutputCNYMicros, input.CacheReadCNY, input.CacheWriteCNY, s.now().UTC()))
 }
 
 func (s *Service) ResetPrice(ctx context.Context, id int64, input ResetPriceInput) error {

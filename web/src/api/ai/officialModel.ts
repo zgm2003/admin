@@ -16,6 +16,11 @@ export interface OfficialModel {
   outputUsdPerMillion: string
   inputCnyPerMillion: string
   outputCnyPerMillion: string
+  modelKind: number
+  cacheReadCnyPerMillion: string | null
+  cacheWriteCnyPerMillion: string | null
+  cacheReadUsdPerMillion: string | null
+  cacheWriteUsdPerMillion: string | null
   catalogVersion: string
   sourceUrl: string
   verifiedAt: string
@@ -43,6 +48,8 @@ export interface UpdateOfficialModelPriceInput {
   expectedVersion: number
   inputCnyPerMillion: string
   outputCnyPerMillion: string
+  cacheReadCnyPerMillion?: string
+  cacheWriteCnyPerMillion?: string
 }
 
 export interface OfficialModelSyncResult {

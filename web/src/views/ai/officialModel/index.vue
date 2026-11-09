@@ -164,6 +164,8 @@ async function save(payload: PriceForm): Promise<void> {
       expectedVersion: editing.value.version,
       inputCnyPerMillion: payload.inputCny,
       outputCnyPerMillion: payload.outputCny,
+      ...(payload.cacheReadCny ? { cacheReadCnyPerMillion: payload.cacheReadCny } : {}),
+      ...(payload.cacheWriteCny ? { cacheWriteCnyPerMillion: payload.cacheWriteCny } : {}),
     })
     dialogVisible.value = false
     ElNotification.success({ title: t('ai.officialModel.saved') })

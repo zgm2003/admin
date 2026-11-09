@@ -94,6 +94,11 @@ export const enUS = {
     'Only the internal CNY price changes; official USD prices stay untouched.',
   'ai.officialModel.inputCny': 'Input price (¥/M tokens)',
   'ai.officialModel.outputCny': 'Output price (¥/M tokens)',
+  'ai.officialModel.cacheReadCny': 'Cache read price (¥/M tokens)',
+  'ai.officialModel.cacheWriteCny': 'Cache write price (¥/M tokens)',
+  'ai.officialModel.cachePlaceholder': 'Leave blank if not configured',
+  'ai.officialModel.cacheHint':
+    'Cache prices are per million tokens. Leave blank when unknown. If a provider reports cache tokens without a configured price, billing must fail rather than charging the full input price.',
   'ai.officialModel.pricePlaceholder': 'e.g. 5.00',
   'ai.officialModel.priceRequired': 'Enter a CNY price',
   'ai.officialModel.priceRule': 'Enter a non-negative number with at most 6 decimal places',
@@ -175,6 +180,7 @@ export const enUS = {
   'ai.providerModel.syncSummary':
     '{total} total, {inserted} added, {updated} updated, {deactivated} disabled, {unmatched} unmatched',
   'ai.providerModel.requestFailed': 'Failed to load provider models',
+  'ai.providerModel.optionsFailed': 'Failed to load model options',
   'ai.providerModel.empty': 'No models yet. Pull the upstream list first.',
   'ai.providerModel.unmatched': 'No official match',
   'ai.providerModel.hint':

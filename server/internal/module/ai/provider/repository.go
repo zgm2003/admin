@@ -93,14 +93,24 @@ func (r *Repository) UpdateStatus(ctx context.Context, id int64, status yesno.Va
 }
 
 func (r *Repository) Delete(ctx context.Context, id int64) error {
-	result := r.db.WithContext(ctx).Where("id = ?", id).Delete(&Model{})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Where("id = ?", id).Delete(&Model{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		now := time.Now().UTC()
+		if err := tx.Table("ai_provider_model_price").
+			Where("provider_model_id IN (?)", tx.Table("ai_provider_model").Select("id").Where("provider_id = ?", id)).
+			Update("deleted_at", now).Error; err != nil {
+			return err
+		}
+		return tx.Table("ai_provider_model").
+			Where("provider_id = ? AND deleted_at IS NULL", id).
+			Update("deleted_at", now).Error
+	})
 }
 
 func modelFilter(db *gorm.DB, query ListQuery) *gorm.DB {

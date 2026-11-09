@@ -89,6 +89,11 @@ export const zhCN = {
   'ai.officialModel.editHint': '只修改系统内人民币价，不会改官方美元价。',
   'ai.officialModel.inputCny': '输入价（¥/M tokens）',
   'ai.officialModel.outputCny': '输出价（¥/M tokens）',
+  'ai.officialModel.cacheReadCny': '缓存读取价（¥/M tokens）',
+  'ai.officialModel.cacheWriteCny': '缓存写入价（¥/M tokens）',
+  'ai.officialModel.cachePlaceholder': '未配置可留空',
+  'ai.officialModel.cacheHint':
+    '缓存价格按百万 Token 填写；留空表示未配置。上游返回缓存 token 但价格未配置时，计费应拒绝而不是按输入价多扣。',
   'ai.officialModel.pricePlaceholder': '例如 5.00',
   'ai.officialModel.priceRequired': '请输入人民币价',
   'ai.officialModel.priceRule': '请输入不小于 0 的数字，最多 6 位小数',
@@ -166,6 +171,7 @@ export const zhCN = {
   'ai.providerModel.syncSummary':
     '共 {total} 个，新增 {inserted}，更新 {updated}，停用 {deactivated}，未匹配 {unmatched}',
   'ai.providerModel.requestFailed': '模型列表加载失败',
+  'ai.providerModel.optionsFailed': '模型选项加载失败',
   'ai.providerModel.empty': '暂无模型，先拉取上游模型',
   'ai.providerModel.unmatched': '未匹配官方模型',
   'ai.providerModel.hint':

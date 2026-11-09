@@ -55,6 +55,11 @@ func (s *Service) List(ctx context.Context, providerID int64, query ListQuery) (
 	if providerID < 1 {
 		return pagination.Result[SafeValue]{}, invalid(fmt.Errorf("provider id is invalid"))
 	}
+	if s.providerSource != nil {
+		if _, err := s.providerSource.FindByID(ctx, providerID); err != nil {
+			return pagination.Result[SafeValue]{}, mapError(err)
+		}
+	}
 	rows, total, err := s.repo.List(ctx, providerID, query)
 	if err != nil {
 		return pagination.Result[SafeValue]{}, mapError(err)
@@ -154,8 +159,10 @@ func (s *Service) Sync(ctx context.Context, providerID int64) (SyncResult, error
 		return SyncResult{}, mapError(err)
 	}
 	byKey := make(map[string]Official, len(officials))
+	byLowerKey := make(map[string]Official, len(officials))
 	for _, official := range officials {
 		byKey[official.ModelKey] = official
+		byLowerKey[strings.ToLower(official.ModelKey)] = official
 	}
 	seenAt := s.now().UTC()
 	items := make([]SyncItem, 0, len(upstream))
@@ -172,7 +179,7 @@ func (s *Service) Sync(ctx context.Context, providerID int64) (SyncResult, error
 			item.ModelKind = official.ModelKind
 			item.PricingMode = pricing.ModeOfficialToken
 			item.PriceUnit = pricing.UnitMillionTokens
-		} else if official, ok := byKey[strings.ToLower(model.ID)]; ok {
+		} else if official, ok := byLowerKey[strings.ToLower(model.ID)]; ok {
 			id := official.ID
 			item.OfficialModelID = &id
 			item.ModelKind = official.ModelKind

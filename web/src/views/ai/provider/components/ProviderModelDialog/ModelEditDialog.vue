@@ -39,8 +39,25 @@ const prices = ref<ProviderModelPriceInput[]>([])
 
 const isTokenMode = computed(() => form.value.pricingMode === 1)
 const officialOptions = computed(() =>
-  props.options.officialModels.filter((item) => item.modelKind === form.value.modelKind),
+  props.options.officialModels
+    .filter((item) => item.modelKind === form.value.modelKind)
+    .map((item) => ({ value: item.id, label: `${item.displayName} · ${item.modelKey}` })),
 )
+const statusOptions = computed(() => [
+  { value: 1, label: t('ai.providerModel.enabled') },
+  { value: 0, label: t('ai.providerModel.disabled') },
+])
+const pricingModes = computed(() =>
+  props.options.pricingModes.filter((item) => form.value.modelKind !== 1 || item.value === 1),
+)
+const priceUnits = computed(() => {
+  if (form.value.modelKind === 2) return props.options.priceUnits.filter((item) => item.value === 2)
+  if (form.value.modelKind === 3) return props.options.priceUnits.filter((item) => item.value === 3)
+  if (form.value.modelKind === 4) {
+    return props.options.priceUnits.filter((item) => [4, 5, 6].includes(item.value))
+  }
+  return props.options.priceUnits.filter((item) => item.value === 1)
+})
 const rules = computed<FormRules<typeof form.value>>(() => ({
   displayName: [
     { required: true, message: t('ai.providerModel.displayNameRequired'), trigger: 'blur' },
@@ -64,7 +81,13 @@ watch(
       tierLabel: price.tierLabel,
       priceCny: price.priceCny,
     }))
-    if (form.value.pricingMode === 2 && prices.value.length === 0) defaultTiers()
+    if (form.value.modelKind === 1) {
+      form.value.pricingMode = 1
+      form.value.priceUnit = 1
+      prices.value = []
+    } else if (form.value.pricingMode === 2 && prices.value.length === 0) {
+      defaultTiers()
+    }
     localError.value = ''
     void nextTick(() => formRef.value?.clearValidate())
   },
@@ -89,10 +112,15 @@ watch(
   () => form.value.modelKind,
   (kind) => {
     const kindChanged = props.model.modelKind !== kind
+    if (kind === 1) {
+      form.value.pricingMode = 1
+      form.value.priceUnit = 1
+      prices.value = []
+    }
     if (form.value.pricingMode === 1) {
       form.value.priceUnit = 1
       const current = form.value.officialModelId
-      if (current !== null && !officialOptions.value.some((item) => item.id === current)) {
+      if (current !== null && !officialOptions.value.some((item) => item.value === current)) {
         form.value.officialModelId = null
       }
       return
@@ -213,60 +241,43 @@ async function submit(): Promise<void> {
           <el-input v-model="form.displayName" maxlength="200" />
         </el-form-item>
         <el-form-item prop="modelKind" :label="t('ai.providerModel.modelKind')">
-          <el-select v-model="form.modelKind" class="ai-provider-model-edit__select">
-            <el-option
-              v-for="item in options.modelKinds"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2
+            v-model="form.modelKind"
+            :options="options.modelKinds"
+            class="ai-provider-model-edit__select"
+          />
         </el-form-item>
         <el-form-item prop="pricingMode" :label="t('ai.providerModel.pricingMode')">
-          <el-select v-model="form.pricingMode" class="ai-provider-model-edit__select">
-            <el-option
-              v-for="item in options.pricingModes"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2
+            v-model="form.pricingMode"
+            :options="pricingModes"
+            class="ai-provider-model-edit__select"
+          />
         </el-form-item>
         <el-form-item prop="priceUnit" :label="t('ai.providerModel.priceUnit')">
-          <el-select
+          <el-select-v2
             v-model="form.priceUnit"
-            class="ai-provider-model-edit__select"
+            :options="priceUnits"
             :disabled="isTokenMode"
-          >
-            <el-option
-              v-for="item in options.priceUnits"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+            class="ai-provider-model-edit__select"
+          />
         </el-form-item>
         <el-form-item prop="officialModelId" :label="t('ai.providerModel.officialModel')">
-          <el-select
+          <el-select-v2
             v-model="form.officialModelId"
+            :options="officialOptions"
             clearable
             filterable
             class="ai-provider-model-edit__select"
             :placeholder="t('ai.providerModel.officialPlaceholder')"
-          >
-            <el-option
-              v-for="item in officialOptions"
-              :key="item.id"
-              :label="`${item.displayName} · ${item.modelKey}`"
-              :value="item.id"
-            />
-          </el-select>
+          />
         </el-form-item>
         <el-form-item prop="status" :label="t('ai.providerModel.status')">
-          <el-select v-model="form.status" class="ai-provider-model-edit__select">
-            <el-option :label="t('ai.providerModel.enabled')" :value="1" />
-            <el-option :label="t('ai.providerModel.disabled')" :value="0" />
-          </el-select>
+          <el-select-v2
+            v-model="form.status"
+            :options="statusOptions"
+            class="ai-provider-model-edit__select"
+          />
         </el-form-item>
       </div>
 

@@ -41,6 +41,7 @@ const options = ref<ProviderModelOptions>({
   officialModels: [],
 })
 const optionsLoading = ref(false)
+const optionsError = ref('')
 const syncing = ref(false)
 const editVisible = ref(false)
 const editing = ref<AiProviderModel | null>(null)
@@ -50,6 +51,10 @@ let sequence = 0
 
 const canSync = computed(() => access.hasPermission('ai:provider:model:sync'))
 const canUpdate = computed(() => access.hasPermission('ai:provider:model:update'))
+const statusOptions = computed(() => [
+  { value: 1, label: t('ai.providerModel.enabled') },
+  { value: 0, label: t('ai.providerModel.disabled') },
+])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: query.value.page,
   pageSize: query.value.pageSize,
@@ -73,8 +78,11 @@ function resultState(): 'loading' | 'error' | 'empty' | 'success' {
 
 async function loadOptions(): Promise<void> {
   optionsLoading.value = true
+  optionsError.value = ''
   try {
     options.value = await api.getProviderModelOptions(props.provider.id)
+  } catch {
+    optionsError.value = t('ai.providerModel.optionsFailed')
   } finally {
     optionsLoading.value = false
   }
@@ -236,22 +244,18 @@ watch(visible, (open) => {
             class="ai-provider-model__keyword"
             @keyup.enter="applyFilters"
           />
-          <el-select v-model="kindFilter" clearable :placeholder="t('ai.providerModel.allKinds')">
-            <el-option
-              v-for="item in options.modelKinds"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
-          <el-select
+          <el-select-v2
+            v-model="kindFilter"
+            :options="options.modelKinds"
+            clearable
+            :placeholder="t('ai.providerModel.allKinds')"
+          />
+          <el-select-v2
             v-model="statusFilter"
+            :options="statusOptions"
             clearable
             :placeholder="t('ai.providerModel.allStatuses')"
-          >
-            <el-option :label="t('ai.providerModel.enabled')" :value="1" />
-            <el-option :label="t('ai.providerModel.disabled')" :value="0" />
-          </el-select>
+          />
           <el-button @click="applyFilters">{{ t('common.search') }}</el-button>
           <el-button text @click="resetFilters">{{ t('common.reset') }}</el-button>
         </div>
@@ -267,8 +271,8 @@ watch(visible, (open) => {
       </div>
 
       <el-alert
-        v-if="loadError"
-        :title="loadError"
+        v-if="loadError || optionsError"
+        :title="loadError || optionsError"
         type="error"
         :closable="false"
         class="ai-provider-model__alert"

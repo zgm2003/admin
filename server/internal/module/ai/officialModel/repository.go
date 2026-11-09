@@ -44,7 +44,8 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Model, error)
 	return rows, err
 }
 
-func (r *Repository) UpdatePrice(ctx context.Context, id int64, expectedVersion int64, inputCNY, outputCNY int64, now time.Time) error {
+func (r *Repository) UpdatePrice(ctx context.Context, id int64, expectedVersion int64, inputCNY, outputCNY int64,
+	cacheReadCNY, cacheWriteCNY *int64, now time.Time) error {
 	if r == nil || r.db == nil {
 		return errors.New("official model database missing")
 	}
@@ -52,6 +53,7 @@ func (r *Repository) UpdatePrice(ctx context.Context, id int64, expectedVersion 
 		Where("id = ? AND version = ?", id, expectedVersion).
 		Updates(map[string]any{
 			"input_cny_micros": inputCNY, "output_cny_micros": outputCNY,
+			"cache_read_cny_micros": cacheReadCNY, "cache_write_cny_micros": cacheWriteCNY,
 			"version": gorm.Expr("version + 1"), "updated_at": now,
 		})
 	if result.Error != nil {
@@ -70,9 +72,11 @@ func (r *Repository) ResetPrice(ctx context.Context, id int64, expectedVersion i
 	result := r.db.WithContext(ctx).Model(&Model{}).
 		Where("id = ? AND version = ?", id, expectedVersion).
 		Updates(map[string]any{
-			"input_cny_micros":  gorm.Expr("input_usd_micros"),
-			"output_cny_micros": gorm.Expr("output_usd_micros"),
-			"version":           gorm.Expr("version + 1"), "updated_at": now,
+			"input_cny_micros":       gorm.Expr("input_usd_micros"),
+			"output_cny_micros":      gorm.Expr("output_usd_micros"),
+			"cache_read_cny_micros":  gorm.Expr("cache_read_usd_micros"),
+			"cache_write_cny_micros": gorm.Expr("cache_write_usd_micros"),
+			"version":                gorm.Expr("version + 1"), "updated_at": now,
 		})
 	if result.Error != nil {
 		return result.Error
@@ -114,6 +118,7 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					Vendor: entry.Vendor, ModelKey: entry.ModelKey, DisplayName: entry.DisplayName,
 					InputUSDMicros: entry.InputUSDMicros, OutputUSDMicros: entry.OutputUSDMicros,
 					InputCNYMicros: entry.InputUSDMicros, OutputCNYMicros: entry.OutputUSDMicros,
+					ModelKind:      1,
 					CatalogVersion: catalog.Version, SourceURL: entry.SourceURL,
 					VerifiedAt: entry.VerifiedAt, SortOrder: entry.SortOrder,
 					Version: 1, CreatedAt: now, UpdatedAt: now,

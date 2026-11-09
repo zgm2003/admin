@@ -56,6 +56,14 @@ func parseMicros(raw string) (int64, error) {
 	return whole*microsPerUnit + fraction, nil
 }
 
+func formatOptionalMicros(value *int64) *string {
+	if value == nil {
+		return nil
+	}
+	formatted := formatMicros(*value)
+	return &formatted
+}
+
 func formatMicros(value int64) string {
 	if value <= 0 {
 		return "0.00"

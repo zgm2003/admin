@@ -20,7 +20,7 @@ const visible = defineModel<boolean>({ required: true })
 const { t, locale } = useI18n()
 
 const formRef = ref<FormInstance>()
-const form = ref<PriceForm>({ inputCny: '', outputCny: '' })
+const form = ref<PriceForm>({ inputCny: '', outputCny: '', cacheReadCny: '', cacheWriteCny: '' })
 const rules = computed<FormRules<PriceForm>>(() => ({
   inputCny: [
     { required: true, message: t('ai.officialModel.priceRequired'), trigger: 'blur' },
@@ -29,6 +29,20 @@ const rules = computed<FormRules<PriceForm>>(() => ({
   outputCny: [
     { required: true, message: t('ai.officialModel.priceRequired'), trigger: 'blur' },
     { pattern: /^\d+(\.\d{1,6})?$/, message: t('ai.officialModel.priceRule'), trigger: 'blur' },
+  ],
+  cacheReadCny: [
+    {
+      pattern: /^\d+(\.\d{1,6})?$/,
+      message: t('ai.officialModel.priceRule'),
+      trigger: 'blur',
+    },
+  ],
+  cacheWriteCny: [
+    {
+      pattern: /^\d+(\.\d{1,6})?$/,
+      message: t('ai.officialModel.priceRule'),
+      trigger: 'blur',
+    },
   ],
 }))
 
@@ -39,6 +53,8 @@ watch(
     form.value = {
       inputCny: props.model.inputCnyPerMillion,
       outputCny: props.model.outputCnyPerMillion,
+      cacheReadCny: props.model.cacheReadCnyPerMillion ?? '',
+      cacheWriteCny: props.model.cacheWriteCnyPerMillion ?? '',
     }
     void nextTick(() => formRef.value?.clearValidate())
   },
@@ -65,6 +81,8 @@ async function submit(): Promise<void> {
   emit('save', {
     inputCny: form.value.inputCny.trim(),
     outputCny: form.value.outputCny.trim(),
+    cacheReadCny: form.value.cacheReadCny.trim(),
+    cacheWriteCny: form.value.cacheWriteCny.trim(),
   })
 }
 </script>
@@ -131,7 +149,30 @@ async function submit(): Promise<void> {
               <template #append>¥ / M</template>
             </el-input>
           </el-form-item>
+          <el-form-item prop="cacheReadCny" :label="t('ai.officialModel.cacheReadCny')">
+            <el-input
+              v-model="form.cacheReadCny"
+              inputmode="decimal"
+              :placeholder="t('ai.officialModel.cachePlaceholder')"
+              data-testid="ai-official-model-cache-read-cny"
+            >
+              <template #append>¥ / M</template>
+            </el-input>
+          </el-form-item>
+          <el-form-item prop="cacheWriteCny" :label="t('ai.officialModel.cacheWriteCny')">
+            <el-input
+              v-model="form.cacheWriteCny"
+              inputmode="decimal"
+              :placeholder="t('ai.officialModel.cachePlaceholder')"
+              data-testid="ai-official-model-cache-write-cny"
+            >
+              <template #append>¥ / M</template>
+            </el-input>
+          </el-form-item>
         </div>
+        <p class="official-model-price-dialog__cache-note">
+          {{ t('ai.officialModel.cacheHint') }}
+        </p>
         <p class="official-model-price-dialog__ratio-note">
           {{ t('ai.officialModel.ratioNote') }}
         </p>
@@ -239,6 +280,13 @@ async function submit(): Promise<void> {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0 16px;
+  }
+
+  &__cache-note {
+    margin: -8px 0 0;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
   }
 
   &__ratio-note {

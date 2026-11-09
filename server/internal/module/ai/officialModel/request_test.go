@@ -30,12 +30,19 @@ func TestParseListQuery(t *testing.T) {
 func TestUpdatePriceRequest(t *testing.T) {
 	version := int64(3)
 	input, output := "5", "30.00"
-	got, err := (updatePriceRequest{ExpectedVersion: &version, InputCNY: &input, OutputCNY: &output}).input()
+	cacheRead, cacheWrite := "0.5", ""
+	got, err := (updatePriceRequest{
+		ExpectedVersion: &version, InputCNY: &input, OutputCNY: &output,
+		CacheReadCNY: &cacheRead, CacheWriteCNY: &cacheWrite,
+	}).input()
 	if err != nil {
 		t.Fatalf("input() error = %v", err)
 	}
 	if got.ExpectedVersion != 3 || got.InputCNYMicros != 5_000_000 || got.OutputCNYMicros != 30_000_000 {
 		t.Fatalf("input() = %+v", got)
+	}
+	if got.CacheReadCNY == nil || *got.CacheReadCNY != 500_000 || got.CacheWriteCNY != nil {
+		t.Fatalf("cache input = %+v", got)
 	}
 	if _, err := (updatePriceRequest{InputCNY: &input, OutputCNY: &output}).input(); err == nil {
 		t.Fatal("missing version accepted")
