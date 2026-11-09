@@ -1,5 +1,5 @@
 {
-  "catalogVersion": "multi-vendor-2026-11-09",
+  "catalogVersion": "multi-vendor-2026-11-09-cache",
   "sourceUrl": "https://developers.openai.com/api/docs/pricing",
   "verifiedAt": "2026-11-04T00:00:00Z",
   "models": [
@@ -9,7 +9,9 @@
       "modelKey": "gpt-6-astra",
       "displayName": "gpt-6-astra",
       "inputUsdPerMillion": "10.00",
-      "outputUsdPerMillion": "50.00"
+      "outputUsdPerMillion": "50.00",
+      "cacheReadUsdPerMillion": "1.00",
+      "cacheWriteUsdPerMillion": "12.50"
     },
     {
       "vendorCode": "openai",
@@ -17,7 +19,9 @@
       "modelKey": "gpt-6.1-sol",
       "displayName": "gpt-6.1-sol",
       "inputUsdPerMillion": "2.00",
-      "outputUsdPerMillion": "10.00"
+      "outputUsdPerMillion": "10.00",
+      "cacheReadUsdPerMillion": "0.10",
+      "cacheWriteUsdPerMillion": "2.50"
     },
     {
       "vendorCode": "openai",
@@ -25,7 +29,9 @@
       "modelKey": "gpt-6.1-terra",
       "displayName": "gpt-6.1-terra",
       "inputUsdPerMillion": "1.00",
-      "outputUsdPerMillion": "5.00"
+      "outputUsdPerMillion": "5.00",
+      "cacheReadUsdPerMillion": "0.05",
+      "cacheWriteUsdPerMillion": "1.25"
     },
     {
       "vendorCode": "openai",
@@ -33,7 +39,9 @@
       "modelKey": "gpt-6-luna",
       "displayName": "gpt-6-luna",
       "inputUsdPerMillion": "0.10",
-      "outputUsdPerMillion": "0.50"
+      "outputUsdPerMillion": "0.50",
+      "cacheReadUsdPerMillion": "0.01",
+      "cacheWriteUsdPerMillion": "0.125"
     },
     {
       "vendorCode": "openai",
@@ -41,7 +49,9 @@
       "modelKey": "gpt-6-sol",
       "displayName": "gpt-6-sol",
       "inputUsdPerMillion": "2.00",
-      "outputUsdPerMillion": "10.00"
+      "outputUsdPerMillion": "10.00",
+      "cacheReadUsdPerMillion": "0.20",
+      "cacheWriteUsdPerMillion": "2.50"
     },
     {
       "vendorCode": "openai",
@@ -49,7 +59,9 @@
       "modelKey": "gpt-5.6-sol",
       "displayName": "gpt-5.6-sol",
       "inputUsdPerMillion": "4.00",
-      "outputUsdPerMillion": "20.00"
+      "outputUsdPerMillion": "20.00",
+      "cacheReadUsdPerMillion": "0.40",
+      "cacheWriteUsdPerMillion": "5.00"
     },
     {
       "vendorCode": "openai",
@@ -57,7 +69,9 @@
       "modelKey": "gpt-5.6-terra",
       "displayName": "gpt-5.6-terra",
       "inputUsdPerMillion": "2.00",
-      "outputUsdPerMillion": "12.00"
+      "outputUsdPerMillion": "12.00",
+      "cacheReadUsdPerMillion": "0.20",
+      "cacheWriteUsdPerMillion": "2.50"
     },
     {
       "vendorCode": "openai",
@@ -65,7 +79,9 @@
       "modelKey": "gpt-5.6-luna",
       "displayName": "gpt-5.6-luna",
       "inputUsdPerMillion": "0.20",
-      "outputUsdPerMillion": "1.20"
+      "outputUsdPerMillion": "1.20",
+      "cacheReadUsdPerMillion": "0.02",
+      "cacheWriteUsdPerMillion": "0.25"
     },
     {
       "vendorCode": "openai",
@@ -73,7 +89,8 @@
       "modelKey": "gpt-5.5",
       "displayName": "gpt-5.5",
       "inputUsdPerMillion": "5.00",
-      "outputUsdPerMillion": "30.00"
+      "outputUsdPerMillion": "30.00",
+      "cacheReadUsdPerMillion": "0.50"
     },
     {
       "vendorCode": "openai",
@@ -89,7 +106,8 @@
       "modelKey": "gpt-5.4",
       "displayName": "gpt-5.4",
       "inputUsdPerMillion": "2.50",
-      "outputUsdPerMillion": "15.00"
+      "outputUsdPerMillion": "15.00",
+      "cacheReadUsdPerMillion": "0.25"
     },
     {
       "vendorCode": "openai",
@@ -105,7 +123,8 @@
       "modelKey": "gpt-5.4-mini",
       "displayName": "gpt-5.4-mini",
       "inputUsdPerMillion": "0.75",
-      "outputUsdPerMillion": "4.50"
+      "outputUsdPerMillion": "4.50",
+      "cacheReadUsdPerMillion": "0.075"
     },
     {
       "vendorCode": "openai",
@@ -113,7 +132,8 @@
       "modelKey": "gpt-5.4-nano",
       "displayName": "gpt-5.4-nano",
       "inputUsdPerMillion": "0.20",
-      "outputUsdPerMillion": "1.25"
+      "outputUsdPerMillion": "1.25",
+      "cacheReadUsdPerMillion": "0.02"
     },
     {
       "vendorCode": "openai",
@@ -121,7 +141,8 @@
       "modelKey": "gpt-5.2",
       "displayName": "gpt-5.2",
       "inputUsdPerMillion": "1.75",
-      "outputUsdPerMillion": "14.00"
+      "outputUsdPerMillion": "14.00",
+      "cacheReadUsdPerMillion": "0.175"
     },
     {
       "vendorCode": "openai",
@@ -137,7 +158,8 @@
       "modelKey": "gpt-5.1",
       "displayName": "gpt-5.1",
       "inputUsdPerMillion": "1.25",
-      "outputUsdPerMillion": "10.00"
+      "outputUsdPerMillion": "10.00",
+      "cacheReadUsdPerMillion": "0.125"
     },
     {
       "vendorCode": "openai",
@@ -145,7 +167,8 @@
       "modelKey": "gpt-5",
       "displayName": "gpt-5",
       "inputUsdPerMillion": "1.25",
-      "outputUsdPerMillion": "10.00"
+      "outputUsdPerMillion": "10.00",
+      "cacheReadUsdPerMillion": "0.125"
     },
     {
       "vendorCode": "openai",
@@ -153,7 +176,8 @@
       "modelKey": "gpt-5-mini",
       "displayName": "gpt-5-mini",
       "inputUsdPerMillion": "0.25",
-      "outputUsdPerMillion": "2.00"
+      "outputUsdPerMillion": "2.00",
+      "cacheReadUsdPerMillion": "0.025"
     },
     {
       "vendorCode": "openai",
@@ -161,7 +185,8 @@
       "modelKey": "gpt-5-nano",
       "displayName": "gpt-5-nano",
       "inputUsdPerMillion": "0.05",
-      "outputUsdPerMillion": "0.40"
+      "outputUsdPerMillion": "0.40",
+      "cacheReadUsdPerMillion": "0.005"
     },
     {
       "vendorCode": "openai",
@@ -177,7 +202,8 @@
       "modelKey": "gpt-4.1",
       "displayName": "gpt-4.1",
       "inputUsdPerMillion": "2.00",
-      "outputUsdPerMillion": "8.00"
+      "outputUsdPerMillion": "8.00",
+      "cacheReadUsdPerMillion": "0.50"
     },
     {
       "vendorCode": "openai",
@@ -185,7 +211,8 @@
       "modelKey": "gpt-4.1-mini",
       "displayName": "gpt-4.1-mini",
       "inputUsdPerMillion": "0.40",
-      "outputUsdPerMillion": "1.60"
+      "outputUsdPerMillion": "1.60",
+      "cacheReadUsdPerMillion": "0.10"
     },
     {
       "vendorCode": "openai",
@@ -193,7 +220,8 @@
       "modelKey": "gpt-4.1-nano",
       "displayName": "gpt-4.1-nano",
       "inputUsdPerMillion": "0.10",
-      "outputUsdPerMillion": "0.40"
+      "outputUsdPerMillion": "0.40",
+      "cacheReadUsdPerMillion": "0.025"
     },
     {
       "vendorCode": "openai",
@@ -201,7 +229,8 @@
       "modelKey": "gpt-4o",
       "displayName": "gpt-4o",
       "inputUsdPerMillion": "2.50",
-      "outputUsdPerMillion": "10.00"
+      "outputUsdPerMillion": "10.00",
+      "cacheReadUsdPerMillion": "1.25"
     },
     {
       "vendorCode": "openai",
@@ -217,7 +246,8 @@
       "modelKey": "gpt-4o-mini",
       "displayName": "gpt-4o-mini",
       "inputUsdPerMillion": "0.15",
-      "outputUsdPerMillion": "0.60"
+      "outputUsdPerMillion": "0.60",
+      "cacheReadUsdPerMillion": "0.075"
     },
     {
       "vendorCode": "openai",
@@ -225,7 +255,8 @@
       "modelKey": "o1",
       "displayName": "o1",
       "inputUsdPerMillion": "15.00",
-      "outputUsdPerMillion": "60.00"
+      "outputUsdPerMillion": "60.00",
+      "cacheReadUsdPerMillion": "7.50"
     },
     {
       "vendorCode": "openai",
@@ -249,7 +280,8 @@
       "modelKey": "o3",
       "displayName": "o3",
       "inputUsdPerMillion": "2.00",
-      "outputUsdPerMillion": "8.00"
+      "outputUsdPerMillion": "8.00",
+      "cacheReadUsdPerMillion": "0.50"
     },
     {
       "vendorCode": "openai",
@@ -257,7 +289,8 @@
       "modelKey": "o4-mini",
       "displayName": "o4-mini",
       "inputUsdPerMillion": "1.10",
-      "outputUsdPerMillion": "4.40"
+      "outputUsdPerMillion": "4.40",
+      "cacheReadUsdPerMillion": "0.275"
     },
     {
       "vendorCode": "openai",
@@ -265,7 +298,8 @@
       "modelKey": "o3-mini",
       "displayName": "o3-mini",
       "inputUsdPerMillion": "1.10",
-      "outputUsdPerMillion": "4.40"
+      "outputUsdPerMillion": "4.40",
+      "cacheReadUsdPerMillion": "0.55"
     },
     {
       "vendorCode": "openai",
@@ -307,7 +341,9 @@
       "displayName": "Claude Opus 4.5",
       "modelKey": "claude-opus-4-5",
       "sourceUrl": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.50",
+      "cacheWriteUsdPerMillion": "6.25"
     },
     {
       "outputUsdPerMillion": "15.00",
@@ -317,7 +353,9 @@
       "displayName": "Claude Sonnet 4.5",
       "modelKey": "claude-sonnet-4-5",
       "sourceUrl": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.30",
+      "cacheWriteUsdPerMillion": "3.75"
     },
     {
       "outputUsdPerMillion": "5.00",
@@ -327,7 +365,9 @@
       "displayName": "Claude Haiku 4.5",
       "modelKey": "claude-haiku-4-5",
       "sourceUrl": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.10",
+      "cacheWriteUsdPerMillion": "1.25"
     },
     {
       "outputUsdPerMillion": "75.00",
@@ -337,7 +377,9 @@
       "displayName": "Claude Opus 4.1",
       "modelKey": "claude-opus-4-1",
       "sourceUrl": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "1.50",
+      "cacheWriteUsdPerMillion": "18.75"
     },
     {
       "outputUsdPerMillion": "15.00",
@@ -347,7 +389,9 @@
       "displayName": "Claude Sonnet 4",
       "modelKey": "claude-sonnet-4",
       "sourceUrl": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.30",
+      "cacheWriteUsdPerMillion": "3.75"
     },
     {
       "outputUsdPerMillion": "15.00",
@@ -357,7 +401,9 @@
       "displayName": "Claude 3.5 Sonnet",
       "modelKey": "claude-3-5-sonnet",
       "sourceUrl": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.30",
+      "cacheWriteUsdPerMillion": "3.75"
     },
     {
       "outputUsdPerMillion": "4.00",
@@ -367,7 +413,9 @@
       "displayName": "Claude 3.5 Haiku",
       "modelKey": "claude-3-5-haiku",
       "sourceUrl": "https://docs.anthropic.com/en/docs/about-claude/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.08",
+      "cacheWriteUsdPerMillion": "1.00"
     },
     {
       "outputUsdPerMillion": "3.75",
@@ -397,7 +445,8 @@
       "displayName": "Gemini 3.1 Pro Preview",
       "modelKey": "gemini-3.1-pro-preview",
       "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.20"
     },
     {
       "outputUsdPerMillion": "3.00",
@@ -407,7 +456,8 @@
       "displayName": "Gemini 3 Flash Preview",
       "modelKey": "gemini-3-flash-preview",
       "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.05"
     },
     {
       "outputUsdPerMillion": "10.00",
@@ -417,7 +467,8 @@
       "displayName": "Gemini 2.5 Pro",
       "modelKey": "gemini-2.5-pro",
       "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.125"
     },
     {
       "outputUsdPerMillion": "2.50",
@@ -427,7 +478,8 @@
       "displayName": "Gemini 2.5 Flash",
       "modelKey": "gemini-2.5-flash",
       "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.03"
     },
     {
       "outputUsdPerMillion": "0.40",
@@ -437,7 +489,8 @@
       "displayName": "Gemini 2.5 Flash-Lite",
       "modelKey": "gemini-2.5-flash-lite",
       "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verifiedAt": "2026-11-09T00:00:00Z"
+      "verifiedAt": "2026-11-09T00:00:00Z",
+      "cacheReadUsdPerMillion": "0.01"
     }
   ]
 }

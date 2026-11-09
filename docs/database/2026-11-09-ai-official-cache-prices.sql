@@ -1,0 +1,52 @@
+-- 回填官方模型缓存价格；缓存 CNY 与 USD 同数字，不乘供应商倍率。
+-- 仅填补已存在模型；未来官方目录同步会继续维护这些字段。
+
+UPDATE ai_official_model AS m
+SET cache_read_usd_micros = v.read_micros,
+    cache_write_usd_micros = v.write_micros,
+    cache_read_cny_micros = COALESCE(m.cache_read_cny_micros, v.read_micros),
+    cache_write_cny_micros = COALESCE(m.cache_write_cny_micros, v.write_micros),
+    catalog_version = 'multi-vendor-2026-11-09-cache',
+    version = version + 1,
+    updated_at = now()
+FROM (VALUES
+    ('gpt-6-astra', 1000000, 12500000),
+    ('gpt-6.1-sol', 100000, 2500000),
+    ('gpt-6.1-terra', 50000, 1250000),
+    ('gpt-6-luna', 10000, 125000),
+    ('gpt-6-sol', 200000, 2500000),
+    ('gpt-5.6-sol', 400000, 5000000),
+    ('gpt-5.6-terra', 200000, 2500000),
+    ('gpt-5.6-luna', 20000, 250000),
+    ('gpt-5.5', 500000, NULL),
+    ('gpt-5.4', 250000, NULL),
+    ('gpt-5.4-mini', 75000, NULL),
+    ('gpt-5.4-nano', 20000, NULL),
+    ('gpt-5.2', 175000, NULL),
+    ('gpt-5.1', 125000, NULL),
+    ('gpt-5', 125000, NULL),
+    ('gpt-5-mini', 25000, NULL),
+    ('gpt-5-nano', 5000, NULL),
+    ('gpt-4.1', 500000, NULL),
+    ('gpt-4.1-mini', 100000, NULL),
+    ('gpt-4.1-nano', 25000, NULL),
+    ('gpt-4o', 1250000, NULL),
+    ('gpt-4o-mini', 75000, NULL),
+    ('o1', 7500000, NULL),
+    ('o3', 500000, NULL),
+    ('o4-mini', 275000, NULL),
+    ('o3-mini', 550000, NULL),
+    ('claude-opus-4-5', 500000, 6250000),
+    ('claude-sonnet-4-5', 300000, 3750000),
+    ('claude-haiku-4-5', 100000, 1250000),
+    ('claude-opus-4-1', 1500000, 18750000),
+    ('claude-sonnet-4', 300000, 3750000),
+    ('claude-3-5-sonnet', 300000, 3750000),
+    ('claude-3-5-haiku', 80000, 1000000),
+    ('gemini-3.1-pro-preview', 200000, NULL),
+    ('gemini-3-flash-preview', 50000, NULL),
+    ('gemini-2.5-pro', 125000, NULL),
+    ('gemini-2.5-flash', 30000, NULL),
+    ('gemini-2.5-flash-lite', 10000, NULL)
+) AS v(model_key, read_micros, write_micros)
+WHERE m.model_key = v.model_key;

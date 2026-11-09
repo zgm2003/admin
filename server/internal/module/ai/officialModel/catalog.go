@@ -23,14 +23,16 @@ type Catalog struct {
 }
 
 type CatalogModel struct {
-	Vendor          Vendor
-	ModelKey        string
-	DisplayName     string
-	InputUSDMicros  int64
-	OutputUSDMicros int64
-	SourceURL       string
-	VerifiedAt      time.Time
-	SortOrder       int
+	Vendor              Vendor
+	ModelKey            string
+	DisplayName         string
+	InputUSDMicros      int64
+	OutputUSDMicros     int64
+	CacheReadUSDMicros  *int64
+	CacheWriteUSDMicros *int64
+	SourceURL           string
+	VerifiedAt          time.Time
+	SortOrder           int
 }
 
 type catalogDocument struct {
@@ -41,14 +43,16 @@ type catalogDocument struct {
 }
 
 type catalogModelRecord struct {
-	VendorCode  string    `json:"vendorCode"`
-	VendorName  string    `json:"vendorName"`
-	ModelKey    string    `json:"modelKey"`
-	DisplayName string    `json:"displayName"`
-	InputUSD    string    `json:"inputUsdPerMillion"`
-	OutputUSD   string    `json:"outputUsdPerMillion"`
-	SourceURL   string    `json:"sourceUrl"`
-	VerifiedAt  time.Time `json:"verifiedAt"`
+	VendorCode    string    `json:"vendorCode"`
+	VendorName    string    `json:"vendorName"`
+	ModelKey      string    `json:"modelKey"`
+	DisplayName   string    `json:"displayName"`
+	InputUSD      string    `json:"inputUsdPerMillion"`
+	OutputUSD     string    `json:"outputUsdPerMillion"`
+	CacheReadUSD  string    `json:"cacheReadUsdPerMillion"`
+	CacheWriteUSD string    `json:"cacheWriteUsdPerMillion"`
+	SourceURL     string    `json:"sourceUrl"`
+	VerifiedAt    time.Time `json:"verifiedAt"`
 }
 
 func LoadCatalog() (Catalog, error) {
@@ -125,6 +129,14 @@ func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, 
 	if err != nil {
 		return CatalogModel{}, fmt.Errorf("outputUsdPerMillion: %w", err)
 	}
+	cacheRead, err := parseCatalogOptionalMicros(record.CacheReadUSD)
+	if err != nil {
+		return CatalogModel{}, fmt.Errorf("cacheReadUsdPerMillion: %w", err)
+	}
+	cacheWrite, err := parseCatalogOptionalMicros(record.CacheWriteUSD)
+	if err != nil {
+		return CatalogModel{}, fmt.Errorf("cacheWriteUsdPerMillion: %w", err)
+	}
 	sourceURL := strings.TrimSpace(record.SourceURL)
 	if sourceURL == "" {
 		sourceURL = fallbackSourceURL
@@ -142,8 +154,20 @@ func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, 
 	return CatalogModel{
 		Vendor: vendor, ModelKey: modelKey, DisplayName: displayName,
 		InputUSDMicros: input, OutputUSDMicros: output,
+		CacheReadUSDMicros: cacheRead, CacheWriteUSDMicros: cacheWrite,
 		SourceURL: sourceURL, VerifiedAt: verifiedAt.UTC(),
 	}, nil
+}
+
+func parseCatalogOptionalMicros(value string) (*int64, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	parsed, err := parseMicros(value)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func validateSourceURL(value string) error {

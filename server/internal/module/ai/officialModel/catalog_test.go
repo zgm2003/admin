@@ -29,6 +29,13 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 				t.Fatalf("gpt-5.5 prices = %d/%d", model.InputUSDMicros, model.OutputUSDMicros)
 			}
 		}
+		if model.ModelKey == "gpt-6-astra" {
+			if model.CacheReadUSDMicros == nil || *model.CacheReadUSDMicros != 1_000_000 ||
+				model.CacheWriteUSDMicros == nil || *model.CacheWriteUSDMicros != 12_500_000 {
+				t.Fatalf("gpt-6-astra cache prices = %+v/%+v",
+					model.CacheReadUSDMicros, model.CacheWriteUSDMicros)
+			}
+		}
 	}
 	if !found {
 		t.Fatal("gpt-5.5 not found in catalog")
@@ -62,5 +69,11 @@ func TestParseCatalogRejectsDuplicateAndInvalidPrices(t *testing.T) {
 	unknownVendor := strings.Replace(duplicate, `"vendorCode":"openai"`, `"vendorCode":"unknown"`, 1)
 	if _, err := parseCatalog([]byte(unknownVendor)); err == nil || !strings.Contains(err.Error(), "vendorCode") {
 		t.Fatalf("unknown vendor error = %v", err)
+	}
+
+	invalidCache := strings.Replace(duplicate, `"outputUsdPerMillion":"2"`,
+		`"outputUsdPerMillion":"2","cacheReadUsdPerMillion":"-1"`, 1)
+	if _, err := parseCatalog([]byte(invalidCache)); err == nil || !strings.Contains(err.Error(), "cacheRead") {
+		t.Fatalf("negative cache price error = %v", err)
 	}
 }

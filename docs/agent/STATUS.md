@@ -1761,4 +1761,12 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 验证：供应商、供应商模型、官方模型、pricing、cmd/api 测试通过；前端 `pnpm typecheck`、定向 ESLint、`pnpm build` 通过；真实页面验证供应商 Token 倍率展示、模型弹窗和图片质量价格保存，临时数据已清理。
 
 - 追加迁移 `2026-11-09-ai-provider-model-token-constraint.sql`：停用的 token 模型允许暂缺官方映射，启用时仍强制官方映射；与 service 的启停校验一致。
-- 当前 `16301` 已重启加载最新 API（pid 35084，health 200）；测试供应商和模型数据已清理，`ai_provider` / `ai_provider_model` 均为 0 条。
+- 当前 `16301` 由维护者手动启动（pid 29072，health 200）；测试供应商和模型数据已清理，`ai_provider` / `ai_provider_model` 均为 0 条。
+
+### 官方模型缓存价格补齐（2026-11-09）
+
+- 官方目录 `official-models.json` 增加 `cacheReadUsdPerMillion` / `cacheWriteUsdPerMillion`，并升级为 `multi-vendor-2026-11-09-cache`。
+- 依据 OpenAI 官方 Pricing：`gpt-6-astra` 缓存读取 1.00、30m 缓存写入 12.50（USD/M tokens）；`gpt-5.6-sol` 为 0.40 / 5.00；`gpt-5.5-pro`、`gpt-5.4-pro` 等官方未单列缓存价的模型保持 NULL，不填 0。
+- 官方目录同步现在会写入缓存 USD/CNY；已存在的官方模型若缓存 CNY 为空，会按官方 USD 数字回填，已有手工 CNY 值不覆盖。
+- 追加 `2026-11-09-ai-official-cache-prices.sql`，当前库回填 38 个模型缓存价；`gpt-6-astra` 页面应显示缓存读取 `1.00`、缓存写入 `12.50`。
+- 当前字段对应 30m cache write；12h cache write 暂未单独建模。

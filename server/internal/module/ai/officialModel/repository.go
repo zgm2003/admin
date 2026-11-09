@@ -118,6 +118,8 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					Vendor: entry.Vendor, ModelKey: entry.ModelKey, DisplayName: entry.DisplayName,
 					InputUSDMicros: entry.InputUSDMicros, OutputUSDMicros: entry.OutputUSDMicros,
 					InputCNYMicros: entry.InputUSDMicros, OutputCNYMicros: entry.OutputUSDMicros,
+					CacheReadUSD: entry.CacheReadUSDMicros, CacheWriteUSD: entry.CacheWriteUSDMicros,
+					CacheReadCNY: entry.CacheReadUSDMicros, CacheWriteCNY: entry.CacheWriteUSDMicros,
 					ModelKind:      1,
 					CatalogVersion: catalog.Version, SourceURL: entry.SourceURL,
 					VerifiedAt: entry.VerifiedAt, SortOrder: entry.SortOrder,
@@ -128,8 +130,13 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 				}
 				result.Inserted++
 			default:
+				fillCacheRead := row.CacheReadCNY == nil && entry.CacheReadUSDMicros != nil
+				fillCacheWrite := row.CacheWriteCNY == nil && entry.CacheWriteUSDMicros != nil
 				if row.InputUSDMicros == entry.InputUSDMicros &&
 					row.OutputUSDMicros == entry.OutputUSDMicros &&
+					sameOptionalMicros(row.CacheReadUSD, entry.CacheReadUSDMicros) &&
+					sameOptionalMicros(row.CacheWriteUSD, entry.CacheWriteUSDMicros) &&
+					!fillCacheRead && !fillCacheWrite &&
 					row.DisplayName == entry.DisplayName &&
 					row.CatalogVersion == catalog.Version &&
 					row.SourceURL == entry.SourceURL &&
@@ -138,10 +145,22 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					result.Unchanged++
 					continue
 				}
+				cacheReadCNY := row.CacheReadCNY
+				if fillCacheRead {
+					cacheReadCNY = entry.CacheReadUSDMicros
+				}
+				cacheWriteCNY := row.CacheWriteCNY
+				if fillCacheWrite {
+					cacheWriteCNY = entry.CacheWriteUSDMicros
+				}
 				update := tx.Model(&Model{}).Where("id = ? AND version = ?", row.ID, row.Version).Updates(map[string]any{
 					"display_name":     entry.DisplayName,
 					"input_usd_micros": entry.InputUSDMicros, "output_usd_micros": entry.OutputUSDMicros,
-					"catalog_version": catalog.Version, "source_url": entry.SourceURL,
+					"cache_read_usd_micros":  nullableMicros(entry.CacheReadUSDMicros),
+					"cache_write_usd_micros": nullableMicros(entry.CacheWriteUSDMicros),
+					"cache_read_cny_micros":  nullableMicros(cacheReadCNY),
+					"cache_write_cny_micros": nullableMicros(cacheWriteCNY),
+					"catalog_version":        catalog.Version, "source_url": entry.SourceURL,
 					"verified_at": entry.VerifiedAt, "sort_order": entry.SortOrder,
 					"version": gorm.Expr("version + 1"), "updated_at": now,
 				})
@@ -160,4 +179,18 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 		return SyncResult{}, err
 	}
 	return result, nil
+}
+
+func sameOptionalMicros(left, right *int64) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
+}
+
+func nullableMicros(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
