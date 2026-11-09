@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ZMLlUwsejQ8xDdPMkWEMFwc9ZjyyugZpJwHS9qZQ0NDfsSZE84mLuBqFrs06yxc
+\restrict t6eBmB4GX1FtJmpXbH3fkTN4yVqWksXOkpH1FnLIIiyVhosET7w4gFgPkrEumai
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -434,7 +434,7 @@ CREATE TABLE public.ai_provider_model (
     CONSTRAINT ai_provider_model_pricing_mode_check CHECK ((pricing_mode = ANY (ARRAY[1, 2]))),
     CONSTRAINT ai_provider_model_source_check CHECK ((source = ANY (ARRAY[1, 2]))),
     CONSTRAINT ai_provider_model_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
-    CONSTRAINT ai_provider_model_token_mode_check CHECK (((pricing_mode <> 1) OR ((official_model_id IS NOT NULL) AND (price_unit = 1)))),
+    CONSTRAINT ai_provider_model_token_mode_check CHECK (((pricing_mode <> 1) OR ((price_unit = 1) AND ((status = 0) OR (official_model_id IS NOT NULL))))),
     CONSTRAINT ai_provider_model_version_check CHECK ((version >= 1))
 );
 
@@ -485,7 +485,7 @@ COMMENT ON COLUMN public.ai_provider_model.price_unit IS '计价单位：1=百�
 -- Name: COLUMN ai_provider_model.official_model_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.ai_provider_model.official_model_id IS 'token 计费必须映射官方模型；媒体模型可为空';
+COMMENT ON COLUMN public.ai_provider_model.official_model_id IS 'token 计费启用时必须映射官方模型；停用草稿可为空，媒体模型可为空';
 
 
 --
@@ -4826,5 +4826,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ZMLlUwsejQ8xDdPMkWEMFwc9ZjyyugZpJwHS9qZQ0NDfsSZE84mLuBqFrs06yxc
+\unrestrict t6eBmB4GX1FtJmpXbH3fkTN4yVqWksXOkpH1FnLIIiyVhosET7w4gFgPkrEumai
 

@@ -1759,3 +1759,6 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - API：`GET /api/admin/v1/ai/provider/:id/models`、`GET /options`、`POST /sync`、`PUT /:modelId`；权限动作 `ai:provider:model:list/sync/update`，admin `menu_version=29`，菜单缓存已清理。
 - 已执行 `2026-11-09-ai-billing-foundation.sql` 与 `2026-11-09-ai-provider-model-menu.sql`；`docs/database/current.sql` 已按 public schema 重新导出。
 - 验证：供应商、供应商模型、官方模型、pricing、cmd/api 测试通过；前端 `pnpm typecheck`、定向 ESLint、`pnpm build` 通过；真实页面验证供应商 Token 倍率展示、模型弹窗和图片质量价格保存，临时数据已清理。
+
+- 追加迁移 `2026-11-09-ai-provider-model-token-constraint.sql`：停用的 token 模型允许暂缺官方映射，启用时仍强制官方映射；与 service 的启停校验一致。
+- 当前 `16301` 已重启加载最新 API（pid 35084，health 200）；测试供应商和模型数据已清理，`ai_provider` / `ai_provider_model` 均为 0 条。
