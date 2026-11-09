@@ -23,12 +23,13 @@ type Catalog struct {
 }
 
 type CatalogModel struct {
-	VendorCode      string
-	VendorName      string
+	Vendor          Vendor
 	ModelKey        string
 	DisplayName     string
 	InputUSDMicros  int64
 	OutputUSDMicros int64
+	SourceURL       string
+	VerifiedAt      time.Time
 	SortOrder       int
 }
 
@@ -40,12 +41,14 @@ type catalogDocument struct {
 }
 
 type catalogModelRecord struct {
-	VendorCode  string `json:"vendorCode"`
-	VendorName  string `json:"vendorName"`
-	ModelKey    string `json:"modelKey"`
-	DisplayName string `json:"displayName"`
-	InputUSD    string `json:"inputUsdPerMillion"`
-	OutputUSD   string `json:"outputUsdPerMillion"`
+	VendorCode  string    `json:"vendorCode"`
+	VendorName  string    `json:"vendorName"`
+	ModelKey    string    `json:"modelKey"`
+	DisplayName string    `json:"displayName"`
+	InputUSD    string    `json:"inputUsdPerMillion"`
+	OutputUSD   string    `json:"outputUsdPerMillion"`
+	SourceURL   string    `json:"sourceUrl"`
+	VerifiedAt  time.Time `json:"verifiedAt"`
 }
 
 func LoadCatalog() (Catalog, error) {
@@ -79,14 +82,14 @@ func parseCatalog(raw []byte) (Catalog, error) {
 	}
 	seen := make(map[string]struct{}, len(document.Models))
 	for index, record := range document.Models {
-		entry, err := normalizeCatalogModel(record)
+		entry, err := normalizeCatalogModel(record, document.SourceURL, document.VerifiedAt)
 		if err != nil {
 			return Catalog{}, fmt.Errorf("models[%d]: %w", index, err)
 		}
 		entry.SortOrder = index
-		key := entry.VendorCode + "\x00" + entry.ModelKey
+		key := fmt.Sprintf("%d\x00%s", entry.Vendor, entry.ModelKey)
 		if _, exists := seen[key]; exists {
-			return Catalog{}, fmt.Errorf("models[%d]: duplicate model %s/%s", index, entry.VendorCode, entry.ModelKey)
+			return Catalog{}, fmt.Errorf("models[%d]: duplicate model %d/%s", index, entry.Vendor, entry.ModelKey)
 		}
 		seen[key] = struct{}{}
 		catalog.Models = append(catalog.Models, entry)
@@ -94,16 +97,16 @@ func parseCatalog(raw []byte) (Catalog, error) {
 	return catalog, nil
 }
 
-func normalizeCatalogModel(record catalogModelRecord) (CatalogModel, error) {
+func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, fallbackVerifiedAt time.Time) (CatalogModel, error) {
 	vendorCode := strings.TrimSpace(record.VendorCode)
-	vendorName := strings.TrimSpace(record.VendorName)
 	modelKey := strings.TrimSpace(record.ModelKey)
 	displayName := strings.TrimSpace(record.DisplayName)
-	if !validCode(vendorCode, 64) {
+	vendor, ok := vendorFromCode(vendorCode)
+	if !ok {
 		return CatalogModel{}, fmt.Errorf("vendorCode is invalid")
 	}
-	if !validText(vendorName, 128) {
-		return CatalogModel{}, fmt.Errorf("vendorName is invalid")
+	if vendorName := strings.TrimSpace(record.VendorName); vendorName != "" && vendorName != vendor.Label() {
+		return CatalogModel{}, fmt.Errorf("vendorName does not match vendorCode")
 	}
 	if !validText(modelKey, 200) {
 		return CatalogModel{}, fmt.Errorf("modelKey is invalid")
@@ -122,9 +125,24 @@ func normalizeCatalogModel(record catalogModelRecord) (CatalogModel, error) {
 	if err != nil {
 		return CatalogModel{}, fmt.Errorf("outputUsdPerMillion: %w", err)
 	}
+	sourceURL := strings.TrimSpace(record.SourceURL)
+	if sourceURL == "" {
+		sourceURL = fallbackSourceURL
+	}
+	if err := validateSourceURL(sourceURL); err != nil {
+		return CatalogModel{}, err
+	}
+	verifiedAt := record.VerifiedAt
+	if verifiedAt.IsZero() {
+		verifiedAt = fallbackVerifiedAt
+	}
+	if verifiedAt.IsZero() {
+		return CatalogModel{}, fmt.Errorf("verifiedAt is required")
+	}
 	return CatalogModel{
-		VendorCode: vendorCode, VendorName: vendorName, ModelKey: modelKey, DisplayName: displayName,
+		Vendor: vendor, ModelKey: modelKey, DisplayName: displayName,
 		InputUSDMicros: input, OutputUSDMicros: output,
+		SourceURL: sourceURL, VerifiedAt: verifiedAt.UTC(),
 	}, nil
 }
 
@@ -138,18 +156,6 @@ func validateSourceURL(value string) error {
 		return fmt.Errorf("sourceUrl must be an http(s) URL")
 	}
 	return nil
-}
-
-func validCode(value string, maximum int) bool {
-	if value == "" || len(value) > maximum || !utf8.ValidString(value) {
-		return false
-	}
-	for _, character := range value {
-		if !(character >= 'a' && character <= 'z') && !(character >= '0' && character <= '9') && character != '-' && character != '_' {
-			return false
-		}
-	}
-	return true
 }
 
 func validText(value string, maximum int) bool {

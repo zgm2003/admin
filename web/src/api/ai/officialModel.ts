@@ -8,7 +8,7 @@ export interface OfficialModelActions {
 
 export interface OfficialModel {
   id: number
-  vendorCode: string
+  vendor: number
   vendorName: string
   modelKey: string
   displayName: string
@@ -27,11 +27,11 @@ export interface OfficialModel {
 
 export interface OfficialModelQuery extends PageRequest {
   keyword?: string
-  vendor?: string
+  vendor?: number
 }
 
 export interface VendorOption {
-  value: string
+  value: number
   label: string
 }
 

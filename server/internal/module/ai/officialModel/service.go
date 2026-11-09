@@ -3,7 +3,6 @@ package officialmodel
 import (
 	"context"
 	"fmt"
-	"sort"
 	"time"
 
 	"admin/server/internal/shared/pagination"
@@ -51,31 +50,6 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 		values = append(values, value)
 	}
 	return pagination.Result[SafeValue]{List: values, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
-}
-
-func (s *Service) Options(ctx context.Context) (Options, error) {
-	if s == nil || s.catalog == nil {
-		return Options{}, dependency(fmt.Errorf("official model catalog missing"))
-	}
-	catalog, err := s.catalog()
-	if err != nil {
-		return Options{}, dependency(err)
-	}
-	seen := make(map[string]string, len(catalog.Models))
-	for _, entry := range catalog.Models {
-		seen[entry.VendorCode] = entry.VendorName
-	}
-	vendors := make([]VendorOption, 0, len(seen))
-	for code, name := range seen {
-		vendors = append(vendors, VendorOption{Value: code, Label: name})
-	}
-	sort.Slice(vendors, func(left, right int) bool {
-		if vendors[left].Label == vendors[right].Label {
-			return vendors[left].Value < vendors[right].Value
-		}
-		return vendors[left].Label < vendors[right].Label
-	})
-	return Options{Vendors: vendors}, nil
 }
 
 func (s *Service) UpdatePrice(ctx context.Context, id int64, input UpdatePriceInput) error {

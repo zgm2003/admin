@@ -12,7 +12,7 @@ type Actions struct {
 
 type SafeValue struct {
 	ID                  int64     `json:"id"`
-	VendorCode          string    `json:"vendorCode"`
+	Vendor              Vendor    `json:"vendor"`
 	VendorName          string    `json:"vendorName"`
 	ModelKey            string    `json:"modelKey"`
 	DisplayName         string    `json:"displayName"`
@@ -29,15 +29,6 @@ type SafeValue struct {
 	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
-type VendorOption struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
-}
-
-type Options struct {
-	Vendors []VendorOption `json:"vendors"`
-}
-
 type SyncResult struct {
 	Inserted  int `json:"inserted"`
 	Updated   int `json:"updated"`
@@ -45,8 +36,7 @@ type SyncResult struct {
 }
 
 func safeValue(row Model) (SafeValue, error) {
-	if row.ID < 1 || row.Version < 1 ||
-		!validCode(row.VendorCode, 64) || !validText(row.VendorName, 128) ||
+	if row.ID < 1 || row.Version < 1 || !row.Vendor.Valid() ||
 		!validText(row.ModelKey, 200) || !validText(row.DisplayName, 200) ||
 		!validText(row.CatalogVersion, 64) || row.SourceURL == "" ||
 		row.VerifiedAt.IsZero() ||
@@ -58,7 +48,7 @@ func safeValue(row Model) (SafeValue, error) {
 		return SafeValue{}, fmt.Errorf("stored official model source is invalid")
 	}
 	return SafeValue{
-		ID: row.ID, VendorCode: row.VendorCode, VendorName: row.VendorName,
+		ID: row.ID, Vendor: row.Vendor, VendorName: row.Vendor.Label(),
 		ModelKey: row.ModelKey, DisplayName: row.DisplayName,
 		InputUSDPerMillion:  formatMicros(row.InputUSDMicros),
 		OutputUSDPerMillion: formatMicros(row.OutputUSDMicros),

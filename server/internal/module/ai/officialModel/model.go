@@ -4,8 +4,7 @@ import "time"
 
 type Model struct {
 	ID              int64     `gorm:"column:id;primaryKey;autoIncrement"`
-	VendorCode      string    `gorm:"column:vendor_code;type:varchar(64);not null"`
-	VendorName      string    `gorm:"column:vendor_name;type:varchar(128);not null"`
+	Vendor          Vendor    `gorm:"column:vendor;type:smallint;not null"`
 	ModelKey        string    `gorm:"column:model_key;type:varchar(200);not null"`
 	DisplayName     string    `gorm:"column:display_name;type:varchar(200);not null"`
 	InputUSDMicros  int64     `gorm:"column:input_usd_micros;not null"`

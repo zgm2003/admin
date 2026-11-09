@@ -14,9 +14,14 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 		t.Fatalf("catalog = %+v", catalog)
 	}
 	found := false
+	vendors := make(map[Vendor]bool)
 	for _, model := range catalog.Models {
-		if model.VendorCode != "openai" {
-			t.Fatalf("unexpected vendor %q", model.VendorCode)
+		if !model.Vendor.Valid() {
+			t.Fatalf("unexpected vendor %d", model.Vendor)
+		}
+		vendors[model.Vendor] = true
+		if model.SourceURL == "" || model.VerifiedAt.IsZero() {
+			t.Fatalf("model %s has incomplete source facts", model.ModelKey)
 		}
 		if model.ModelKey == "gpt-5.5" {
 			found = true
@@ -27,6 +32,11 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("gpt-5.5 not found in catalog")
+	}
+	for _, vendor := range []Vendor{VendorOpenAI, VendorAnthropic, VendorGoogle} {
+		if !vendors[vendor] {
+			t.Fatalf("vendor %d not found in catalog", vendor)
+		}
 	}
 }
 
@@ -47,5 +57,10 @@ func TestParseCatalogRejectsDuplicateAndInvalidPrices(t *testing.T) {
 	invalidPrice := strings.Replace(duplicate, `"inputUsdPerMillion":"1"`, `"inputUsdPerMillion":"-1"`, 1)
 	if _, err := parseCatalog([]byte(invalidPrice)); err == nil {
 		t.Fatal("negative price accepted")
+	}
+
+	unknownVendor := strings.Replace(duplicate, `"vendorCode":"openai"`, `"vendorCode":"unknown"`, 1)
+	if _, err := parseCatalog([]byte(unknownVendor)); err == nil || !strings.Contains(err.Error(), "vendorCode") {
+		t.Fatalf("unknown vendor error = %v", err)
 	}
 }

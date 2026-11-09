@@ -3,6 +3,7 @@ package officialmodel
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -13,7 +14,7 @@ type ListQuery struct {
 	Page     int
 	PageSize int
 	Keyword  string
-	Vendor   string
+	Vendor   Vendor
 }
 
 type UpdatePriceInput struct {
@@ -74,13 +75,19 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 	query := ListQuery{
 		Page: request.Page, PageSize: request.PageSize,
 		Keyword: strings.TrimSpace(values.Get("keyword")),
-		Vendor:  strings.TrimSpace(values.Get("vendor")),
 	}
 	if utf8.RuneCountInString(query.Keyword) > 200 {
 		return ListQuery{}, fmt.Errorf("keyword is too long")
 	}
-	if query.Vendor != "" && !validCode(query.Vendor, 64) {
-		return ListQuery{}, fmt.Errorf("vendor is invalid")
+	if rawVendor := strings.TrimSpace(values.Get("vendor")); rawVendor != "" {
+		value, err := strconv.ParseInt(rawVendor, 10, 16)
+		if err != nil {
+			return ListQuery{}, fmt.Errorf("vendor is invalid")
+		}
+		query.Vendor = Vendor(value)
+		if !query.Vendor.Valid() {
+			return ListQuery{}, fmt.Errorf("vendor is invalid")
+		}
 	}
 	return query, nil
 }

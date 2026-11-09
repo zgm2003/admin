@@ -2,7 +2,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { FormInstance, FormRules } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
@@ -17,7 +16,8 @@ import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import { usePermissionStore } from '@/store/permission'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
-import AppDialog from '@/components/AppDialog/index.vue'
+import PriceDialog from './components/PriceDialog/index.vue'
+import type { PriceForm } from './components/PriceDialog/types'
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
@@ -27,15 +27,10 @@ const {
   reload: reloadOptions,
 } = useLocalizedOptions<OfficialModelOptions>(api.getOfficialModelOptions, () => ({ vendors: [] }))
 
-interface PriceForm {
-  inputCny: string
-  outputCny: string
-}
-
 const rows = ref<OfficialModel[]>([])
 const total = ref(0)
 const query = ref<OfficialModelQuery>({ page: 1, pageSize: 20 })
-const filters = ref<SearchFormModel<{ keyword: string; vendor: string }>>({
+const filters = ref<SearchFormModel<{ keyword: string; vendor: number | '' }>>({
   keyword: '',
   vendor: '',
 })
@@ -47,8 +42,6 @@ const dialogVisible = ref(false)
 const editing = ref<OfficialModel | null>(null)
 const submitting = ref(false)
 const formError = ref('')
-const form = ref<PriceForm>({ inputCny: '', outputCny: '' })
-const formRef = ref<FormInstance>()
 const narrowMedia = window.matchMedia?.('(max-width: 900px)')
 const isNarrow = ref(narrowMedia?.matches ?? false)
 const syncNarrow = (event: MediaQueryListEvent): void => {
@@ -67,7 +60,7 @@ const pagination = computed<TablePaginationState>(() => ({
   pageSize: query.value.pageSize,
   total: total.value,
 }))
-const searchFields = computed<SearchField<{ keyword: string; vendor: string }>[]>(() => [
+const searchFields = computed<SearchField<{ keyword: string; vendor: number | '' }>[]>(() => [
   {
     key: 'keyword',
     type: 'input',
@@ -99,17 +92,6 @@ const columns = computed<TableColumn<OfficialModel>[]>(() => [
     fixed: isNarrow.value ? false : 'right',
   },
 ])
-const priceRules = computed<FormRules<PriceForm>>(() => ({
-  inputCny: [
-    { required: true, message: t('ai.officialModel.priceRequired'), trigger: 'blur' },
-    { pattern: /^\d+(\.\d{1,6})?$/, message: t('ai.officialModel.priceRule'), trigger: 'blur' },
-  ],
-  outputCny: [
-    { required: true, message: t('ai.officialModel.priceRequired'), trigger: 'blur' },
-    { pattern: /^\d+(\.\d{1,6})?$/, message: t('ai.officialModel.priceRule'), trigger: 'blur' },
-  ],
-}))
-
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
   if (loadError.value) return 'error'
@@ -143,7 +125,7 @@ function search(): void {
     page: 1,
     pageSize: query.value.pageSize,
     ...(filters.value.keyword.trim() ? { keyword: filters.value.keyword.trim() } : {}),
-    ...(filters.value.vendor ? { vendor: filters.value.vendor } : {}),
+    ...(filters.value.vendor !== '' ? { vendor: filters.value.vendor } : {}),
   }
   void load()
 }
@@ -162,12 +144,6 @@ function updatePagination(value: TablePaginationState): void {
   void load()
 }
 
-function formatVerifiedAt(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium' }).format(date)
-}
-
 function price(value: string, currency: 'USD' | 'CNY'): string {
   return `${currency === 'USD' ? '$' : '¥'}${value}/M`
 }
@@ -175,26 +151,19 @@ function price(value: string, currency: 'USD' | 'CNY'): string {
 function openEdit(row: OfficialModel): void {
   if (!canUpdate.value || !row.actions.update) return
   editing.value = row
-  form.value = { inputCny: row.inputCnyPerMillion, outputCny: row.outputCnyPerMillion }
   formError.value = ''
   dialogVisible.value = true
 }
 
-async function save(): Promise<void> {
-  if (submitting.value || editing.value === null || formRef.value === undefined || !canUpdate.value)
-    return
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
-  }
+async function save(payload: PriceForm): Promise<void> {
+  if (submitting.value || editing.value === null || !canUpdate.value) return
   submitting.value = true
   formError.value = ''
   try {
     await api.updateOfficialModelPrice(editing.value.id, {
       expectedVersion: editing.value.version,
-      inputCnyPerMillion: form.value.inputCny.trim(),
-      outputCnyPerMillion: form.value.outputCny.trim(),
+      inputCnyPerMillion: payload.inputCny,
+      outputCnyPerMillion: payload.outputCny,
     })
     dialogVisible.value = false
     ElNotification.success({ title: t('ai.officialModel.saved') })
@@ -274,7 +243,6 @@ watch(
 watch(dialogVisible, (visible) => {
   if (!visible) {
     editing.value = null
-    form.value = { inputCny: '', outputCny: '' }
     formError.value = ''
   }
 })
@@ -388,88 +356,13 @@ onBeforeUnmount(() => {
       </template>
     </AppTable>
 
-    <AppDialog
+    <PriceDialog
       v-model="dialogVisible"
-      :title="t('ai.officialModel.editTitle')"
-      width="600px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="!submitting"
-      :show-close="!submitting"
-    >
-      <div v-if="editing" class="ai-official-model-page__edit">
-        <div class="ai-official-model-page__edit-head">
-          <div>
-            <span class="ai-official-model-page__edit-vendor">{{ editing.vendorName }}</span>
-            <strong>{{ editing.displayName }}</strong>
-            <code v-if="editing.displayName !== editing.modelKey">{{ editing.modelKey }}</code>
-          </div>
-          <span class="ai-official-model-page__edit-note">
-            {{ t('ai.officialModel.editHint') }}
-            <br />
-            {{ t('ai.officialModel.verifiedAt') }}: {{ formatVerifiedAt(editing.verifiedAt) }}
-          </span>
-        </div>
-        <div class="ai-official-model-page__official-grid">
-          <div>
-            <span>{{ t('ai.officialModel.officialInput') }}</span>
-            <strong>{{ price(editing.inputUsdPerMillion, 'USD') }}</strong>
-          </div>
-          <div>
-            <span>{{ t('ai.officialModel.officialOutput') }}</span>
-            <strong>{{ price(editing.outputUsdPerMillion, 'USD') }}</strong>
-          </div>
-        </div>
-        <el-form
-          ref="formRef"
-          :model="form"
-          :rules="priceRules"
-          :disabled="submitting"
-          label-position="top"
-          class="ai-official-model-page__form"
-          @submit.prevent="save"
-        >
-          <div class="ai-official-model-page__form-grid">
-            <el-form-item prop="inputCny" :label="t('ai.officialModel.inputCny')">
-              <el-input
-                v-model="form.inputCny"
-                inputmode="decimal"
-                :placeholder="t('ai.officialModel.pricePlaceholder')"
-                data-testid="ai-official-model-input-cny"
-              >
-                <template #append>¥ / M</template>
-              </el-input>
-            </el-form-item>
-            <el-form-item prop="outputCny" :label="t('ai.officialModel.outputCny')">
-              <el-input
-                v-model="form.outputCny"
-                inputmode="decimal"
-                :placeholder="t('ai.officialModel.pricePlaceholder')"
-                data-testid="ai-official-model-output-cny"
-              >
-                <template #append>¥ / M</template>
-              </el-input>
-            </el-form-item>
-          </div>
-          <p class="ai-official-model-page__ratio-note">
-            {{ t('ai.officialModel.ratioNote') }}
-          </p>
-          <el-alert v-if="formError" :title="formError" type="error" :closable="false" />
-        </el-form>
-      </div>
-      <template #footer>
-        <el-button :disabled="submitting" @click="dialogVisible = false">
-          {{ t('common.cancel') }}
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="submitting"
-          data-testid="ai-official-model-save"
-          @click="save"
-        >
-          {{ t('common.save') }}
-        </el-button>
-      </template>
-    </AppDialog>
+      :model="editing"
+      :submitting="submitting"
+      :error="formError"
+      @save="save"
+    />
   </AppPage>
 </template>
 
@@ -532,117 +425,6 @@ onBeforeUnmount(() => {
     &--official {
       color: var(--admin-text-soft);
       font-weight: 500;
-    }
-  }
-
-  &__edit {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-  }
-
-  &__edit-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 20px;
-
-    > div {
-      display: flex;
-      min-width: 0;
-      flex-direction: column;
-      gap: 3px;
-    }
-
-    strong {
-      color: var(--admin-text);
-      font-size: 16px;
-      font-weight: 700;
-    }
-
-    code {
-      overflow: hidden;
-      color: var(--admin-text-muted);
-      font-family: var(--admin-font-data, ui-monospace, monospace);
-      font-size: 11px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  &__edit-vendor {
-    color: var(--el-color-primary);
-    font-size: 10px;
-    font-weight: 750;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  &__edit-note {
-    max-width: 240px;
-    color: var(--admin-text-muted);
-    font-size: 12px;
-    line-height: 1.7;
-    text-align: right;
-  }
-
-  &__official-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-
-    > div {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 12px 14px;
-      background: var(--admin-surface-soft);
-      border: 1px solid var(--admin-border);
-      border-radius: 8px;
-    }
-
-    span {
-      color: var(--admin-text-muted);
-      font-size: 11px;
-    }
-
-    strong {
-      color: var(--admin-text);
-      font-family: var(--admin-font-data, ui-monospace, monospace);
-      font-size: 14px;
-      font-weight: 650;
-    }
-  }
-
-  &__form-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0 16px;
-  }
-
-  &__ratio-note {
-    margin: -2px 0 0;
-    color: var(--admin-text-muted);
-    font-size: 12px;
-    line-height: 1.7;
-  }
-}
-
-@media (max-width: 680px) {
-  .ai-official-model-page {
-    &__edit-head {
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    &__edit-note {
-      max-width: none;
-      text-align: left;
-    }
-
-    &__form-grid,
-    &__official-grid {
-      grid-template-columns: 1fr;
     }
   }
 }

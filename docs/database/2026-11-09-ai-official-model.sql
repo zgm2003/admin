@@ -6,8 +6,7 @@ SET LOCAL statement_timeout = '30s';
 
 CREATE TABLE IF NOT EXISTS ai_official_model (
     id bigserial PRIMARY KEY,
-    vendor_code varchar(64) NOT NULL,
-    vendor_name varchar(128) NOT NULL,
+    vendor smallint NOT NULL CHECK (vendor IN (1, 2, 3)),
     model_key varchar(200) NOT NULL,
     display_name varchar(200) NOT NULL,
     input_usd_micros bigint NOT NULL CHECK (input_usd_micros >= 0),
@@ -21,15 +20,16 @@ CREATE TABLE IF NOT EXISTS ai_official_model (
     version bigint NOT NULL DEFAULT 1 CHECK (version >= 1),
     created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT ai_official_model_vendor_model_key UNIQUE (vendor_code, model_key)
+    CONSTRAINT ai_official_model_vendor_model_key UNIQUE (vendor, model_key)
 );
 
 -- 兼容已经建表的环境；新环境执行也不会重复加列。
 ALTER TABLE ai_official_model ADD COLUMN IF NOT EXISTS sort_order integer NOT NULL DEFAULT 0 CHECK (sort_order >= 0);
 
-CREATE INDEX IF NOT EXISTS ai_official_model_vendor_idx ON ai_official_model (vendor_code, display_name);
+CREATE INDEX IF NOT EXISTS ai_official_model_vendor_sort_idx ON ai_official_model (vendor, sort_order);
 
 COMMENT ON TABLE ai_official_model IS 'AI 官方模型价格目录；官方价为美元/1M tokens，系统价为人民币/1M tokens';
+COMMENT ON COLUMN ai_official_model.vendor IS '厂商：1=OpenAI，2=Anthropic，3=Google；后端 typed enum';
 COMMENT ON COLUMN ai_official_model.input_usd_micros IS '官方输入价，美元 micros / 1M tokens';
 COMMENT ON COLUMN ai_official_model.output_usd_micros IS '官方输出价，美元 micros / 1M tokens';
 COMMENT ON COLUMN ai_official_model.input_cny_micros IS '系统输入价，人民币 micros / 1M tokens';

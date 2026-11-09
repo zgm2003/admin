@@ -7,17 +7,18 @@ import (
 
 func TestParseListQuery(t *testing.T) {
 	query, err := parseListQuery(url.Values{
-		"page": {"2"}, "pageSize": {"50"}, "keyword": {" gpt-5 "}, "vendor": {"openai"},
+		"page": {"2"}, "pageSize": {"50"}, "keyword": {" gpt-5 "}, "vendor": {"1"},
 	})
 	if err != nil {
 		t.Fatalf("parseListQuery() error = %v", err)
 	}
-	if query.Page != 2 || query.PageSize != 50 || query.Keyword != "gpt-5" || query.Vendor != "openai" {
+	if query.Page != 2 || query.PageSize != 50 || query.Keyword != "gpt-5" || query.Vendor != VendorOpenAI {
 		t.Fatalf("parseListQuery() = %+v", query)
 	}
 	for _, values := range []url.Values{
 		{"page": {"1"}, "pageSize": {"20"}, "status": {"1"}},
-		{"page": {"1"}, "pageSize": {"20"}, "vendor": {"OpenAI"}},
+		{"page": {"1"}, "pageSize": {"20"}, "vendor": {"openai"}},
+		{"page": {"1"}, "pageSize": {"20"}, "vendor": {"99"}},
 		{"page": {"0"}, "pageSize": {"20"}},
 	} {
 		if _, err := parseListQuery(values); err == nil {

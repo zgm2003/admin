@@ -14,8 +14,8 @@ type Repository struct{ db *gorm.DB }
 func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 
 func modelFilter(db *gorm.DB, query ListQuery) *gorm.DB {
-	if query.Vendor != "" {
-		db = db.Where("vendor_code = ?", query.Vendor)
+	if query.Vendor != 0 {
+		db = db.Where("vendor = ?", query.Vendor)
 	}
 	if query.Keyword != "" {
 		like := "%" + query.Keyword + "%"
@@ -103,7 +103,7 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 		for _, entry := range catalog.Models {
 			var row Model
 			found := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-				Where("vendor_code = ? AND model_key = ?", entry.VendorCode, entry.ModelKey).
+				Where("vendor = ? AND model_key = ?", entry.Vendor, entry.ModelKey).
 				Limit(1).Find(&row)
 			if found.Error != nil {
 				return found.Error
@@ -111,12 +111,11 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 			switch {
 			case found.RowsAffected == 0:
 				row = Model{
-					VendorCode: entry.VendorCode, VendorName: entry.VendorName,
-					ModelKey: entry.ModelKey, DisplayName: entry.DisplayName,
+					Vendor: entry.Vendor, ModelKey: entry.ModelKey, DisplayName: entry.DisplayName,
 					InputUSDMicros: entry.InputUSDMicros, OutputUSDMicros: entry.OutputUSDMicros,
 					InputCNYMicros: entry.InputUSDMicros, OutputCNYMicros: entry.OutputUSDMicros,
-					CatalogVersion: catalog.Version, SourceURL: catalog.SourceURL,
-					VerifiedAt: catalog.VerifiedAt, SortOrder: entry.SortOrder,
+					CatalogVersion: catalog.Version, SourceURL: entry.SourceURL,
+					VerifiedAt: entry.VerifiedAt, SortOrder: entry.SortOrder,
 					Version: 1, CreatedAt: now, UpdatedAt: now,
 				}
 				if err := tx.Create(&row).Error; err != nil {
@@ -126,20 +125,19 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 			default:
 				if row.InputUSDMicros == entry.InputUSDMicros &&
 					row.OutputUSDMicros == entry.OutputUSDMicros &&
-					row.VendorName == entry.VendorName &&
 					row.DisplayName == entry.DisplayName &&
 					row.CatalogVersion == catalog.Version &&
-					row.SourceURL == catalog.SourceURL &&
-					row.VerifiedAt.Equal(catalog.VerifiedAt) &&
+					row.SourceURL == entry.SourceURL &&
+					row.VerifiedAt.Equal(entry.VerifiedAt) &&
 					row.SortOrder == entry.SortOrder {
 					result.Unchanged++
 					continue
 				}
 				update := tx.Model(&Model{}).Where("id = ? AND version = ?", row.ID, row.Version).Updates(map[string]any{
-					"vendor_name": entry.VendorName, "display_name": entry.DisplayName,
+					"display_name":     entry.DisplayName,
 					"input_usd_micros": entry.InputUSDMicros, "output_usd_micros": entry.OutputUSDMicros,
-					"catalog_version": catalog.Version, "source_url": catalog.SourceURL,
-					"verified_at": catalog.VerifiedAt, "sort_order": entry.SortOrder,
+					"catalog_version": catalog.Version, "source_url": entry.SourceURL,
+					"verified_at": entry.VerifiedAt, "sort_order": entry.SortOrder,
 					"version": gorm.Expr("version + 1"), "updated_at": now,
 				})
 				if update.Error != nil {
