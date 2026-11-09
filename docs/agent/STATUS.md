@@ -1711,3 +1711,14 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - AppDialog 默认 content height 改为 500px，内部统一使用 el-scrollbar；footer 留在滚动区外并增加顶边框。邮件模板弹窗改用 AppDialog，基础字段和变量压缩在顶部，编辑器与 sandbox 预览左右并排，示例变量同行显示。
 - 完整邮件 HTML 新增 `data-mail-editor="content"` 可视化编辑边界；富文本只更新该区域，不再替换 body。编辑器忽略初始化 change，只有用户在编辑区操作后才回写，避免点击即丢失完整 HTML 和邮件卡片样式。
 - migration 已再次在真实 PostgreSQL 执行，4 个邮件模板均有编辑边界，current.sql 已刷新。AppDialog/HTML 工具定向测试 7/7、Mail 页面测试 20/20、pnpm typecheck 通过；前端全量测试由维护者执行。
+
+### AI 官方模型（2026-11-09）
+
+- 新增 `AI` 目录与 `官方模型` 页面，权限动作：查看、改人民币价、同步官方目录、按官方价重置。
+- 新增 `ai_official_model` 表；官方价与人民币价均按 1M tokens 存储，金额用 micros 整数保存，避免浮点误差。
+- 官方目录来自仓库内 `server/internal/module/ai/officialModel/catalog/official-models.json`，当前 37 个 OpenAI 模型；同步时新模型用官方数字初始化人民币价，已有人民币价保留，目录顺序写入 `sort_order`。
+- 页面支持人民币输入/输出价编辑、显式重置为官方数字、目录同步；官方模型目录只读，不提供页面新增/删除。
+- API：`GET /api/admin/v1/ai/official-model`、`GET /options`、`PUT /:id/price`、`POST /:id/reset-price`、`POST /sync`。
+- 菜单迁移已执行：admin `menu_version=27`，Redis `authz:menu-state:v1:1 = ready/27`；当前 API pid `34168`，Worker 未重启。
+- 验证：后端官方模型包与 `cmd/api` 测试通过；前端 `pnpm typecheck`、`pnpm build` 通过；浏览器实际完成列表、编辑、重置、同步。全量 `go test ./...` 仍受既有 `configCache` 测试和 `tmp/schedulerFailureFixture` 构建失败影响，不计为本次通过。
+- `docs/database/current.sql` 已从 public schema 重新导出。
