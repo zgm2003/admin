@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rHot17ux1q3XAnS8ehjfMh05bpZvcgvGNHolegiUtnXSRgTRFJeWZeJ7nSusef1
+\restrict EixUk2wNxsd3NTNEnCmLUBvZS0AG4A31ju3yJeoW7oN1kpHH7EpgDN29ar0ngSd
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -836,7 +836,7 @@ CREATE TABLE public.ai_provider (
     CONSTRAINT ai_provider_base_url_check CHECK (((base_url)::text ~ '^https://[^[:space:]]+$'::text)),
     CONSTRAINT ai_provider_encryption_key_id_check CHECK ((length((encryption_key_id)::text) > 0)),
     CONSTRAINT ai_provider_name_check CHECK (((length((name)::text) >= 1) AND (length((name)::text) <= 128))),
-    CONSTRAINT ai_provider_protocol_check CHECK ((protocol = ANY (ARRAY[1, 2, 3]))),
+    CONSTRAINT ai_provider_protocol_check CHECK ((protocol = ANY (ARRAY[1, 2, 3, 4]))),
     CONSTRAINT ai_provider_sort_order_check CHECK (((sort_order >= 0) AND (sort_order <= 1000000))),
     CONSTRAINT ai_provider_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ai_provider_timeout_ms_check CHECK (((timeout_ms >= 1000) AND (timeout_ms <= 300000))),
@@ -862,7 +862,7 @@ COMMENT ON COLUMN public.ai_provider.vendor IS '厂商：1=OpenAI，2=Anthropic�
 -- Name: COLUMN ai_provider.protocol; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.ai_provider.protocol IS '协议：1=OpenAI 兼容，2=Anthropic，3=Gemini';
+COMMENT ON COLUMN public.ai_provider.protocol IS '协议：1=OpenAI Chat Completions 兼容，2=Anthropic，3=Gemini，4=OpenAI Responses';
 
 
 --
@@ -13046,5 +13046,5 @@ ALTER TABLE ONLY test_role_1794197867820588800.permission_user_role
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rHot17ux1q3XAnS8ehjfMh05bpZvcgvGNHolegiUtnXSRgTRFJeWZeJ7nSusef1
+\unrestrict EixUk2wNxsd3NTNEnCmLUBvZS0AG4A31ju3yJeoW7oN1kpHH7EpgDN29ar0ngSd
 

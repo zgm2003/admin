@@ -20,9 +20,10 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 		option.New(ctx, VendorGoogle, "Google", "Google"),
 	}
 	protocols := []option.Option[Protocol]{
-		option.New(ctx, ProtocolOpenAI, "OpenAI 兼容", "OpenAI compatible"),
+		option.New(ctx, ProtocolOpenAI, "OpenAI Chat 兼容", "OpenAI Chat compatible"),
 		option.New(ctx, ProtocolAnthropic, "Anthropic", "Anthropic"),
 		option.New(ctx, ProtocolGemini, "Gemini", "Gemini"),
+		option.New(ctx, ProtocolOpenAIResponses, "OpenAI Responses", "OpenAI Responses"),
 	}
 	statuses := []option.Option[yesno.Value]{
 		option.New(ctx, yesno.No, "停用", "Disabled"),

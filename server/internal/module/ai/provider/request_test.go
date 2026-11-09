@@ -71,13 +71,13 @@ func TestUpdateRequestBlankAPIKeyMeansKeepCurrent(t *testing.T) {
 func TestParseListQueryParsesFilters(t *testing.T) {
 	query, err := parseListQuery(url.Values{
 		"page": {"2"}, "pageSize": {"50"}, "keyword": {" proxy "},
-		"vendor": {"2"}, "protocol": {"3"}, "status": {"1"},
+		"vendor": {"2"}, "protocol": {"4"}, "status": {"1"},
 	})
 	if err != nil {
 		t.Fatalf("parseListQuery() error = %v", err)
 	}
 	if query.Page != 2 || query.PageSize != 50 || query.Keyword != "proxy" ||
-		query.Vendor != VendorAnthropic || query.Protocol != ProtocolGemini ||
+		query.Vendor != VendorAnthropic || query.Protocol != ProtocolOpenAIResponses ||
 		query.Status == nil || *query.Status != yesno.Yes {
 		t.Fatalf("parseListQuery() = %+v", query)
 	}

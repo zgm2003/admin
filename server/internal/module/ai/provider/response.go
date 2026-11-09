@@ -69,11 +69,13 @@ func safeValue(ctx context.Context, row Model) (SafeValue, error) {
 func protocolLabelZH(protocol Protocol) string {
 	switch protocol {
 	case ProtocolOpenAI:
-		return "OpenAI 兼容"
+		return "OpenAI Chat 兼容"
 	case ProtocolAnthropic:
 		return "Anthropic"
 	case ProtocolGemini:
 		return "Gemini"
+	case ProtocolOpenAIResponses:
+		return "OpenAI Responses"
 	default:
 		return ""
 	}
@@ -82,11 +84,13 @@ func protocolLabelZH(protocol Protocol) string {
 func protocolLabelEN(protocol Protocol) string {
 	switch protocol {
 	case ProtocolOpenAI:
-		return "OpenAI compatible"
+		return "OpenAI Chat compatible"
 	case ProtocolAnthropic:
 		return "Anthropic"
 	case ProtocolGemini:
 		return "Gemini"
+	case ProtocolOpenAIResponses:
+		return "OpenAI Responses"
 	default:
 		return ""
 	}

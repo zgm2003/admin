@@ -28,11 +28,12 @@ func (vendor Vendor) Label() string {
 type Protocol int16
 
 const (
-	ProtocolOpenAI    Protocol = 1
-	ProtocolAnthropic Protocol = 2
-	ProtocolGemini    Protocol = 3
+	ProtocolOpenAI          Protocol = 1
+	ProtocolAnthropic       Protocol = 2
+	ProtocolGemini          Protocol = 3
+	ProtocolOpenAIResponses Protocol = 4
 )
 
 func (protocol Protocol) Valid() bool {
-	return protocol >= ProtocolOpenAI && protocol <= ProtocolGemini
+	return protocol >= ProtocolOpenAI && protocol <= ProtocolOpenAIResponses
 }

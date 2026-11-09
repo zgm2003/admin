@@ -1739,3 +1739,11 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 表迁移 `2026-11-09-ai-provider.sql` 和菜单迁移 `2026-11-09-ai-provider-menu.sql` 已执行；admin `menu_version=28`，旧菜单状态缓存已清理。
 - 后端请求/服务/真实 PostgreSQL 生命周期验证通过；临时端口 API 验证创建、列表、编辑、启停、删除通过；前端 `pnpm typecheck`、`pnpm build`、定向 ESLint 通过。
 - 当前 16301 仍是 14:29 启动的旧 API，供应商路由返回 404；需要重启加载新代码。`docs/database/current.sql` 已刷新。
+
+### OpenAI Responses 协议选项（2026-11-09）
+
+- 供应商协议枚举新增 `4 = OpenAI Responses`；原有 `1 = OpenAI Chat Completions 兼容` 保持不变。
+- 数据库 `ai_provider_protocol_check` 已扩展为 `protocol IN (1,2,3,4)`，并更新字段注释；迁移文件为 `2026-11-09-ai-provider-responses-protocol.sql`。
+- `/api/admin/v1/ai/provider/options` 的 `protocols` 现在返回 4 项；前端下拉无需硬编码，由后端选项驱动。
+- 已通过供应商包测试、`cmd/api` 构建；`docs/database/current.sql` 已刷新。
+- 当前 16301 仍是旧 API 进程，需重启后页面才能看到 OpenAI Responses；该选项只解决协议配置，真正调用适配在后续模型绑定/调用层实现。
