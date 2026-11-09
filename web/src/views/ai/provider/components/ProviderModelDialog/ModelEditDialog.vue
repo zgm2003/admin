@@ -51,6 +51,9 @@ const pricingModes = computed(() =>
   props.options.pricingModes.filter((item) => form.value.modelKind !== 1 || item.value === 1),
 )
 const priceUnits = computed(() => {
+  if (form.value.pricingMode === 1) {
+    return props.options.priceUnits.filter((item) => item.value === 1)
+  }
   if (form.value.modelKind === 2) return props.options.priceUnits.filter((item) => item.value === 2)
   if (form.value.modelKind === 3) return props.options.priceUnits.filter((item) => item.value === 3)
   if (form.value.modelKind === 4) {
