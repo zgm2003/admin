@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hLDM06ceeZS34xhDnK0wudcfObU5iZIHyZdf0GYVZiwDbevxPGA8MrYwMhmUr74
+\restrict f0KGxOPyu8LcUX6canX4Z7ndZ8d3JUzcqBGieWyN9afafMdKqGy4BKqsyfQVwZw
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -715,8 +715,6 @@ SET default_table_access_method = heap;
 
 CREATE TABLE public.ai_official_model (
     id bigint NOT NULL,
-    vendor_code character varying(64) NOT NULL,
-    vendor_name character varying(128) NOT NULL,
     model_key character varying(200) NOT NULL,
     display_name character varying(200) NOT NULL,
     input_usd_micros bigint NOT NULL,
@@ -730,11 +728,13 @@ CREATE TABLE public.ai_official_model (
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     sort_order integer DEFAULT 0 NOT NULL,
+    vendor smallint NOT NULL,
     CONSTRAINT ai_official_model_input_cny_micros_check CHECK ((input_cny_micros >= 0)),
     CONSTRAINT ai_official_model_input_usd_micros_check CHECK ((input_usd_micros >= 0)),
     CONSTRAINT ai_official_model_output_cny_micros_check CHECK ((output_cny_micros >= 0)),
     CONSTRAINT ai_official_model_output_usd_micros_check CHECK ((output_usd_micros >= 0)),
     CONSTRAINT ai_official_model_sort_order_check CHECK ((sort_order >= 0)),
+    CONSTRAINT ai_official_model_vendor_check CHECK ((vendor = ANY (ARRAY[1, 2, 3]))),
     CONSTRAINT ai_official_model_version_check CHECK ((version >= 1))
 );
 
@@ -786,6 +786,13 @@ COMMENT ON COLUMN public.ai_official_model.version IS '乐观锁版本；编辑�
 --
 
 COMMENT ON COLUMN public.ai_official_model.sort_order IS '官方目录顺序；数字越小越靠前';
+
+
+--
+-- Name: COLUMN ai_official_model.vendor; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.ai_official_model.vendor IS '厂商：1=OpenAI，2=Anthropic，3=Google；后端 typed enum';
 
 
 --
@@ -7201,14 +7208,6 @@ ALTER TABLE ONLY public.ai_official_model
 
 
 --
--- Name: ai_official_model ai_official_model_vendor_model_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.ai_official_model
-    ADD CONSTRAINT ai_official_model_vendor_model_key UNIQUE (vendor_code, model_key);
-
-
---
 -- Name: system_operation_log audit_operation_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9129,10 +9128,17 @@ ALTER TABLE ONLY test_user_profile_avatar_migration_1794196925337478100.user_acc
 
 
 --
--- Name: ai_official_model_vendor_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: ai_official_model_vendor_model_key_uq; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX ai_official_model_vendor_idx ON public.ai_official_model USING btree (vendor_code, display_name);
+CREATE UNIQUE INDEX ai_official_model_vendor_model_key_uq ON public.ai_official_model USING btree (vendor, model_key);
+
+
+--
+-- Name: ai_official_model_vendor_sort_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ai_official_model_vendor_sort_idx ON public.ai_official_model USING btree (vendor, sort_order);
 
 
 --
@@ -12939,5 +12945,5 @@ ALTER TABLE ONLY test_role_1794197867820588800.permission_user_role
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hLDM06ceeZS34xhDnK0wudcfObU5iZIHyZdf0GYVZiwDbevxPGA8MrYwMhmUr74
+\unrestrict f0KGxOPyu8LcUX6canX4Z7ndZ8d3JUzcqBGieWyN9afafMdKqGy4BKqsyfQVwZw
 

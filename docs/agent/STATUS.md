@@ -1727,6 +1727,6 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 
 - 厂商字段按项目规范改为 `vendor SMALLINT + CHECK`，后端 typed enum：1=OpenAI、2=Anthropic、3=Google；`/options` 返回数字 `{value,label}`，不建通用字典表。
 - 官方目录增加到 51 个模型：OpenAI 37、Anthropic 7、Google 7；Anthropic/Gemini 使用独立 sourceUrl 与核验日期。
-- 已执行 expand 迁移 `2026-11-09-ai-official-model-vendor.sql`，现有 37 行回填为 OpenAI；旧 `vendor_code/vendor_name` 暂保留为可空列以支持滚动部署，收缩迁移 `2026-11-09-ai-official-model-vendor-cleanup.sql` 待新 API 重启后执行。
+- 已执行 expand 迁移 `2026-11-09-ai-official-model-vendor.sql`，现有 37 行回填为 OpenAI；旧 `vendor_code/vendor_name` 在滚动部署期间保留为可空列。后端停止后已执行收缩迁移 `2026-11-09-ai-official-model-vendor-cleanup.sql`，旧列已删除，最终只保留 `vendor smallint`。
 - 服务级校验：同步插入 14 行、更新 37 行，厂商分布 37/7/7，51 个模型人民币价均等于官方数字。
 - 后端官方模型包、`cmd/api` 测试通过；前端 `pnpm typecheck`、`pnpm build`、定向 ESLint 通过。当前 16301 仍是旧 API 进程，需要重启后前端数字 vendor 契约才生效。
