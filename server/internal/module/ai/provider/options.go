@@ -18,6 +18,7 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 		option.New(ctx, VendorOpenAI, "OpenAI", "OpenAI"),
 		option.New(ctx, VendorAnthropic, "Anthropic", "Anthropic"),
 		option.New(ctx, VendorGoogle, "Google", "Google"),
+		option.New(ctx, VendorVolcengine, "火山引擎", "Volcengine"),
 	}
 	protocols := []option.Option[Protocol]{
 		option.New(ctx, ProtocolOpenAI, "OpenAI Chat 兼容", "OpenAI Chat compatible"),

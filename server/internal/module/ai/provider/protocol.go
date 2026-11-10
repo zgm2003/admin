@@ -3,13 +3,14 @@ package provider
 type Vendor int16
 
 const (
-	VendorOpenAI    Vendor = 1
-	VendorAnthropic Vendor = 2
-	VendorGoogle    Vendor = 3
+	VendorOpenAI     Vendor = 1
+	VendorAnthropic  Vendor = 2
+	VendorGoogle     Vendor = 3
+	VendorVolcengine Vendor = 4
 )
 
 func (vendor Vendor) Valid() bool {
-	return vendor >= VendorOpenAI && vendor <= VendorGoogle
+	return vendor >= VendorOpenAI && vendor <= VendorVolcengine
 }
 
 func (vendor Vendor) Label() string {
@@ -20,6 +21,8 @@ func (vendor Vendor) Label() string {
 		return "Anthropic"
 	case VendorGoogle:
 		return "Google"
+	case VendorVolcengine:
+		return "火山引擎"
 	default:
 		return ""
 	}

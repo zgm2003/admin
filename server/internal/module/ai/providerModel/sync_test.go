@@ -60,13 +60,17 @@ func TestSyncMatchesOfficialModelsAndDefaultsUnmatched(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
-		_, _ = writer.Write([]byte(`{"data":[{"id":"gpt-4o"},{"id":"unknown-model"}]}`))
+		_, _ = writer.Write([]byte(`{"data":[{"id":"gpt-4o"},{"id":"doubao-seedance-2-5-260628"},{"id":"unknown-model"}]}`))
 	}))
 	defer server.Close()
 
-	repo := &syncFakeRepository{officials: []Official{{
-		ID: 7, ModelKey: "gpt-4o", DisplayName: "GPT-4o", ModelKind: pricing.KindChat,
-	}}}
+	repo := &syncFakeRepository{officials: []Official{
+		{ID: 7, ModelKey: "gpt-4o", DisplayName: "GPT-4o", ModelKind: pricing.KindChat},
+		{
+			ID: 8, ModelKey: "doubao-seedance-2-5-260628",
+			DisplayName: "Seedance 2.5", ModelKind: pricing.KindVideo,
+		},
+	}}
 	service := &Service{
 		repo: repo,
 		providerSource: syncFakeProvider{model: aiprovider.Model{
@@ -79,7 +83,7 @@ func TestSyncMatchesOfficialModelsAndDefaultsUnmatched(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Total != 2 || result.Unmatched != 1 || len(repo.items) != 2 {
+	if result.Total != 3 || result.Unmatched != 1 || len(repo.items) != 3 {
 		t.Fatalf("result = %+v, items = %+v", result, repo.items)
 	}
 	if repo.items[0].OfficialModelID == nil || *repo.items[0].OfficialModelID != 7 ||
@@ -88,8 +92,15 @@ func TestSyncMatchesOfficialModelsAndDefaultsUnmatched(t *testing.T) {
 		repo.items[0].Status != yesno.No {
 		t.Fatalf("matched item = %+v", repo.items[0])
 	}
-	if repo.items[1].OfficialModelID != nil || repo.items[1].PricingMode != pricing.ModeProviderUnit ||
+	if repo.items[1].OfficialModelID == nil || *repo.items[1].OfficialModelID != 8 ||
+		repo.items[1].ModelKind != pricing.KindVideo ||
+		repo.items[1].PricingMode != pricing.ModeProviderUnit ||
+		repo.items[1].PriceUnit != pricing.UnitSecond ||
 		repo.items[1].Status != yesno.No {
-		t.Fatalf("unmatched item = %+v", repo.items[1])
+		t.Fatalf("video item = %+v", repo.items[1])
+	}
+	if repo.items[2].OfficialModelID != nil || repo.items[2].PricingMode != pricing.ModeProviderUnit ||
+		repo.items[2].Status != yesno.No {
+		t.Fatalf("unmatched item = %+v", repo.items[2])
 	}
 }

@@ -88,6 +88,18 @@ export const enUS = {
     'Update models and official prices from the repository catalog. New models initialize CNY prices from official numbers; existing CNY prices are preserved. Continue?',
   'ai.officialModel.synced': 'Official catalog synced',
   'ai.officialModel.syncSummary': '{inserted} added, {updated} updated, {unchanged} unchanged',
+  'ai.officialModel.kindChat': 'Chat',
+  'ai.officialModel.kindImage': 'Image',
+  'ai.officialModel.kindVideo': 'Video',
+  'ai.officialModel.kindAudio': 'Audio',
+  'ai.officialModel.videoPrice': 'Official video ¥/second',
+  'ai.officialModel.videoPriceTitle': 'Official video prices',
+  'ai.officialModel.videoHint':
+    'Video models are priced by resolution and whether input video is included. These are official reference prices.',
+  'ai.officialModel.videoPriceUnavailable': 'No fixed per-second price',
+  'ai.officialModel.videoPriceNote':
+    'With input video, the official price is token-based and varies with input/output duration. Configure the actual billing rate in provider model prices.',
+  'ai.officialModel.viewPrice': 'View prices',
   'ai.officialModel.edit': 'Set CNY',
   'ai.officialModel.editTitle': 'Set CNY price',
   'ai.officialModel.editHint':

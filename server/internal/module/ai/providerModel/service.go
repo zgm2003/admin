@@ -177,14 +177,12 @@ func (s *Service) Sync(ctx context.Context, providerID int64) (SyncResult, error
 			id := official.ID
 			item.OfficialModelID = &id
 			item.ModelKind = official.ModelKind
-			item.PricingMode = pricing.ModeOfficialToken
-			item.PriceUnit = pricing.UnitMillionTokens
+			item.PricingMode, item.PriceUnit = defaultPricingForKind(official.ModelKind)
 		} else if official, ok := byLowerKey[strings.ToLower(model.ID)]; ok {
 			id := official.ID
 			item.OfficialModelID = &id
 			item.ModelKind = official.ModelKind
-			item.PricingMode = pricing.ModeOfficialToken
-			item.PriceUnit = pricing.UnitMillionTokens
+			item.PricingMode, item.PriceUnit = defaultPricingForKind(official.ModelKind)
 		} else {
 			unmatched++
 		}
@@ -198,6 +196,22 @@ func (s *Service) Sync(ctx context.Context, providerID int64) (SyncResult, error
 		Total: len(upstream), Inserted: counts.Inserted, Updated: counts.Updated,
 		Deactivated: counts.Deactivated, Unmatched: unmatched,
 	}, nil
+}
+
+func defaultPricingForKind(kind pricing.ModelKind) (pricing.PricingMode, pricing.PriceUnit) {
+	if kind == pricing.KindChat {
+		return pricing.ModeOfficialToken, pricing.UnitMillionTokens
+	}
+	switch kind {
+	case pricing.KindImage:
+		return pricing.ModeProviderUnit, pricing.UnitImage
+	case pricing.KindVideo:
+		return pricing.ModeProviderUnit, pricing.UnitSecond
+	case pricing.KindAudio:
+		return pricing.ModeProviderUnit, pricing.UnitRequest
+	default:
+		return pricing.ModeProviderUnit, pricing.UnitRequest
+	}
 }
 
 func (s *Service) safeValues(ctx context.Context, rows []Model) ([]SafeValue, error) {

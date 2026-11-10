@@ -1761,7 +1761,7 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 验证：供应商、供应商模型、官方模型、pricing、cmd/api 测试通过；前端 `pnpm typecheck`、定向 ESLint、`pnpm build` 通过；真实页面验证供应商 Token 倍率展示、模型弹窗和图片质量价格保存，临时数据已清理。
 
 - 追加迁移 `2026-11-09-ai-provider-model-token-constraint.sql`：停用的 token 模型允许暂缺官方映射，启用时仍强制官方映射；与 service 的启停校验一致。
-- 当前 `16301` 由维护者手动启动（pid 29072，health 200）；测试供应商和模型数据已清理，`ai_provider` / `ai_provider_model` 均为 0 条。
+- 当前 `16301` 由维护者手动启动（health 200）；测试供应商和模型数据已清理，`ai_provider` / `ai_provider_model` 均为 0 条。
 
 ### 官方模型缓存价格补齐（2026-11-09）
 
@@ -1770,3 +1770,13 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 官方目录同步现在会写入缓存 USD/CNY；已存在的官方模型若缓存 CNY 为空，会按官方 USD 数字回填，已有手工 CNY 值不覆盖。
 - 追加 `2026-11-09-ai-official-cache-prices.sql`，当前库回填 38 个模型缓存价；`gpt-6-astra` 页面应显示缓存读取 `1.00`、缓存写入 `12.50`。
 - 当前字段对应 30m cache write；12h cache write 暂未单独建模。
+
+### Seedance 官方视频目录与按秒价格（2026-11-09）
+
+- 新增厂商 `火山引擎`（Volcengine，vendor=4），`ai_official_model` / `ai_provider` 的厂商约束同步扩展。
+- 官方目录新增 4 个视频模型：`doubao-seedance-2-5-260628`、`doubao-seedance-2-0-260128`、`doubao-seedance-2-0-fast-260128`、`doubao-seedance-2-0-mini-260615`，`model_kind=3`。
+- 新增 `ai_official_model_price`，按 `tier_key` 保存 480p/720p/1080p 与是否含输入视频的官方每秒价；目录同步会重建对应档位。
+- 官方无输入视频每秒价（元/秒）：2.5 为 0.67/1.51/3.74；2.0 为 0.46/0.99/2.48；2.0 Fast 为 0.37/0.80（仅 480p/720p）；2.0 Mini 为 0.23/0.50（仅 480p/720p）。
+- 含输入视频时火山方舟官方按 token 和输入/输出总时长计费，不提供固定每秒价，因此对应档位保留 NULL，页面显示“未提供固定每秒价”，不编造价格。
+- 供应商模型同步遇到非 chat 官方模型时，默认改为供应商单位价格：视频 `second`、图片 `image`、音频 `request`，避免视频模型误用 0 token 价格。
+- 当前手动运行的 `16301` 若是在本次改动前启动的，需要重启一次才能加载 `vendor=4`、`videoPrices` 和 Seedance 路由；数据库和前端构建已完成。

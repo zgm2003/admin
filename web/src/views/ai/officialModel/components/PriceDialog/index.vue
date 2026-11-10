@@ -21,6 +21,11 @@ const { t, locale } = useI18n()
 
 const formRef = ref<FormInstance>()
 const form = ref<PriceForm>({ inputCny: '', outputCny: '', cacheReadCny: '', cacheWriteCny: '' })
+const isTokenModel = computed(() => props.model?.modelKind === 1)
+const isVideoModel = computed(() => props.model?.modelKind === 3)
+const dialogTitle = computed(() =>
+  isVideoModel.value ? t('ai.officialModel.videoPriceTitle') : t('ai.officialModel.editTitle'),
+)
 const rules = computed<FormRules<PriceForm>>(() => ({
   inputCny: [
     { required: true, message: t('ai.officialModel.priceRequired'), trigger: 'blur' },
@@ -72,7 +77,13 @@ function price(value: string, currency: 'USD' | 'CNY'): string {
 }
 
 async function submit(): Promise<void> {
-  if (props.submitting || props.model === null || formRef.value === undefined) return
+  if (
+    props.submitting ||
+    props.model === null ||
+    !isTokenModel.value ||
+    formRef.value === undefined
+  )
+    return
   try {
     await formRef.value.validate()
   } catch {
@@ -90,7 +101,7 @@ async function submit(): Promise<void> {
 <template>
   <AppDialog
     v-model="visible"
-    :title="t('ai.officialModel.editTitle')"
+    :title="dialogTitle"
     width="600px"
     :close-on-click-modal="false"
     :close-on-press-escape="!submitting"
@@ -104,12 +115,30 @@ async function submit(): Promise<void> {
           <code v-if="model.displayName !== model.modelKey">{{ model.modelKey }}</code>
         </div>
         <span class="official-model-price-dialog__edit-note">
-          {{ t('ai.officialModel.editHint') }}
+          {{ isVideoModel ? t('ai.officialModel.videoHint') : t('ai.officialModel.editHint') }}
           <br />
           {{ t('ai.officialModel.verifiedAt') }}: {{ formatVerifiedAt(model.verifiedAt) }}
         </span>
       </div>
-      <div class="official-model-price-dialog__official-grid">
+      <div v-if="isVideoModel" class="official-model-price-dialog__video">
+        <div
+          v-for="item in model.videoPrices ?? []"
+          :key="item.tierKey"
+          class="official-model-price-dialog__video-row"
+        >
+          <span>{{ item.tierLabel }}</span>
+          <strong v-if="item.priceCnyPerSecond">
+            {{ `¥${item.priceCnyPerSecond}/${item.unit === 'second' ? '秒' : item.unit}` }}
+          </strong>
+          <strong v-else class="official-model-price-dialog__video-empty">
+            {{ t('ai.officialModel.videoPriceUnavailable') }}
+          </strong>
+        </div>
+        <p class="official-model-price-dialog__cache-note">
+          {{ t('ai.officialModel.videoPriceNote') }}
+        </p>
+      </div>
+      <div v-if="isTokenModel" class="official-model-price-dialog__official-grid">
         <div>
           <span>{{ t('ai.officialModel.officialInput') }}</span>
           <strong>{{ price(model.inputUsdPerMillion, 'USD') }}</strong>
@@ -120,6 +149,7 @@ async function submit(): Promise<void> {
         </div>
       </div>
       <el-form
+        v-if="isTokenModel"
         ref="formRef"
         :model="form"
         :rules="rules"
@@ -184,6 +214,7 @@ async function submit(): Promise<void> {
         {{ t('common.cancel') }}
       </el-button>
       <el-button
+        v-if="isTokenModel"
         type="primary"
         :loading="submitting"
         data-testid="ai-official-model-save"
@@ -246,6 +277,41 @@ async function submit(): Promise<void> {
     font-size: 12px;
     line-height: 1.7;
     text-align: right;
+  }
+
+  &__video {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--admin-border);
+    border-radius: 10px;
+    background: var(--admin-surface-soft);
+  }
+
+  &__video-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 13px;
+
+    span {
+      color: var(--admin-text-muted);
+    }
+
+    strong {
+      color: var(--admin-text);
+      font-family: var(--admin-font-data, ui-monospace, monospace);
+      font-weight: 650;
+    }
+  }
+
+  &__video-empty {
+    color: var(--admin-text-muted) !important;
+    font-family: inherit !important;
+    font-size: 12px;
+    font-weight: 500 !important;
   }
 
   &__official-grid {

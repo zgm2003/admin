@@ -1,7 +1,7 @@
 {
-  "catalogVersion": "multi-vendor-2026-11-09-cache",
+  "catalogVersion": "multi-vendor-2026-11-09-video",
   "sourceUrl": "https://developers.openai.com/api/docs/pricing",
-  "verifiedAt": "2026-11-04T00:00:00Z",
+  "verifiedAt": "2026-11-09T00:00:00Z",
   "models": [
     {
       "vendorCode": "openai",
@@ -491,6 +491,168 @@
       "sourceUrl": "https://ai.google.dev/gemini-api/docs/pricing",
       "verifiedAt": "2026-11-09T00:00:00Z",
       "cacheReadUsdPerMillion": "0.01"
+    },
+    {
+      "vendorCode": "volcengine",
+      "vendorName": "火山引擎",
+      "modelKey": "doubao-seedance-2-5-260628",
+      "displayName": "Seedance 2.5",
+      "modelKind": 3,
+      "inputUsdPerMillion": "0",
+      "outputUsdPerMillion": "0",
+      "videoPrices": [
+        {
+          "tierKey": "480p:no_input",
+          "tierLabel": "480p · 无输入视频",
+          "priceCnyPerSecond": "0.67",
+          "unit": "second"
+        },
+        {
+          "tierKey": "480p:with_input",
+          "tierLabel": "480p · 含输入视频",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:no_input",
+          "tierLabel": "720p · 无输入视频",
+          "priceCnyPerSecond": "1.51",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:with_input",
+          "tierLabel": "720p · 含输入视频",
+          "unit": "second"
+        },
+        {
+          "tierKey": "1080p:no_input",
+          "tierLabel": "1080p · 无输入视频",
+          "priceCnyPerSecond": "3.74",
+          "unit": "second"
+        },
+        {
+          "tierKey": "1080p:with_input",
+          "tierLabel": "1080p · 含输入视频",
+          "unit": "second"
+        }
+      ],
+      "sourceUrl": "https://console.volcengine.com/ark/region:cn-beijing/docs/ark/model-pricing?lang=zh",
+      "verifiedAt": "2026-11-05T00:00:00Z"
+    },
+    {
+      "vendorCode": "volcengine",
+      "vendorName": "火山引擎",
+      "modelKey": "doubao-seedance-2-0-260128",
+      "displayName": "Seedance 2.0",
+      "modelKind": 3,
+      "inputUsdPerMillion": "0",
+      "outputUsdPerMillion": "0",
+      "videoPrices": [
+        {
+          "tierKey": "480p:no_input",
+          "tierLabel": "480p · 无输入视频",
+          "priceCnyPerSecond": "0.46",
+          "unit": "second"
+        },
+        {
+          "tierKey": "480p:with_input",
+          "tierLabel": "480p · 含输入视频",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:no_input",
+          "tierLabel": "720p · 无输入视频",
+          "priceCnyPerSecond": "0.99",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:with_input",
+          "tierLabel": "720p · 含输入视频",
+          "unit": "second"
+        },
+        {
+          "tierKey": "1080p:no_input",
+          "tierLabel": "1080p · 无输入视频",
+          "priceCnyPerSecond": "2.48",
+          "unit": "second"
+        },
+        {
+          "tierKey": "1080p:with_input",
+          "tierLabel": "1080p · 含输入视频",
+          "unit": "second"
+        }
+      ],
+      "sourceUrl": "https://console.volcengine.com/ark/region:cn-beijing/docs/ark/model-pricing?lang=zh",
+      "verifiedAt": "2026-11-05T00:00:00Z"
+    },
+    {
+      "vendorCode": "volcengine",
+      "vendorName": "火山引擎",
+      "modelKey": "doubao-seedance-2-0-fast-260128",
+      "displayName": "Seedance 2.0 Fast",
+      "modelKind": 3,
+      "inputUsdPerMillion": "0",
+      "outputUsdPerMillion": "0",
+      "videoPrices": [
+        {
+          "tierKey": "480p:no_input",
+          "tierLabel": "480p · 无输入视频",
+          "priceCnyPerSecond": "0.37",
+          "unit": "second"
+        },
+        {
+          "tierKey": "480p:with_input",
+          "tierLabel": "480p · 含输入视频",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:no_input",
+          "tierLabel": "720p · 无输入视频",
+          "priceCnyPerSecond": "0.80",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:with_input",
+          "tierLabel": "720p · 含输入视频",
+          "unit": "second"
+        }
+      ],
+      "sourceUrl": "https://console.volcengine.com/ark/region:cn-beijing/docs/ark/model-pricing?lang=zh",
+      "verifiedAt": "2026-11-05T00:00:00Z"
+    },
+    {
+      "vendorCode": "volcengine",
+      "vendorName": "火山引擎",
+      "modelKey": "doubao-seedance-2-0-mini-260615",
+      "displayName": "Seedance 2.0 Mini",
+      "modelKind": 3,
+      "inputUsdPerMillion": "0",
+      "outputUsdPerMillion": "0",
+      "videoPrices": [
+        {
+          "tierKey": "480p:no_input",
+          "tierLabel": "480p · 无输入视频",
+          "priceCnyPerSecond": "0.23",
+          "unit": "second"
+        },
+        {
+          "tierKey": "480p:with_input",
+          "tierLabel": "480p · 含输入视频",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:no_input",
+          "tierLabel": "720p · 无输入视频",
+          "priceCnyPerSecond": "0.50",
+          "unit": "second"
+        },
+        {
+          "tierKey": "720p:with_input",
+          "tierLabel": "720p · 含输入视频",
+          "unit": "second"
+        }
+      ],
+      "sourceUrl": "https://console.volcengine.com/ark/region:cn-beijing/docs/ark/model-pricing?lang=zh",
+      "verifiedAt": "2026-11-05T00:00:00Z"
     }
   ]
 }

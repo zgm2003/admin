@@ -8,9 +8,10 @@ import "context"
 type Vendor int16
 
 const (
-	VendorOpenAI    Vendor = 1
-	VendorAnthropic Vendor = 2
-	VendorGoogle    Vendor = 3
+	VendorOpenAI     Vendor = 1
+	VendorAnthropic  Vendor = 2
+	VendorGoogle     Vendor = 3
+	VendorVolcengine Vendor = 4
 )
 
 type VendorOption struct {
@@ -32,6 +33,7 @@ var vendorDefinitions = []vendorDefinition{
 	{value: VendorOpenAI, code: "openai", label: "OpenAI"},
 	{value: VendorAnthropic, code: "anthropic", label: "Anthropic"},
 	{value: VendorGoogle, code: "google", label: "Google"},
+	{value: VendorVolcengine, code: "volcengine", label: "火山引擎"},
 }
 
 func (vendor Vendor) Valid() bool {

@@ -11,27 +11,35 @@ type Actions struct {
 }
 
 type SafeValue struct {
-	ID                      int64     `json:"id"`
-	Vendor                  Vendor    `json:"vendor"`
-	VendorName              string    `json:"vendorName"`
-	ModelKey                string    `json:"modelKey"`
-	DisplayName             string    `json:"displayName"`
-	InputUSDPerMillion      string    `json:"inputUsdPerMillion"`
-	OutputUSDPerMillion     string    `json:"outputUsdPerMillion"`
-	InputCNYPerMillion      string    `json:"inputCnyPerMillion"`
-	OutputCNYPerMillion     string    `json:"outputCnyPerMillion"`
-	ModelKind               int16     `json:"modelKind"`
-	CacheReadCNYPerMillion  *string   `json:"cacheReadCnyPerMillion"`
-	CacheWriteCNYPerMillion *string   `json:"cacheWriteCnyPerMillion"`
-	CacheReadUSDPerMillion  *string   `json:"cacheReadUsdPerMillion"`
-	CacheWriteUSDPerMillion *string   `json:"cacheWriteUsdPerMillion"`
-	CatalogVersion          string    `json:"catalogVersion"`
-	SourceURL               string    `json:"sourceUrl"`
-	VerifiedAt              time.Time `json:"verifiedAt"`
-	Version                 int64     `json:"version"`
-	Actions                 Actions   `json:"actions"`
-	CreatedAt               time.Time `json:"createdAt"`
-	UpdatedAt               time.Time `json:"updatedAt"`
+	ID                      int64             `json:"id"`
+	Vendor                  Vendor            `json:"vendor"`
+	VendorName              string            `json:"vendorName"`
+	ModelKey                string            `json:"modelKey"`
+	DisplayName             string            `json:"displayName"`
+	InputUSDPerMillion      string            `json:"inputUsdPerMillion"`
+	OutputUSDPerMillion     string            `json:"outputUsdPerMillion"`
+	InputCNYPerMillion      string            `json:"inputCnyPerMillion"`
+	OutputCNYPerMillion     string            `json:"outputCnyPerMillion"`
+	ModelKind               int16             `json:"modelKind"`
+	CacheReadCNYPerMillion  *string           `json:"cacheReadCnyPerMillion"`
+	CacheWriteCNYPerMillion *string           `json:"cacheWriteCnyPerMillion"`
+	CacheReadUSDPerMillion  *string           `json:"cacheReadUsdPerMillion"`
+	CacheWriteUSDPerMillion *string           `json:"cacheWriteUsdPerMillion"`
+	VideoPrices             []VideoPriceValue `json:"videoPrices"`
+	CatalogVersion          string            `json:"catalogVersion"`
+	SourceURL               string            `json:"sourceUrl"`
+	VerifiedAt              time.Time         `json:"verifiedAt"`
+	Version                 int64             `json:"version"`
+	Actions                 Actions           `json:"actions"`
+	CreatedAt               time.Time         `json:"createdAt"`
+	UpdatedAt               time.Time         `json:"updatedAt"`
+}
+
+type VideoPriceValue struct {
+	TierKey           string  `json:"tierKey"`
+	TierLabel         string  `json:"tierLabel"`
+	PriceCNYPerSecond *string `json:"priceCnyPerSecond"`
+	Unit              string  `json:"unit"`
 }
 
 type SyncResult struct {
@@ -51,11 +59,24 @@ func safeValue(row Model) (SafeValue, error) {
 		(row.CacheReadCNY != nil && *row.CacheReadCNY < 0) ||
 		(row.CacheWriteCNY != nil && *row.CacheWriteCNY < 0) ||
 		(row.CacheReadUSD != nil && *row.CacheReadUSD < 0) ||
-		(row.CacheWriteUSD != nil && *row.CacheWriteUSD < 0) {
+		(row.CacheWriteUSD != nil && *row.CacheWriteUSD < 0) ||
+		len(row.VideoPrices) > 40 {
 		return SafeValue{}, fmt.Errorf("stored official model is invalid")
 	}
 	if err := validateSourceURL(row.SourceURL); err != nil {
 		return SafeValue{}, fmt.Errorf("stored official model source is invalid")
+	}
+	videoPrices := make([]VideoPriceValue, 0, len(row.VideoPrices))
+	for _, price := range row.VideoPrices {
+		if !validText(price.TierKey, 64) || !validText(price.TierLabel, 64) ||
+			(price.Unit != "second" && price.Unit != "minute" && price.Unit != "item") ||
+			(price.PriceCNYMicros != nil && *price.PriceCNYMicros < 0) {
+			return SafeValue{}, fmt.Errorf("stored official video price is invalid")
+		}
+		videoPrices = append(videoPrices, VideoPriceValue{
+			TierKey: price.TierKey, TierLabel: price.TierLabel,
+			PriceCNYPerSecond: formatOptionalMicros(price.PriceCNYMicros), Unit: price.Unit,
+		})
 	}
 	return SafeValue{
 		ID: row.ID, Vendor: row.Vendor, VendorName: row.Vendor.Label(),
@@ -69,6 +90,7 @@ func safeValue(row Model) (SafeValue, error) {
 		CacheWriteCNYPerMillion: formatOptionalMicros(row.CacheWriteCNY),
 		CacheReadUSDPerMillion:  formatOptionalMicros(row.CacheReadUSD),
 		CacheWriteUSDPerMillion: formatOptionalMicros(row.CacheWriteUSD),
+		VideoPrices:             videoPrices,
 		CatalogVersion:          row.CatalogVersion, SourceURL: row.SourceURL, VerifiedAt: row.VerifiedAt.UTC(),
 		Version: row.Version, Actions: Actions{Update: true, Reset: true},
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,

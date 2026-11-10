@@ -6,6 +6,13 @@ export interface OfficialModelActions {
   reset: boolean
 }
 
+export interface OfficialVideoPrice {
+  tierKey: string
+  tierLabel: string
+  priceCnyPerSecond: string | null
+  unit: string
+}
+
 export interface OfficialModel {
   id: number
   vendor: number
@@ -21,6 +28,7 @@ export interface OfficialModel {
   cacheWriteCnyPerMillion: string | null
   cacheReadUsdPerMillion: string | null
   cacheWriteUsdPerMillion: string | null
+  videoPrices: OfficialVideoPrice[]
   catalogVersion: string
   sourceUrl: string
   verifiedAt: string

@@ -19,7 +19,7 @@ func modelFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 	}
 	if query.Keyword != "" {
 		like := "%" + query.Keyword + "%"
-		db = db.Where("(display_name ILIKE ? OR model_key ILIKE ? OR vendor_name ILIKE ?)", like, like, like)
+		db = db.Where("(display_name ILIKE ? OR model_key ILIKE ?)", like, like)
 	}
 	return db
 }
@@ -39,6 +39,9 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Model, error)
 	}
 	var rows []Model
 	err := modelFilter(r.db.WithContext(ctx).Model(&Model{}), query).
+		Preload("VideoPrices", func(db *gorm.DB) *gorm.DB {
+			return db.Order("sort_order ASC, id ASC")
+		}).
 		Order("sort_order ASC, display_name ASC, id ASC").
 		Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Find(&rows).Error
 	return rows, err
@@ -120,7 +123,7 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					InputCNYMicros: entry.InputUSDMicros, OutputCNYMicros: entry.OutputUSDMicros,
 					CacheReadUSD: entry.CacheReadUSDMicros, CacheWriteUSD: entry.CacheWriteUSDMicros,
 					CacheReadCNY: entry.CacheReadUSDMicros, CacheWriteCNY: entry.CacheWriteUSDMicros,
-					ModelKind:      1,
+					ModelKind:      entry.ModelKind,
 					CatalogVersion: catalog.Version, SourceURL: entry.SourceURL,
 					VerifiedAt: entry.VerifiedAt, SortOrder: entry.SortOrder,
 					Version: 1, CreatedAt: now, UpdatedAt: now,
@@ -128,12 +131,15 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 				if err := tx.Create(&row).Error; err != nil {
 					return err
 				}
+				if err := replaceVideoPrices(tx, row.ID, entry.VideoPrices, now); err != nil {
+					return err
+				}
 				result.Inserted++
 			default:
 				fillCacheRead := row.CacheReadCNY == nil && entry.CacheReadUSDMicros != nil
 				fillCacheWrite := row.CacheWriteCNY == nil && entry.CacheWriteUSDMicros != nil
 				if row.InputUSDMicros == entry.InputUSDMicros &&
-					row.OutputUSDMicros == entry.OutputUSDMicros &&
+					row.OutputUSDMicros == entry.OutputUSDMicros && row.ModelKind == entry.ModelKind &&
 					sameOptionalMicros(row.CacheReadUSD, entry.CacheReadUSDMicros) &&
 					sameOptionalMicros(row.CacheWriteUSD, entry.CacheWriteUSDMicros) &&
 					!fillCacheRead && !fillCacheWrite &&
@@ -142,6 +148,9 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					row.SourceURL == entry.SourceURL &&
 					row.VerifiedAt.Equal(entry.VerifiedAt) &&
 					row.SortOrder == entry.SortOrder {
+					if err := replaceVideoPrices(tx, row.ID, entry.VideoPrices, now); err != nil {
+						return err
+					}
 					result.Unchanged++
 					continue
 				}
@@ -155,6 +164,7 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 				}
 				update := tx.Model(&Model{}).Where("id = ? AND version = ?", row.ID, row.Version).Updates(map[string]any{
 					"display_name":     entry.DisplayName,
+					"model_kind":       entry.ModelKind,
 					"input_usd_micros": entry.InputUSDMicros, "output_usd_micros": entry.OutputUSDMicros,
 					"cache_read_usd_micros":  nullableMicros(entry.CacheReadUSDMicros),
 					"cache_write_usd_micros": nullableMicros(entry.CacheWriteUSDMicros),
@@ -170,6 +180,9 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 				if update.RowsAffected != 1 {
 					return errVersionConflict
 				}
+				if err := replaceVideoPrices(tx, row.ID, entry.VideoPrices, now); err != nil {
+					return err
+				}
 				result.Updated++
 			}
 		}
@@ -179,6 +192,23 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 		return SyncResult{}, err
 	}
 	return result, nil
+}
+
+func replaceVideoPrices(tx *gorm.DB, officialModelID int64, prices []CatalogVideoPrice, now time.Time) error {
+	if err := tx.Where("official_model_id = ?", officialModelID).Delete(&VideoPrice{}).Error; err != nil {
+		return err
+	}
+	for index, price := range prices {
+		row := VideoPrice{
+			OfficialModelID: officialModelID, TierKey: price.TierKey, TierLabel: price.TierLabel,
+			PriceCNYMicros: price.PriceCNYMicros, Unit: price.Unit, SortOrder: index,
+			Version: 1, CreatedAt: now, UpdatedAt: now,
+		}
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func sameOptionalMicros(left, right *int64) bool {

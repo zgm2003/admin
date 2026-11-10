@@ -36,11 +36,24 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 					model.CacheReadUSDMicros, model.CacheWriteUSDMicros)
 			}
 		}
+		if model.ModelKey == "doubao-seedance-2-5-260628" {
+			if model.Vendor != VendorVolcengine || model.ModelKind != 3 || len(model.VideoPrices) != 6 {
+				t.Fatalf("seedance 2.5 = vendor %d kind %d prices %+v",
+					model.Vendor, model.ModelKind, model.VideoPrices)
+			}
+			if model.VideoPrices[0].TierKey != "480p:no_input" ||
+				model.VideoPrices[0].PriceCNYMicros == nil || *model.VideoPrices[0].PriceCNYMicros != 670_000 {
+				t.Fatalf("seedance 2.5 480p price = %+v", model.VideoPrices[0])
+			}
+			if model.VideoPrices[1].TierKey != "480p:with_input" || model.VideoPrices[1].PriceCNYMicros != nil {
+				t.Fatalf("seedance 2.5 with-input price = %+v", model.VideoPrices[1])
+			}
+		}
 	}
 	if !found {
 		t.Fatal("gpt-5.5 not found in catalog")
 	}
-	for _, vendor := range []Vendor{VendorOpenAI, VendorAnthropic, VendorGoogle} {
+	for _, vendor := range []Vendor{VendorOpenAI, VendorAnthropic, VendorGoogle, VendorVolcengine} {
 		if !vendors[vendor] {
 			t.Fatalf("vendor %d not found in catalog", vendor)
 		}
@@ -75,5 +88,11 @@ func TestParseCatalogRejectsDuplicateAndInvalidPrices(t *testing.T) {
 		`"outputUsdPerMillion":"2","cacheReadUsdPerMillion":"-1"`, 1)
 	if _, err := parseCatalog([]byte(invalidCache)); err == nil || !strings.Contains(err.Error(), "cacheRead") {
 		t.Fatalf("negative cache price error = %v", err)
+	}
+
+	invalidVideo := strings.Replace(duplicate, `"outputUsdPerMillion":"2"`,
+		`"outputUsdPerMillion":"2","modelKind":3,"videoPrices":[{"tierKey":"480p","priceCnyPerSecond":"-1"}]`, 1)
+	if _, err := parseCatalog([]byte(invalidVideo)); err == nil || !strings.Contains(err.Error(), "videoPrices") {
+		t.Fatalf("negative video price error = %v", err)
 	}
 }

@@ -26,13 +26,22 @@ type CatalogModel struct {
 	Vendor              Vendor
 	ModelKey            string
 	DisplayName         string
+	ModelKind           int16
 	InputUSDMicros      int64
 	OutputUSDMicros     int64
 	CacheReadUSDMicros  *int64
 	CacheWriteUSDMicros *int64
+	VideoPrices         []CatalogVideoPrice
 	SourceURL           string
 	VerifiedAt          time.Time
 	SortOrder           int
+}
+
+type CatalogVideoPrice struct {
+	TierKey        string
+	TierLabel      string
+	PriceCNYMicros *int64
+	Unit           string
 }
 
 type catalogDocument struct {
@@ -43,16 +52,25 @@ type catalogDocument struct {
 }
 
 type catalogModelRecord struct {
-	VendorCode    string    `json:"vendorCode"`
-	VendorName    string    `json:"vendorName"`
-	ModelKey      string    `json:"modelKey"`
-	DisplayName   string    `json:"displayName"`
-	InputUSD      string    `json:"inputUsdPerMillion"`
-	OutputUSD     string    `json:"outputUsdPerMillion"`
-	CacheReadUSD  string    `json:"cacheReadUsdPerMillion"`
-	CacheWriteUSD string    `json:"cacheWriteUsdPerMillion"`
-	SourceURL     string    `json:"sourceUrl"`
-	VerifiedAt    time.Time `json:"verifiedAt"`
+	VendorCode    string                    `json:"vendorCode"`
+	VendorName    string                    `json:"vendorName"`
+	ModelKey      string                    `json:"modelKey"`
+	DisplayName   string                    `json:"displayName"`
+	ModelKind     int16                     `json:"modelKind"`
+	InputUSD      string                    `json:"inputUsdPerMillion"`
+	OutputUSD     string                    `json:"outputUsdPerMillion"`
+	CacheReadUSD  string                    `json:"cacheReadUsdPerMillion"`
+	CacheWriteUSD string                    `json:"cacheWriteUsdPerMillion"`
+	VideoPrices   []catalogVideoPriceRecord `json:"videoPrices"`
+	SourceURL     string                    `json:"sourceUrl"`
+	VerifiedAt    time.Time                 `json:"verifiedAt"`
+}
+
+type catalogVideoPriceRecord struct {
+	TierKey        string `json:"tierKey"`
+	TierLabel      string `json:"tierLabel"`
+	PriceCNYPerSec string `json:"priceCnyPerSecond"`
+	Unit           string `json:"unit"`
 }
 
 func LoadCatalog() (Catalog, error) {
@@ -121,6 +139,13 @@ func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, 
 	if !validText(displayName, 200) {
 		return CatalogModel{}, fmt.Errorf("displayName is invalid")
 	}
+	modelKind := record.ModelKind
+	if modelKind == 0 {
+		modelKind = 1
+	}
+	if modelKind < 1 || modelKind > 4 {
+		return CatalogModel{}, fmt.Errorf("modelKind is invalid")
+	}
 	input, err := parseMicros(record.InputUSD)
 	if err != nil {
 		return CatalogModel{}, fmt.Errorf("inputUsdPerMillion: %w", err)
@@ -137,6 +162,10 @@ func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, 
 	if err != nil {
 		return CatalogModel{}, fmt.Errorf("cacheWriteUsdPerMillion: %w", err)
 	}
+	videoPrices, err := normalizeCatalogVideoPrices(record.VideoPrices)
+	if err != nil {
+		return CatalogModel{}, err
+	}
 	sourceURL := strings.TrimSpace(record.SourceURL)
 	if sourceURL == "" {
 		sourceURL = fallbackSourceURL
@@ -152,11 +181,55 @@ func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, 
 		return CatalogModel{}, fmt.Errorf("verifiedAt is required")
 	}
 	return CatalogModel{
-		Vendor: vendor, ModelKey: modelKey, DisplayName: displayName,
+		Vendor: vendor, ModelKey: modelKey, DisplayName: displayName, ModelKind: modelKind,
 		InputUSDMicros: input, OutputUSDMicros: output,
 		CacheReadUSDMicros: cacheRead, CacheWriteUSDMicros: cacheWrite,
-		SourceURL: sourceURL, VerifiedAt: verifiedAt.UTC(),
+		VideoPrices: videoPrices,
+		SourceURL:   sourceURL, VerifiedAt: verifiedAt.UTC(),
 	}, nil
+}
+
+func normalizeCatalogVideoPrices(records []catalogVideoPriceRecord) ([]CatalogVideoPrice, error) {
+	if len(records) == 0 {
+		return nil, nil
+	}
+	if len(records) > 40 {
+		return nil, fmt.Errorf("videoPrices must contain at most 40 entries")
+	}
+	prices := make([]CatalogVideoPrice, 0, len(records))
+	seen := make(map[string]struct{}, len(records))
+	for index, record := range records {
+		tierKey := strings.TrimSpace(record.TierKey)
+		if !validText(tierKey, 64) {
+			return nil, fmt.Errorf("videoPrices[%d].tierKey is invalid", index)
+		}
+		if _, exists := seen[tierKey]; exists {
+			return nil, fmt.Errorf("videoPrices[%d].tierKey is duplicated", index)
+		}
+		seen[tierKey] = struct{}{}
+		tierLabel := strings.TrimSpace(record.TierLabel)
+		if tierLabel == "" {
+			tierLabel = tierKey
+		}
+		if !validText(tierLabel, 64) {
+			return nil, fmt.Errorf("videoPrices[%d].tierLabel is invalid", index)
+		}
+		unit := strings.TrimSpace(record.Unit)
+		if unit == "" {
+			unit = "second"
+		}
+		if unit != "second" && unit != "minute" && unit != "item" {
+			return nil, fmt.Errorf("videoPrices[%d].unit is invalid", index)
+		}
+		price, err := parseCatalogOptionalMicros(record.PriceCNYPerSec)
+		if err != nil {
+			return nil, fmt.Errorf("videoPrices[%d].priceCnyPerSecond: %w", index, err)
+		}
+		prices = append(prices, CatalogVideoPrice{
+			TierKey: tierKey, TierLabel: tierLabel, PriceCNYMicros: price, Unit: unit,
+		})
+	}
+	return prices, nil
 }
 
 func parseCatalogOptionalMicros(value string) (*int64, error) {

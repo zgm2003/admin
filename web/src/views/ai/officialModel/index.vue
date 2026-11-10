@@ -85,6 +85,7 @@ const columns = computed<TableColumn<OfficialModel>[]>(() => [
   { key: 'officialOutput', label: t('ai.officialModel.officialOutput'), width: 120 },
   { key: 'cnyInput', label: t('ai.officialModel.cnyInput'), width: 130 },
   { key: 'cnyOutput', label: t('ai.officialModel.cnyOutput'), width: 130 },
+  { key: 'video', label: t('ai.officialModel.videoPrice'), minWidth: 260 },
   {
     key: 'actions',
     label: t('common.actions'),
@@ -146,6 +147,24 @@ function updatePagination(value: TablePaginationState): void {
 
 function price(value: string, currency: 'USD' | 'CNY'): string {
   return `${currency === 'USD' ? '$' : '¥'}${value}/M`
+}
+
+function modelKindLabel(kind: number): string {
+  if (kind === 2) return t('ai.officialModel.kindImage')
+  if (kind === 3) return t('ai.officialModel.kindVideo')
+  if (kind === 4) return t('ai.officialModel.kindAudio')
+  return t('ai.officialModel.kindChat')
+}
+
+function videoPriceSummary(row: OfficialModel): string {
+  const items = (row.videoPrices ?? []).filter(
+    (item) =>
+      item.unit === 'second' && item.priceCnyPerSecond && item.tierKey.endsWith(':no_input'),
+  )
+  if (items.length === 0) return '—'
+  return items
+    .map((item) => `${item.tierKey.split(':')[0]} ¥${item.priceCnyPerSecond}/s`)
+    .join(' · ')
 }
 
 function openEdit(row: OfficialModel): void {
@@ -300,28 +319,47 @@ onBeforeUnmount(() => {
         <div class="ai-official-model-page__model">
           <span class="ai-official-model-page__model-vendor">{{ row.vendorName }}</span>
           <strong>{{ row.displayName }}</strong>
+          <el-tag v-if="row.modelKind !== 1" size="small" type="warning" effect="plain">
+            {{ modelKindLabel(row.modelKind) }}
+          </el-tag>
           <code v-if="row.displayName !== row.modelKey">{{ row.modelKey }}</code>
         </div>
       </template>
       <template #cell-officialInput="{ row }: { row: OfficialModel }">
-        <span class="ai-official-model-page__money ai-official-model-page__money--official">
+        <span
+          v-if="row.modelKind === 1"
+          class="ai-official-model-page__money ai-official-model-page__money--official"
+        >
           {{ price(row.inputUsdPerMillion, 'USD') }}
         </span>
+        <span v-else class="ai-official-model-page__money">—</span>
       </template>
       <template #cell-officialOutput="{ row }: { row: OfficialModel }">
-        <span class="ai-official-model-page__money ai-official-model-page__money--official">
+        <span
+          v-if="row.modelKind === 1"
+          class="ai-official-model-page__money ai-official-model-page__money--official"
+        >
           {{ price(row.outputUsdPerMillion, 'USD') }}
         </span>
+        <span v-else class="ai-official-model-page__money">—</span>
       </template>
       <template #cell-cnyInput="{ row }: { row: OfficialModel }">
-        <span class="ai-official-model-page__money">{{
-          price(row.inputCnyPerMillion, 'CNY')
-        }}</span>
+        <span v-if="row.modelKind === 1" class="ai-official-model-page__money">
+          {{ price(row.inputCnyPerMillion, 'CNY') }}
+        </span>
+        <span v-else class="ai-official-model-page__money">—</span>
       </template>
       <template #cell-cnyOutput="{ row }: { row: OfficialModel }">
-        <span class="ai-official-model-page__money">{{
-          price(row.outputCnyPerMillion, 'CNY')
-        }}</span>
+        <span v-if="row.modelKind === 1" class="ai-official-model-page__money">
+          {{ price(row.outputCnyPerMillion, 'CNY') }}
+        </span>
+        <span v-else class="ai-official-model-page__money">—</span>
+      </template>
+      <template #cell-video="{ row }: { row: OfficialModel }">
+        <span v-if="row.modelKind === 3" class="ai-official-model-page__video-prices">
+          {{ videoPriceSummary(row) }}
+        </span>
+        <span v-else class="ai-official-model-page__money">—</span>
       </template>
       <template #cell-actions="{ row }: { row: OfficialModel }">
         <el-button
@@ -331,10 +369,10 @@ onBeforeUnmount(() => {
           :disabled="busyID !== null || syncing"
           @click="openEdit(row)"
         >
-          {{ t('ai.officialModel.edit') }}
+          {{ row.modelKind === 1 ? t('ai.officialModel.edit') : t('ai.officialModel.viewPrice') }}
         </el-button>
         <el-button
-          v-if="canReset && row.actions.reset"
+          v-if="canReset && row.modelKind === 1 && row.actions.reset"
           link
           type="warning"
           :disabled="busyID !== null || syncing"
@@ -428,6 +466,14 @@ onBeforeUnmount(() => {
       color: var(--admin-text-soft);
       font-weight: 500;
     }
+  }
+
+  &__video-prices {
+    color: var(--admin-text-soft);
+    font-family: var(--admin-font-data, ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1.6;
+    white-space: normal;
   }
 }
 </style>
