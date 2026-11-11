@@ -197,7 +197,7 @@ export const enUS = {
 
   'ai.providerModel.title': 'Provider models · {name}',
   'ai.providerModel.description':
-    'Sync upstream models into the database and configure kind, official mapping, pricing, and status. Pulled models are disabled by default; only enabled models with pricing appear in the Agent model list.',
+    'Pulled models stay disabled. Configure pricing and enable a model before it appears in the Agent model list.',
   'ai.providerModel.model': 'Model',
   'ai.providerModel.modelKind': 'Kind',
   'ai.providerModel.pricing': 'Pricing',

@@ -41,8 +41,13 @@ const isTokenMode = computed(() => form.value.pricingMode === 1)
 const officialOptions = computed(() =>
   props.options.officialModels
     .filter((item) => item.modelKind === form.value.modelKind)
-    .map((item) => ({ value: item.id, label: `${item.displayName} · ${item.modelKey}` })),
+    .map((item) => ({ value: item.id, label: officialLabel(item) })),
 )
+
+function officialLabel(item: ProviderModelOptions['officialModels'][number]): string {
+  if (!item.displayName || item.displayName === item.modelKey) return item.modelKey
+  return `${item.displayName} · ${item.modelKey}`
+}
 const statusOptions = computed(() => [
   { value: 1, label: t('ai.providerModel.enabled') },
   { value: 0, label: t('ai.providerModel.disabled') },

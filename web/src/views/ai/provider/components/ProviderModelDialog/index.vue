@@ -243,12 +243,14 @@ watch(visible, (open) => {
             :options="options.modelKinds"
             clearable
             :placeholder="t('ai.providerModel.allKinds')"
+            class="ai-provider-model__filter-select"
           />
           <el-select-v2
             v-model="statusFilter"
             :options="statusOptions"
             clearable
             :placeholder="t('ai.providerModel.allStatuses')"
+            class="ai-provider-model__filter-select"
           />
           <el-button @click="applyFilters">{{ t('common.search') }}</el-button>
           <el-button text @click="resetFilters">{{ t('common.reset') }}</el-button>
@@ -301,8 +303,15 @@ watch(visible, (open) => {
         </template>
         <template #cell-official="{ row }: { row: AiProviderModel }">
           <div v-if="row.officialModel" class="ai-provider-model__pricing">
-            <span>{{ row.officialModel.displayName }}</span>
-            <small>{{ row.officialModel.modelKey }}</small>
+            <span>{{ row.officialModel.displayName || row.officialModel.modelKey }}</span>
+            <small
+              v-if="
+                row.officialModel.displayName &&
+                row.officialModel.displayName !== row.officialModel.modelKey
+              "
+            >
+              {{ row.officialModel.modelKey }}
+            </small>
           </div>
           <el-tag v-else type="warning" effect="plain">
             {{ t('ai.providerModel.unmatched') }}
@@ -364,14 +373,10 @@ watch(visible, (open) => {
   gap: 12px;
 
   &__description {
-    margin: 0;
-    padding: 10px 12px;
-    border: 1px solid var(--admin-border);
-    border-radius: 8px;
-    background: var(--admin-surface-soft);
+    margin: -2px 0 0;
     color: var(--admin-text-muted);
     font-size: 12px;
-    line-height: 1.6;
+    line-height: 1.5;
   }
 
   &__toolbar {
@@ -390,6 +395,10 @@ watch(visible, (open) => {
 
   &__keyword {
     width: 220px;
+  }
+
+  &__filter-select {
+    width: 150px;
   }
 
   &__identity,

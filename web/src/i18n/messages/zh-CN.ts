@@ -185,7 +185,7 @@ export const zhCN = {
 
   'ai.providerModel.title': '供应商模型 · {name}',
   'ai.providerModel.description':
-    '这里负责把上游模型同步到数据库，并配置类型、官方映射、价格和启用状态。拉取后的模型默认停用；只有启用并配置好价格的模型才会出现在 Agent 可选模型里。',
+    '拉取后默认停用；配置价格并启用后，才会出现在 Agent 可选模型列表。',
   'ai.providerModel.model': '模型',
   'ai.providerModel.modelKind': '类型',
   'ai.providerModel.pricing': '计费方式',
