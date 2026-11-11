@@ -174,8 +174,9 @@ export const enUS = {
   'ai.provider.baseUrlRequired': 'Enter a base URL',
   'ai.provider.baseUrlRule': 'Must start with https://',
   'ai.provider.apiKeyRequired': 'Enter an API key',
-  'ai.provider.models': 'Models',
-  'ai.provider.modelsHint': 'Pull upstream models and configure official mappings and prices',
+  'ai.provider.models': 'Models & pricing',
+  'ai.provider.modelsHint':
+    'Pull upstream models and configure kind, pricing, and status; only enabled models appear in the Agent model list',
   'ai.provider.testing': 'Testing',
   'ai.provider.connectionCheck': 'Connection check',
   'ai.provider.connectionCheckHint':
@@ -195,6 +196,8 @@ export const enUS = {
   'ai.provider.testEmptyReply': 'The upstream returned no content',
 
   'ai.providerModel.title': 'Provider models · {name}',
+  'ai.providerModel.description':
+    'Sync upstream models into the database and configure kind, official mapping, pricing, and status. Pulled models are disabled by default; only enabled models with pricing appear in the Agent model list.',
   'ai.providerModel.model': 'Model',
   'ai.providerModel.modelKind': 'Kind',
   'ai.providerModel.pricing': 'Pricing',

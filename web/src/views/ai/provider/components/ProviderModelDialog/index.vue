@@ -3,7 +3,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import * as api from '@/api/ai/providerModel'
@@ -139,15 +138,6 @@ function updatePagination(value: TablePaginationState): void {
 
 async function sync(): Promise<void> {
   if (!canSync.value || syncing.value) return
-  try {
-    await ElMessageBox.confirm(
-      t('ai.providerModel.syncConfirm', { name: props.provider.name }),
-      t('confirm.title'),
-      { type: 'warning' },
-    )
-  } catch {
-    return
-  }
   syncing.value = true
   try {
     const result = await api.syncProviderModels(props.provider.id)
@@ -235,6 +225,10 @@ watch(visible, (open) => {
     :show-close="!syncing && !submitting"
   >
     <div class="ai-provider-model">
+      <p class="ai-provider-model__description">
+        {{ t('ai.providerModel.description') }}
+      </p>
+
       <div class="ai-provider-model__toolbar">
         <div class="ai-provider-model__filters">
           <el-input
@@ -368,6 +362,17 @@ watch(visible, (open) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+
+  &__description {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: var(--admin-surface-soft);
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
 
   &__toolbar {
     display: flex;

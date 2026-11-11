@@ -164,8 +164,9 @@ export const zhCN = {
   'ai.provider.baseUrlRequired': '请输入 Base URL',
   'ai.provider.baseUrlRule': '必须以 https:// 开头',
   'ai.provider.apiKeyRequired': '请输入 API Key',
-  'ai.provider.models': '模型',
-  'ai.provider.modelsHint': '拉取上游模型并配置官方映射与价格',
+  'ai.provider.models': '模型与价格',
+  'ai.provider.modelsHint':
+    '拉取上游模型，配置类型、价格和启用状态；启用的模型才会出现在 Agent 可选列表',
   'ai.provider.testing': '测试中',
   'ai.provider.connectionCheck': '连接验证',
   'ai.provider.connectionCheckHint': '先拉取当前配置下的模型，再选择一个模型发送 hello 测试。',
@@ -183,6 +184,8 @@ export const zhCN = {
   'ai.provider.testEmptyReply': '上游未返回内容',
 
   'ai.providerModel.title': '供应商模型 · {name}',
+  'ai.providerModel.description':
+    '这里负责把上游模型同步到数据库，并配置类型、官方映射、价格和启用状态。拉取后的模型默认停用；只有启用并配置好价格的模型才会出现在 Agent 可选模型里。',
   'ai.providerModel.model': '模型',
   'ai.providerModel.modelKind': '类型',
   'ai.providerModel.pricing': '计费方式',

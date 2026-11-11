@@ -100,7 +100,7 @@ const columns = computed<TableColumn<AiProvider>[]>(() => [
   { key: 'apiKey', label: t('ai.provider.apiKey'), width: 110 },
   { key: 'status', label: t('ai.provider.status'), width: 90 },
   { key: 'updatedAt', label: t('ai.provider.updatedAt'), width: 170 },
-  { key: 'actions', label: t('common.actions'), width: 280, fixed: 'right' },
+  { key: 'actions', label: t('common.actions'), width: 320, fixed: 'right' },
 ])
 
 function state(): 'loading' | 'error' | 'empty' | 'success' {
