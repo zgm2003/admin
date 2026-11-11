@@ -1796,3 +1796,15 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 模型与价格弹窗新增多选复选框和“批量启用”按钮，只允许勾选已配置完整且当前停用的模型：官方 Token 模型必须有官方映射，供应商计价模型必须至少有价格。
 - 批量启用复用单模型更新接口，逐个提交完整配置并启用；完成后刷新列表、清空选择，并汇总成功/失败数量。
 - 通用表格 `AppTable` 暴露 `clearSelection`，筛选、分页、同步和批量启用后都会清空选择，避免跨页残留。
+
+### Agent 配置管理第一切片 A（2026-11-11）
+
+- 范围只做可配置智能体：名称、描述、系统提示词、绑定对话模型、启停；不做对话运行时、流式输出、部署实例、工具或 MCP。
+- 新增 `ai_agent` 表，`provider_model_id` 外键指向 `ai_provider_model`；软删除、版本号、状态约束、名称/提示词长度约束和查询索引已落库。
+- 新增 `server/internal/module/ai/agent`：列表、详情、新增、编辑、启停、删除、状态选项和动态模型选项；路由挂在 `/api/admin/v1/ai/agent`。
+- Agent 只允许绑定已启用、`model_kind=chat`、官方 Token 计价且已映射官方模型、供应商也启用的模型；启用 Agent 时再次校验绑定模型是否仍可用，避免停在非法计费状态。
+- 列表返回绑定模型的供应商名、模型名、上游 key 和 `modelAvailable`；模型被停用或删除后，页面会标为不可用，编辑时必须重新选择可用模型。
+- 新增 `ai:agent:view/list/detail/create/update/status/delete` 菜单与动作权限；页面组件 `web/src/views/ai/agent/index.vue`，弹窗 `AgentDialog`，中英文文案和 `navigation.aiAgent` 已补齐。
+- 权限迁移不自动授权普通角色；页面通过动态菜单出现，当前超级管理员按既有全量权限可见。菜单迁移可重复执行，未变更时不会递增 `menu_version`。
+- 数据库迁移：`docs/database/2026-11-11-ai-agent.sql`、`docs/database/2026-11-11-ai-agent-menu.sql`；`docs/database/current.sql` 已刷新。
+- 验证通过：`go test ./internal/module/ai/agent ./cmd/api -count=1`、`go vet ./internal/module/ai/agent ./cmd/api`、真实 PostgreSQL 事务内 CRUD/模型投影 smoke、`pnpm typecheck`、Agent 相关 ESLint、`pnpm build`。

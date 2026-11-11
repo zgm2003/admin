@@ -14,6 +14,7 @@ import (
 	"admin/server/internal/config"
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
+	aiagent "admin/server/internal/module/ai/agent"
 	"admin/server/internal/module/ai/officialModel"
 	aiprovider "admin/server/internal/module/ai/provider"
 	providermodel "admin/server/internal/module/ai/providerModel"
@@ -82,6 +83,7 @@ import (
 )
 
 type routerDependencies struct {
+	AIAgent            *aiagent.Handler
 	AIOfficialModel    *officialmodel.Handler
 	AIProvider         *aiprovider.Handler
 	AIProviderModel    *providermodel.Handler
@@ -246,6 +248,8 @@ func run(logger *slog.Logger) error {
 	providerService := aiprovider.NewService(providerRepository, keys)
 	providerModelRepository := providermodel.NewRepository(postgres.GORM)
 	providerModelService := providermodel.NewService(providerModelRepository, providerRepository, keys)
+	agentRepository := aiagent.NewRepository(postgres.GORM)
+	agentService := aiagent.NewService(agentRepository)
 	paymentPackageRepository := rechargepackage.NewRepository(postgres.GORM)
 	paymentPackageService := rechargepackage.NewService(paymentPackageRepository)
 	paymentWalletRepository := paymentwallet.NewRepository(postgres.GORM)
@@ -523,6 +527,7 @@ func run(logger *slog.Logger) error {
 			return useremail.Actor{UserID: identity.UserID, SessionID: identity.SessionID, PlatformID: identity.PlatformID, Platform: identity.Platform, ClientIP: client.ClientIP}, ok && clientOK
 		}),
 		COSConfig:          cosconfig.NewHandler(cosConfigService),
+		AIAgent:            aiagent.NewHandler(agentService),
 		AIOfficialModel:    officialmodel.NewHandler(officialModelService),
 		AIProvider:         aiprovider.NewHandler(providerService),
 		AIProviderModel:    providermodel.NewHandler(providerModelService),
@@ -688,6 +693,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	if dependencies.AIProviderModel != nil {
 		providermodel.RegisterAdminRoutes(adminRoutes, dependencies.AIProviderModel, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIAgent != nil {
+		aiagent.RegisterAdminRoutes(adminRoutes, dependencies.AIAgent, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.PaymentConfig != nil {
 		paymentconfig.RegisterAdminRoutes(adminRoutes, dependencies.PaymentConfig, dependencies.Authenticate, dependencies.RequirePermission)
