@@ -42,6 +42,9 @@ const options = ref<ProviderModelOptions>({
 const optionsLoading = ref(false)
 const optionsError = ref('')
 const syncing = ref(false)
+const batchEnabling = ref(false)
+const selection = ref<AiProviderModel[]>([])
+const tableRef = ref<{ clearSelection: () => void }>()
 const editVisible = ref(false)
 const editing = ref<AiProviderModel | null>(null)
 const submitting = ref(false)
@@ -96,6 +99,8 @@ async function load(): Promise<void> {
     if (current === sequence) {
       rows.value = result.list
       total.value = result.total
+      selection.value = []
+      tableRef.value?.clearSelection()
     }
   } catch {
     if (current === sequence) {
@@ -136,8 +141,23 @@ function updatePagination(value: TablePaginationState): void {
   void load()
 }
 
+function canSelectForBatch(row: AiProviderModel): boolean {
+  if (row.status === 1) return false
+  if (row.modelKind === 1) {
+    return row.pricingMode === 1 && row.officialModel !== null
+  }
+  if (row.pricingMode === 1) return row.officialModel !== null
+  return row.prices.length > 0
+}
+
+function onSelectionChange(value: AiProviderModel[]): void {
+  selection.value = value
+}
+
+const batchSelection = computed(() => selection.value.filter(canSelectForBatch))
+
 async function sync(): Promise<void> {
-  if (!canSync.value || syncing.value) return
+  if (!canSync.value || syncing.value || batchEnabling.value) return
   syncing.value = true
   try {
     const result = await api.syncProviderModels(props.provider.id)
@@ -157,6 +177,49 @@ async function sync(): Promise<void> {
   } finally {
     syncing.value = false
   }
+}
+
+async function enableSelected(): Promise<void> {
+  if (!canUpdate.value || batchEnabling.value || batchSelection.value.length === 0) return
+  const targets = [...batchSelection.value]
+  batchEnabling.value = true
+  let enabled = 0
+  let failed = 0
+  for (const row of targets) {
+    try {
+      await api.updateProviderModel(props.provider.id, row.id, {
+        displayName: row.displayName,
+        modelKind: row.modelKind,
+        pricingMode: row.pricingMode,
+        priceUnit: row.priceUnit,
+        officialModelId: row.officialModel?.id ?? null,
+        status: 1,
+        prices: row.prices.map((price) => ({
+          tierKey: price.tierKey,
+          tierLabel: price.tierLabel,
+          priceCny: price.priceCny,
+        })),
+      })
+      enabled++
+    } catch {
+      failed++
+    }
+  }
+  await load()
+  tableRef.value?.clearSelection()
+  selection.value = []
+  batchEnabling.value = false
+  if (failed === 0) {
+    ElNotification.success({
+      title: t('ai.providerModel.batchEnableDone'),
+      message: t('ai.providerModel.batchEnableSummary', { enabled, failed }),
+    })
+    return
+  }
+  ElNotification.warning({
+    title: t('ai.providerModel.batchEnablePartial'),
+    message: t('ai.providerModel.batchEnableSummary', { enabled, failed }),
+  })
 }
 
 function openEdit(row: AiProviderModel): void {
@@ -255,15 +318,32 @@ watch(visible, (open) => {
           <el-button @click="applyFilters">{{ t('common.search') }}</el-button>
           <el-button text @click="resetFilters">{{ t('common.reset') }}</el-button>
         </div>
-        <el-button
-          v-if="canSync"
-          type="primary"
-          :loading="syncing"
-          :disabled="loading || submitting"
-          @click="sync"
-        >
-          {{ t('ai.providerModel.sync') }}
-        </el-button>
+        <div class="ai-provider-model__toolbar-actions">
+          <el-button
+            v-if="canUpdate"
+            type="primary"
+            plain
+            :loading="batchEnabling"
+            :disabled="batchSelection.length === 0 || syncing || loading || submitting"
+            :title="t('ai.providerModel.batchEnableHint')"
+            @click="enableSelected"
+          >
+            {{
+              batchSelection.length > 0
+                ? t('ai.providerModel.batchEnableCount', { count: batchSelection.length })
+                : t('ai.providerModel.batchEnable')
+            }}
+          </el-button>
+          <el-button
+            v-if="canSync"
+            type="primary"
+            :loading="syncing"
+            :disabled="loading || submitting || batchEnabling"
+            @click="sync"
+          >
+            {{ t('ai.providerModel.sync') }}
+          </el-button>
+        </div>
       </div>
 
       <el-alert
@@ -275,21 +355,25 @@ watch(visible, (open) => {
       />
 
       <AppTable
+        ref="tableRef"
         :columns="columns"
         :data="rows"
         :loading="loading"
         :pagination="pagination"
         :row-key="(row: AiProviderModel) => String(row.id)"
+        :selectable="canUpdate"
+        :selection-selectable="canSelectForBatch"
         :result-state="resultState()"
         :status-message="loadError"
         :aria-label="t('ai.providerModel.title', { name: provider.name })"
         @refresh="load"
+        @selection-change="onSelectionChange"
         @update:pagination="updatePagination"
       >
         <template #cell-model="{ row }: { row: AiProviderModel }">
           <div class="ai-provider-model__identity">
             <strong>{{ row.displayName }}</strong>
-            <span>{{ row.upstreamModel }}</span>
+            <span>{{ t('ai.providerModel.modelId') }}: {{ row.upstreamModel }}</span>
           </div>
         </template>
         <template #cell-kind="{ row }: { row: AiProviderModel }">
@@ -330,7 +414,7 @@ watch(visible, (open) => {
             v-if="canUpdate && row.actions.update"
             link
             type="primary"
-            :disabled="submitting || syncing"
+            :disabled="submitting || syncing || batchEnabling"
             @click="openEdit(row)"
           >
             {{ t('common.edit') }}
@@ -384,6 +468,12 @@ watch(visible, (open) => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+  }
+
+  &__toolbar-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
   }
 
   &__filters {

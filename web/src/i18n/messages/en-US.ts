@@ -198,7 +198,15 @@ export const enUS = {
   'ai.providerModel.title': 'Provider models · {name}',
   'ai.providerModel.description':
     'Pulled models stay disabled. Configure pricing and enable a model before it appears in the Agent model list.',
+  'ai.providerModel.batchEnable': 'Enable selected',
+  'ai.providerModel.batchEnableCount': 'Enable selected ({count})',
+  'ai.providerModel.batchEnableHint':
+    'Only disabled models with an official mapping or configured prices can be selected',
+  'ai.providerModel.batchEnableDone': 'Bulk enable completed',
+  'ai.providerModel.batchEnablePartial': 'Some models failed to enable',
+  'ai.providerModel.batchEnableSummary': '{enabled} enabled, {failed} failed',
   'ai.providerModel.model': 'Model',
+  'ai.providerModel.modelId': 'ID',
   'ai.providerModel.modelKind': 'Kind',
   'ai.providerModel.pricing': 'Pricing',
   'ai.providerModel.officialModel': 'Official model',

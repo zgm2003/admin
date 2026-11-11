@@ -60,7 +60,12 @@ const { t } = useI18n()
 const paginationState = ref<TablePaginationState | null>(
   props.pagination ? { ...props.pagination } : null,
 )
+const tableRef = ref<{ clearSelection: () => void }>()
 const isMobile = ref(false)
+
+defineExpose({
+  clearSelection: () => tableRef.value?.clearSelection(),
+})
 
 function updateMobile(): void {
   isMobile.value = window.innerWidth <= 768
@@ -166,6 +171,7 @@ function onSelectionChange(selection: Row[]): void {
       </el-space>
     </div>
     <el-table
+      ref="tableRef"
       v-loading="busy"
       border
       :data="data"
