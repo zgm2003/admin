@@ -41,7 +41,6 @@ const filters = ref<SearchFormModel<{ keyword: string; vendor: number | ''; stat
 const loading = ref(false)
 const loadError = ref('')
 const busyID = ref<number | null>(null)
-const testingID = ref<number | null>(null)
 const dialogVisible = ref(false)
 const editing = ref<AiProvider | null>(null)
 const modelDialogVisible = ref(false)
@@ -101,7 +100,7 @@ const columns = computed<TableColumn<AiProvider>[]>(() => [
   { key: 'apiKey', label: t('ai.provider.apiKey'), width: 110 },
   { key: 'status', label: t('ai.provider.status'), width: 90 },
   { key: 'updatedAt', label: t('ai.provider.updatedAt'), width: 170 },
-  { key: 'actions', label: t('common.actions'), width: 360, fixed: 'right' },
+  { key: 'actions', label: t('common.actions'), width: 280, fixed: 'right' },
 ])
 
 function state(): 'loading' | 'error' | 'empty' | 'success' {
@@ -175,37 +174,6 @@ function openModels(row: AiProvider): void {
   if (!canModels.value) return
   modelProvider.value = row
   modelDialogVisible.value = true
-}
-
-async function test(row: AiProvider): Promise<void> {
-  if (!canTest.value || busyID.value !== null) return
-  busyID.value = row.id
-  testingID.value = row.id
-  try {
-    const result = await api.testProvider(row.id)
-    if (result.ok) {
-      ElNotification.success({
-        title: t('ai.provider.testSuccess'),
-        message: t('ai.provider.testSuccessMessage', {
-          model: result.model,
-          latency: result.latencyMs,
-          reply: result.reply || t('ai.provider.testEmptyReply'),
-        }),
-        duration: 6000,
-      })
-    } else {
-      ElNotification.error({
-        title: t('ai.provider.testFailed'),
-        message: result.error || t('ai.provider.testEmptyReply'),
-        duration: 8000,
-      })
-    }
-  } catch {
-    // request.ts owns the API error notification.
-  } finally {
-    busyID.value = null
-    testingID.value = null
-  }
 }
 
 async function save(payload: ProviderForm): Promise<void> {
@@ -403,18 +371,6 @@ onBeforeUnmount(() => {
         <span class="ai-provider-page__muted">{{ formatDate(row.updatedAt) }}</span>
       </template>
       <template #cell-actions="{ row }: { row: AiProvider }">
-        <el-button
-          v-if="canTest"
-          link
-          type="success"
-          :loading="testingID === row.id"
-          :disabled="busyID !== null"
-          :title="t('ai.provider.testHint')"
-          data-testid="ai-provider-test"
-          @click="test(row)"
-        >
-          {{ testingID === row.id ? t('ai.provider.testing') : t('ai.provider.test') }}
-        </el-button>
         <el-button
           v-if="canModels"
           link

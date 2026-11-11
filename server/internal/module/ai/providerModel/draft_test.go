@@ -8,13 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/ai/pricing"
 	aiprovider "admin/server/internal/module/ai/provider"
 	"admin/server/internal/secretkey"
 )
 
-func TestTestDraftDiscoversChatModelBeforeSaving(t *testing.T) {
-	keys := testKeyRing(t)
+func TestPreviewModelsThenTestSelectedModel(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("Authorization") != "Bearer sk-draft" {
 			t.Errorf("authorization = %q", request.Header.Get("Authorization"))
@@ -36,25 +34,33 @@ func TestTestDraftDiscoversChatModelBeforeSaving(t *testing.T) {
 	defer server.Close()
 
 	service := &Service{
-		repo:           &syncFakeRepository{},
 		providerSource: syncFakeProvider{},
-		keys:           keys,
+		keys:           testKeyRing(t),
 		httpClient:     server.Client(),
 		now:            time.Now,
 	}
-	result, err := service.TestDraft(context.Background(), TestDraftInput{
+	input := TestDraftInput{
 		Protocol: aiprovider.ProtocolOpenAI, BaseURL: server.URL + "/v1",
 		APIKey: "sk-draft", TimeoutMS: 3000,
-	})
+	}
+	preview, err := service.PreviewModels(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !result.OK || result.Model != "gpt-4o-mini" || result.ModelsFound != 4 || result.Reply != "OK" {
+	if !preview.OK || len(preview.Models) != 4 {
+		t.Fatalf("preview = %+v", preview)
+	}
+	input.Model = "gpt-4o-mini"
+	result, err := service.TestDraft(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || result.Model != "gpt-4o-mini" || result.Reply != "OK" {
 		t.Fatalf("result = %+v", result)
 	}
 }
 
-func TestTestDraftUsesStoredKeyAndModelWhenEditing(t *testing.T) {
+func TestPreviewAndTestUseStoredKeyWhenEditing(t *testing.T) {
 	keys := testKeyRing(t)
 	ciphertext, _, err := secretkey.EncryptProviderValue(keys.ProviderEncryptionKey(), "sk-saved")
 	if err != nil {
@@ -66,7 +72,7 @@ func TestTestDraftUsesStoredKeyAndModelWhenEditing(t *testing.T) {
 		}
 		switch request.URL.Path {
 		case "/v1/models":
-			writer.WriteHeader(http.StatusNotFound)
+			_, _ = writer.Write([]byte(`{"data":[{"id":"saved-chat"}]}`))
 		case "/v1/chat/completions":
 			_, _ = writer.Write([]byte(`{"choices":[{"message":{"content":"OK"}}]}`))
 		default:
@@ -77,39 +83,29 @@ func TestTestDraftUsesStoredKeyAndModelWhenEditing(t *testing.T) {
 
 	providerID := int64(9)
 	service := &Service{
-		repo: &syncFakeRepository{chatModel: &Model{
-			ID: 1, ProviderID: providerID, UpstreamModel: "saved-chat",
-			ModelKind: pricing.KindChat,
-		}},
-		providerSource: syncFakeProvider{model: aiprovider.Model{
-			APIKeyCiphertext: ciphertext,
-		}},
-		keys: keys, httpClient: server.Client(), now: time.Now,
+		providerSource: syncFakeProvider{model: aiprovider.Model{APIKeyCiphertext: ciphertext}},
+		keys:           keys,
+		httpClient:     server.Client(),
+		now:            time.Now,
 	}
-	result, err := service.TestDraft(context.Background(), TestDraftInput{
+	input := TestDraftInput{
 		ProviderID: &providerID, Protocol: aiprovider.ProtocolOpenAI,
 		BaseURL: server.URL + "/v1", TimeoutMS: 3000,
-	})
+	}
+	preview, err := service.PreviewModels(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !preview.OK || len(preview.Models) != 1 || preview.Models[0].ID != "saved-chat" {
+		t.Fatalf("preview = %+v", preview)
+	}
+	input.Model = "saved-chat"
+	result, err := service.TestDraft(context.Background(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !result.OK || result.Model != "saved-chat" || result.Reply != "OK" {
 		t.Fatalf("result = %+v", result)
-	}
-}
-
-func TestChooseTestModelSkipsEmbeddingAndImage(t *testing.T) {
-	model := chooseTestModel([]upstreamModel{
-		{ID: "text-embedding-3-small"},
-		{ID: "dall-e-3"},
-		{ID: "claude-3-5-sonnet"},
-		{ID: "gpt-4o"},
-	})
-	if model.ID != "claude-3-5-sonnet" {
-		t.Fatalf("model = %+v", model)
-	}
-	if !strings.Contains(model.ID, "claude") {
-		t.Fatal("expected a chat model")
 	}
 }
 

@@ -22,7 +22,6 @@ import (
 type repository interface {
 	List(context.Context, int64, ListQuery) ([]Model, int64, error)
 	FindByID(context.Context, int64, int64) (Model, error)
-	TestChatModel(context.Context, int64) (Model, error)
 	PricesByModelIDs(context.Context, []int64) (map[int64][]Price, error)
 	OfficialByIDs(context.Context, []int64) (map[int64]Official, error)
 	OfficialByVendor(context.Context, int16) ([]Official, error)

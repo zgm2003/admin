@@ -14,10 +14,21 @@ import (
 	aiprovider "admin/server/internal/module/ai/provider"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/apperror"
-	"gorm.io/gorm"
 )
 
 const testPrompt = "Reply with OK only."
+
+type PreviewModel struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+}
+
+type ModelPreviewResult struct {
+	OK        bool           `json:"ok"`
+	Models    []PreviewModel `json:"models"`
+	Error     string         `json:"error"`
+	CheckedAt time.Time      `json:"checkedAt"`
+}
 
 type TestResult struct {
 	OK          bool      `json:"ok"`
@@ -27,99 +38,81 @@ type TestResult struct {
 	LatencyMS   int64     `json:"latencyMs"`
 	Reply       string    `json:"reply"`
 	Error       string    `json:"error"`
-	ModelsFound int       `json:"modelsFound"`
 	CheckedAt   time.Time `json:"checkedAt"`
 }
 
-func (s *Service) Test(ctx context.Context, providerID int64) (TestResult, error) {
-	if s == nil || s.repo == nil || s.providerSource == nil || s.keys == nil {
-		return TestResult{}, dependency(fmt.Errorf("provider test service is not configured"))
-	}
-	if providerID < 1 {
-		return TestResult{}, invalid(fmt.Errorf("provider id is invalid"))
-	}
-	provider, err := s.providerSource.FindByID(ctx, providerID)
+func (s *Service) PreviewModels(ctx context.Context, input TestDraftInput) (ModelPreviewResult, error) {
+	provider, apiKey, err := s.resolveDraftProvider(ctx, input)
 	if err != nil {
-		return TestResult{}, mapError(err)
-	}
-	model, err := s.repo.TestChatModel(ctx, providerID)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return TestResult{
-			OK:        false,
-			Error:     "没有可测试的对话模型，请先拉取模型",
-			CheckedAt: s.checkedAt(),
-		}, nil
-	}
-	if err != nil {
-		return TestResult{}, mapError(err)
-	}
-	apiKey, err := secretkey.DecryptProviderValue(s.keys.ProviderEncryptionKey(), provider.APIKeyCiphertext)
-	if err != nil {
-		return TestResult{}, dependency(fmt.Errorf("decrypt provider API key: %w", err))
-	}
-	return s.probeHello(ctx, provider, model, apiKey), nil
-}
-
-func (s *Service) TestDraft(ctx context.Context, input TestDraftInput) (TestResult, error) {
-	if s == nil || s.providerSource == nil || s.keys == nil {
-		return TestResult{}, dependency(fmt.Errorf("provider test service is not configured"))
-	}
-	if !input.Protocol.Valid() || strings.TrimSpace(input.BaseURL) == "" {
-		return TestResult{}, invalid(fmt.Errorf("protocol or baseUrl is invalid"))
-	}
-	apiKey := strings.TrimSpace(input.APIKey)
-	if apiKey == "" {
-		if input.ProviderID == nil {
-			return TestResult{}, invalid(fmt.Errorf("apiKey is required"))
-		}
-		saved, err := s.providerSource.FindByID(ctx, *input.ProviderID)
-		if err != nil {
-			return TestResult{}, mapError(err)
-		}
-		apiKey, err = secretkey.DecryptProviderValue(
-			s.keys.ProviderEncryptionKey(), saved.APIKeyCiphertext,
-		)
-		if err != nil {
-			return TestResult{}, dependency(fmt.Errorf("decrypt provider API key: %w", err))
-		}
-	}
-	timeout := input.TimeoutMS
-	if timeout < 1000 || timeout > 30000 {
-		timeout = 15000
-	}
-	provider := aiprovider.Model{
-		Protocol: input.Protocol, BaseURL: strings.TrimSpace(input.BaseURL), TimeoutMS: timeout,
-	}
-	if input.Model != "" {
-		return s.probeHello(ctx, provider, Model{
-			UpstreamModel: input.Model, DisplayName: input.Model,
-		}, apiKey), nil
+		return ModelPreviewResult{}, err
 	}
 	models, err := s.listUpstreamModels(ctx, provider, apiKey)
 	if err != nil {
-		if input.ProviderID != nil && s.repo != nil {
-			if savedModel, modelErr := s.repo.TestChatModel(ctx, *input.ProviderID); modelErr == nil {
-				return s.probeHello(ctx, provider, savedModel, apiKey), nil
-			}
-		}
-		return TestResult{
+		return ModelPreviewResult{
 			OK:        false,
 			Error:     "拉取模型失败: " + sanitizeTestText(testErrorDetail(err), apiKey, 300),
 			CheckedAt: s.checkedAt(),
 		}, nil
 	}
 	if len(models) == 0 {
-		return TestResult{
-			OK: false, Error: "上游没有返回任何模型，无法自动选择测试模型",
-			CheckedAt: s.checkedAt(),
+		return ModelPreviewResult{
+			OK: false, Error: "上游没有返回模型", CheckedAt: s.checkedAt(),
 		}, nil
 	}
-	model := chooseTestModel(models)
-	result := s.probeHello(ctx, provider, Model{
-		UpstreamModel: model.ID, DisplayName: model.DisplayName,
-	}, apiKey)
-	result.ModelsFound = len(models)
-	return result, nil
+	items := make([]PreviewModel, 0, len(models))
+	for _, model := range models {
+		items = append(items, PreviewModel{ID: model.ID, DisplayName: model.DisplayName})
+	}
+	return ModelPreviewResult{OK: true, Models: items, CheckedAt: s.checkedAt()}, nil
+}
+
+func (s *Service) TestDraft(ctx context.Context, input TestDraftInput) (TestResult, error) {
+	model := strings.TrimSpace(input.Model)
+	if model == "" {
+		return TestResult{}, invalid(fmt.Errorf("model is required"))
+	}
+	provider, apiKey, err := s.resolveDraftProvider(ctx, input)
+	if err != nil {
+		return TestResult{}, err
+	}
+	return s.probeHello(ctx, provider, Model{
+		UpstreamModel: model, DisplayName: model,
+	}, apiKey), nil
+}
+
+func (s *Service) resolveDraftProvider(
+	ctx context.Context,
+	input TestDraftInput,
+) (aiprovider.Model, string, error) {
+	if s == nil || s.providerSource == nil || s.keys == nil {
+		return aiprovider.Model{}, "", dependency(fmt.Errorf("provider test service is not configured"))
+	}
+	if !input.Protocol.Valid() || strings.TrimSpace(input.BaseURL) == "" {
+		return aiprovider.Model{}, "", invalid(fmt.Errorf("protocol or baseUrl is invalid"))
+	}
+	apiKey := strings.TrimSpace(input.APIKey)
+	if apiKey == "" {
+		if input.ProviderID == nil {
+			return aiprovider.Model{}, "", invalid(fmt.Errorf("apiKey is required"))
+		}
+		saved, err := s.providerSource.FindByID(ctx, *input.ProviderID)
+		if err != nil {
+			return aiprovider.Model{}, "", mapError(err)
+		}
+		apiKey, err = secretkey.DecryptProviderValue(
+			s.keys.ProviderEncryptionKey(), saved.APIKeyCiphertext,
+		)
+		if err != nil {
+			return aiprovider.Model{}, "", dependency(fmt.Errorf("decrypt provider API key: %w", err))
+		}
+	}
+	timeout := input.TimeoutMS
+	if timeout < 1000 || timeout > 30000 {
+		timeout = 15000
+	}
+	return aiprovider.Model{
+		Protocol: input.Protocol, BaseURL: strings.TrimSpace(input.BaseURL), TimeoutMS: timeout,
+	}, apiKey, nil
 }
 
 func testErrorDetail(err error) string {
@@ -128,44 +121,6 @@ func testErrorDetail(err error) string {
 		return appErr.Cause.Error()
 	}
 	return err.Error()
-}
-
-func chooseTestModel(models []upstreamModel) upstreamModel {
-	excluded := []string{
-		"embedding", "embed-", "moderation", "rerank", "realtime",
-		"whisper", "transcribe", "speech", "tts", "audio",
-		"image", "dall-e", "imagen", "video", "seedance", "sora", "veo",
-	}
-	preferred := []string{
-		"gpt-", "claude", "gemini", "chat", "o1", "o3", "o4",
-		"deepseek", "qwen", "doubao", "moonshot", "kimi", "glm", "llama",
-	}
-	available := make([]upstreamModel, 0, len(models))
-	for _, model := range models {
-		id := strings.ToLower(model.ID)
-		skip := false
-		for _, token := range excluded {
-			if strings.Contains(id, token) {
-				skip = true
-				break
-			}
-		}
-		if !skip {
-			available = append(available, model)
-		}
-	}
-	for _, model := range available {
-		id := strings.ToLower(model.ID)
-		for _, token := range preferred {
-			if strings.Contains(id, token) {
-				return model
-			}
-		}
-	}
-	if len(available) > 0 {
-		return available[0]
-	}
-	return models[0]
 }
 
 func (s *Service) probeHello(

@@ -15,7 +15,7 @@ type handlerService interface {
 	Get(context.Context, int64, int64) (SafeValue, error)
 	Update(context.Context, int64, int64, UpdateInput) error
 	Sync(context.Context, int64) (SyncResult, error)
-	Test(context.Context, int64) (TestResult, error)
+	PreviewModels(context.Context, TestDraftInput) (ModelPreviewResult, error)
 	TestDraft(context.Context, TestDraftInput) (TestResult, error)
 	Options(context.Context, int64) (Options, error)
 }
@@ -122,17 +122,18 @@ func (h *Handler) Sync(c *gin.Context) {
 	response.OK(c, http.StatusOK, result)
 }
 
-func (h *Handler) Test(c *gin.Context) {
-	id, err := providerID(c)
+func (h *Handler) PreviewModels(c *gin.Context) {
+	var request testDraftRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	input, err := request.input()
 	if err != nil {
-		response.Fail(c, err)
+		response.Fail(c, invalid(err))
 		return
 	}
-	if err = validate.RequireEmptyBody(c); err != nil {
-		response.Fail(c, err)
-		return
-	}
-	result, err := h.service.Test(c.Request.Context(), id)
+	result, err := h.service.PreviewModels(c.Request.Context(), input)
 	if err != nil {
 		response.Fail(c, err)
 		return

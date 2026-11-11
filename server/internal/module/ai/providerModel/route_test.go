@@ -24,8 +24,8 @@ func TestRegisterAdminRoutesSharesProviderIDParam(t *testing.T) {
 	}
 	for _, route := range []string{
 		"GET /api/admin/v1/ai/provider/:id",
+		"POST /api/admin/v1/ai/provider/models/preview",
 		"POST /api/admin/v1/ai/provider/test",
-		"POST /api/admin/v1/ai/provider/:id/test",
 		"POST /api/admin/v1/ai/provider/:id/models/sync",
 	} {
 		if !routes[route] {

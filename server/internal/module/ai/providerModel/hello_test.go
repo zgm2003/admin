@@ -9,20 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"admin/server/internal/module/ai/pricing"
 	aiprovider "admin/server/internal/module/ai/provider"
-	"admin/server/internal/secretkey"
 )
 
 func TestProviderHelloSupportsChatProtocols(t *testing.T) {
-	keys, err := secretkey.New(strings.Repeat("s", 64))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ciphertext, _, err := secretkey.EncryptProviderValue(keys.ProviderEncryptionKey(), "sk-test")
-	if err != nil {
-		t.Fatal(err)
-	}
 	cases := []struct {
 		name       string
 		protocol   aiprovider.Protocol
@@ -80,23 +70,21 @@ func TestProviderHelloSupportsChatProtocols(t *testing.T) {
 			defer server.Close()
 
 			service := &Service{
-				repo: &syncFakeRepository{chatModel: &Model{
-					ID: 9, ProviderID: 3, UpstreamModel: "test-chat", DisplayName: "Test Chat",
-					ModelKind: pricing.KindChat,
-				}},
-				providerSource: syncFakeProvider{model: aiprovider.Model{
-					BaseURL: server.URL + map[aiprovider.Protocol]string{
-						aiprovider.ProtocolOpenAI:          "/v1",
-						aiprovider.ProtocolOpenAIResponses: "/v1",
-						aiprovider.ProtocolAnthropic:       "/v1",
-						aiprovider.ProtocolGemini:          "/v1beta",
-					}[tc.protocol],
-					Protocol: tc.protocol, APIKeyCiphertext: ciphertext,
-					TimeoutMS: 3000, Vendor: aiprovider.VendorOpenAI,
-				}},
-				keys: keys, httpClient: server.Client(), now: time.Now,
+				providerSource: syncFakeProvider{},
+				keys:           testKeyRing(t),
+				httpClient:     server.Client(),
+				now:            time.Now,
 			}
-			result, err := service.Test(context.Background(), 3)
+			result, err := service.TestDraft(context.Background(), TestDraftInput{
+				Protocol: tc.protocol,
+				BaseURL: server.URL + map[aiprovider.Protocol]string{
+					aiprovider.ProtocolOpenAI:          "/v1",
+					aiprovider.ProtocolOpenAIResponses: "/v1",
+					aiprovider.ProtocolAnthropic:       "/v1",
+					aiprovider.ProtocolGemini:          "/v1beta",
+				}[tc.protocol],
+				APIKey: "sk-test", Model: "test-chat", TimeoutMS: 3000,
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -109,30 +97,21 @@ func TestProviderHelloSupportsChatProtocols(t *testing.T) {
 }
 
 func TestProviderHelloReportsUpstreamErrorWithoutLeakingKey(t *testing.T) {
-	keys, err := secretkey.New(strings.Repeat("s", 64))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ciphertext, _, err := secretkey.EncryptProviderValue(keys.ProviderEncryptionKey(), "sk-secret")
-	if err != nil {
-		t.Fatal(err)
-	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.WriteHeader(http.StatusUnauthorized)
 		_, _ = writer.Write([]byte(`{"error":{"message":"invalid API key sk-secret"}}`))
 	}))
 	defer server.Close()
 	service := &Service{
-		repo: &syncFakeRepository{chatModel: &Model{
-			ID: 9, ProviderID: 3, UpstreamModel: "test-chat", ModelKind: pricing.KindChat,
-		}},
-		providerSource: syncFakeProvider{model: aiprovider.Model{
-			BaseURL: server.URL + "/v1", Protocol: aiprovider.ProtocolOpenAI,
-			APIKeyCiphertext: ciphertext, TimeoutMS: 3000,
-		}},
-		keys: keys, httpClient: server.Client(), now: time.Now,
+		providerSource: syncFakeProvider{},
+		keys:           testKeyRing(t),
+		httpClient:     server.Client(),
+		now:            time.Now,
 	}
-	result, err := service.Test(context.Background(), 3)
+	result, err := service.TestDraft(context.Background(), TestDraftInput{
+		Protocol: aiprovider.ProtocolOpenAI, BaseURL: server.URL + "/v1",
+		APIKey: "sk-secret", Model: "test-chat", TimeoutMS: 3000,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,21 +123,16 @@ func TestProviderHelloReportsUpstreamErrorWithoutLeakingKey(t *testing.T) {
 	}
 }
 
-func TestProviderHelloRequiresEnabledChatModel(t *testing.T) {
-	keys, err := secretkey.New(strings.Repeat("s", 64))
-	if err != nil {
-		t.Fatal(err)
-	}
+func TestProviderHelloRequiresSelectedModel(t *testing.T) {
 	service := &Service{
-		repo:           &syncFakeRepository{},
-		providerSource: syncFakeProvider{model: aiprovider.Model{}},
-		keys:           keys, now: time.Now,
+		providerSource: syncFakeProvider{},
+		keys:           testKeyRing(t),
+		now:            time.Now,
 	}
-	result, err := service.Test(context.Background(), 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.OK || !strings.Contains(result.Error, "对话模型") {
-		t.Fatalf("result = %+v", result)
+	if _, err := service.TestDraft(context.Background(), TestDraftInput{
+		Protocol: aiprovider.ProtocolOpenAI, BaseURL: "https://api.example.com/v1",
+		APIKey: "sk-test", TimeoutMS: 3000,
+	}); err == nil {
+		t.Fatal("test without a selected model was accepted")
 	}
 }

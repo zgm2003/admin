@@ -1781,12 +1781,12 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 供应商模型同步遇到非 chat 官方模型时，默认改为供应商单位价格：视频 `second`、图片 `image`、音频 `request`，避免视频模型误用 0 token 价格。
 - 当前手动运行的 `16301` 若是在本次改动前启动的，需要重启一次才能加载 `vendor=4`、`videoPrices` 和 Seedance 路由；数据库和前端构建已完成。
 
-### 供应商模型拉取与 hello 测试（2026-11-10）
+### 供应商模型拉取与按模型测试（2026-11-11）
 
-- 供应商列表保留“模型”入口：弹窗内“拉取模型”调用上游 `/models`，按厂商协议解析并同步到 `ai_provider_model`。
-- 新增/编辑供应商弹窗新增“测试连接”，不要求先保存：`POST /api/admin/v1/ai/provider/test` 接收当前表单的协议、Base URL、可选 API Key 和超时时间。
-- 编辑时 API Key 留空会使用已保存的密钥；新增时必须填写 Key。测试会先拉取 `/models`，自动排除 embedding/image/video 等非对话模型，选一个对话模型发送最小 hello。
-- 新增 `ai:provider:test` 动作权限和迁移 `2026-11-10-ai-provider-test-permission.sql`；测试接口和两个前端测试入口都按该权限显示。
-- 已保存供应商仍保留 `POST /api/admin/v1/ai/provider/:id/test` 快捷测试；测试支持 OpenAI Chat、OpenAI Responses、Anthropic、Gemini。
-- 测试返回 `ok`、模型、HTTP 状态、耗时、回复、发现模型数和经过脱敏的失败原因；失败原因会脱敏 API Key、压缩空白并截断。
-- 草稿测试会尝试用保存的对话模型兜底 `/models` 不可用的编辑场景；新增场景若 `/models` 不可用会明确提示拉取失败。
+- 新增/编辑供应商弹窗增加“连接验证”分区，固定流程为：用当前表单配置拉取模型 → 用户选择一个模型 → 只测试该选中模型。
+- `POST /api/admin/v1/ai/provider/models/preview` 不落库，接收协议、Base URL、可选 API Key 和超时，返回上游模型清单；编辑时 Key 留空使用已保存密钥。
+- `POST /api/admin/v1/ai/provider/test` 必须携带选中的 `model`，不再自动挑模型；只向该模型发送最小 hello。
+- 已去掉供应商列表的自动模型测试和 `POST /api/admin/v1/ai/provider/:id/test`，避免“没选模型就测试”的歧义。
+- 测试支持 OpenAI Chat、OpenAI Responses、Anthropic、Gemini；返回 `ok`、模型、HTTP 状态、耗时、回复和经过脱敏的失败原因。
+- 新增 `ai:provider:test` 动作权限和迁移 `2026-11-10-ai-provider-test-permission.sql`；前端连接验证区按该权限显示。
+- 失败原因会脱敏 API Key、压缩空白并截断；模型列表拉取失败会直接显示在弹窗内。

@@ -19,6 +19,6 @@ func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate
 	group.PUT("/:modelId", authenticate, requirePermission(PermissionUpdate), handler.Update)
 
 	providerGroup := routes.Group("/ai/provider")
+	providerGroup.POST("/models/preview", authenticate, requirePermission(aiprovider.PermissionTest), handler.PreviewModels)
 	providerGroup.POST("/test", authenticate, requirePermission(aiprovider.PermissionTest), handler.TestDraft)
-	providerGroup.POST("/:id/test", authenticate, requirePermission(aiprovider.PermissionTest), handler.Test)
 }

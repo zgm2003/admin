@@ -5,9 +5,12 @@ import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 
 import {
+  previewProviderModels,
   testProviderDraft,
   type AiProvider,
+  type ProviderDraftTestInput,
   type ProviderOptions,
+  type ProviderPreviewModel,
   type ProviderTestResult,
 } from '@/api/ai/provider'
 import AppDialog from '@/components/AppDialog/index.vue'
@@ -28,6 +31,10 @@ const { t } = useI18n()
 
 const formRef = ref<FormInstance>()
 const form = ref<ProviderForm>(emptyForm())
+const models = ref<ProviderPreviewModel[]>([])
+const modelsLoading = ref(false)
+const modelsError = ref('')
+const selectedModel = ref('')
 const testing = ref(false)
 const testResult = ref<ProviderTestResult | null>(null)
 const testError = ref('')
@@ -72,6 +79,9 @@ watch(
   () => [visible.value, props.model?.id] as const,
   () => {
     if (!visible.value) return
+    models.value = []
+    modelsError.value = ''
+    selectedModel.value = ''
     testResult.value = null
     testError.value = ''
     if (props.model === null) {
@@ -97,31 +107,96 @@ watch(
 watch(
   () => [form.value.protocol, form.value.baseUrl, form.value.apiKey, form.value.timeoutMs],
   () => {
-    if (!testing.value) {
-      testResult.value = null
-      testError.value = ''
-    }
+    if (testing.value || modelsLoading.value) return
+    models.value = []
+    modelsError.value = ''
+    selectedModel.value = ''
+    testResult.value = null
+    testError.value = ''
   },
 )
 
-async function testConnection(): Promise<void> {
-  if (!props.canTest || props.submitting || testing.value || formRef.value === undefined) return
+watch(selectedModel, () => {
+  testResult.value = null
+  testError.value = ''
+})
+
+function modelLabel(item: ProviderPreviewModel): string {
+  return item.displayName && item.displayName !== item.id
+    ? `${item.displayName} (${item.id})`
+    : item.id
+}
+
+function draftPayload(): ProviderDraftTestInput {
+  const payload: ProviderDraftTestInput = {
+    protocol: form.value.protocol,
+    baseUrl: form.value.baseUrl.trim(),
+    timeoutMs: form.value.timeoutMs,
+  }
+  if (props.model !== null) payload.providerId = props.model.id
+  const apiKey = form.value.apiKey.trim()
+  if (apiKey !== '') payload.apiKey = apiKey
+  return payload
+}
+
+async function validateConnectionFields(): Promise<boolean> {
+  if (formRef.value === undefined) return false
   try {
     await formRef.value.validateField(['baseUrl', 'apiKey'])
+    return true
   } catch {
+    return false
+  }
+}
+
+async function pullModels(): Promise<void> {
+  if (
+    !props.canTest ||
+    props.submitting ||
+    modelsLoading.value ||
+    testing.value ||
+    !(await validateConnectionFields())
+  ) {
+    return
+  }
+  modelsLoading.value = true
+  models.value = []
+  modelsError.value = ''
+  selectedModel.value = ''
+  testResult.value = null
+  testError.value = ''
+  try {
+    const result = await previewProviderModels(draftPayload())
+    if (!visible.value) return
+    if (result.ok) {
+      models.value = result.models
+    } else {
+      modelsError.value = result.error || t('ai.provider.modelsRequestFailed')
+    }
+  } catch {
+    modelsError.value = t('ai.provider.modelsRequestFailed')
+  } finally {
+    modelsLoading.value = false
+  }
+}
+
+async function testSelectedModel(): Promise<void> {
+  if (
+    !props.canTest ||
+    props.submitting ||
+    testing.value ||
+    modelsLoading.value ||
+    selectedModel.value === ''
+  ) {
     return
   }
   testing.value = true
   testResult.value = null
   testError.value = ''
   try {
-    const apiKey = form.value.apiKey.trim()
     const result = await testProviderDraft({
-      ...(props.model === null ? {} : { providerId: props.model.id }),
-      protocol: form.value.protocol,
-      baseUrl: form.value.baseUrl.trim(),
-      ...(apiKey === '' ? {} : { apiKey }),
-      timeoutMs: form.value.timeoutMs,
+      ...draftPayload(),
+      model: selectedModel.value,
     })
     if (visible.value) testResult.value = result
   } catch {
@@ -154,14 +229,14 @@ async function submit(): Promise<void> {
     :title="title"
     width="660px"
     :close-on-click-modal="false"
-    :close-on-press-escape="!submitting && !testing"
-    :show-close="!submitting && !testing"
+    :close-on-press-escape="!submitting && !testing && !modelsLoading"
+    :show-close="!submitting && !testing && !modelsLoading"
   >
     <el-form
       ref="formRef"
       :model="form"
       :rules="rules"
-      :disabled="submitting || testing"
+      :disabled="submitting || testing || modelsLoading"
       label-position="top"
       class="ai-provider-dialog"
       @submit.prevent="submit"
@@ -273,60 +348,97 @@ async function submit(): Promise<void> {
 
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
 
-      <div
-        v-if="testResult !== null || testError !== ''"
-        class="ai-provider-dialog__test-result"
-        :class="testResult?.ok ? 'is-success' : 'is-error'"
-      >
-        <div class="ai-provider-dialog__test-head">
-          <el-tag :type="testResult?.ok ? 'success' : 'danger'" size="small" effect="plain">
-            {{ testResult?.ok ? t('ai.provider.testSuccess') : t('ai.provider.testFailed') }}
-          </el-tag>
-          <span v-if="testResult?.ok && testResult.modelsFound > 0">
-            {{ t('ai.provider.draftModelsFound', { count: testResult.modelsFound }) }}
-          </span>
+      <div v-if="canTest" class="ai-provider-dialog__connection">
+        <div class="ai-provider-dialog__connection-head">
+          <div>
+            <strong>{{ t('ai.provider.connectionCheck') }}</strong>
+            <p class="ai-provider-dialog__hint">{{ t('ai.provider.connectionCheckHint') }}</p>
+          </div>
+          <el-button
+            size="small"
+            :loading="modelsLoading"
+            :disabled="submitting || testing"
+            data-testid="ai-provider-pull-models"
+            @click="pullModels"
+          >
+            {{ modelsLoading ? t('ai.provider.pullingModels') : t('ai.provider.pullModels') }}
+          </el-button>
         </div>
-        <template v-if="testResult?.ok">
-          <p>
-            {{
-              t('ai.provider.draftModelLatency', {
-                model: testResult.model,
-                latency: testResult.latencyMs,
-              })
-            }}
-          </p>
-          <p>
-            {{
-              t('ai.provider.testReply', {
-                reply: testResult.reply || t('ai.provider.testEmptyReply'),
-              })
-            }}
-          </p>
-        </template>
-        <p v-else class="ai-provider-dialog__test-error">
-          {{ testError || testResult?.error || t('ai.provider.testEmptyReply') }}
+
+        <div v-if="models.length > 0" class="ai-provider-dialog__model-select">
+          <el-select
+            v-model="selectedModel"
+            filterable
+            clearable
+            :placeholder="t('ai.provider.selectModelPlaceholder')"
+            :disabled="testing || modelsLoading"
+          >
+            <el-option
+              v-for="item in models"
+              :key="item.id"
+              :label="modelLabel(item)"
+              :value="item.id"
+            />
+          </el-select>
+          <el-button
+            type="primary"
+            :loading="testing"
+            :disabled="selectedModel === '' || modelsLoading || submitting"
+            data-testid="ai-provider-test-draft"
+            @click="testSelectedModel"
+          >
+            {{ testing ? t('ai.provider.testing') : t('ai.provider.testModel') }}
+          </el-button>
+        </div>
+
+        <p v-if="models.length > 0" class="ai-provider-dialog__hint">
+          {{ t('ai.provider.modelsLoaded', { count: models.length }) }}
         </p>
+        <p v-if="modelsError !== ''" class="ai-provider-dialog__connection-error">
+          {{ modelsError }}
+        </p>
+
+        <div
+          v-if="testResult !== null || testError !== ''"
+          class="ai-provider-dialog__test-result"
+          :class="testResult?.ok ? 'is-success' : 'is-error'"
+        >
+          <div class="ai-provider-dialog__test-head">
+            <el-tag :type="testResult?.ok ? 'success' : 'danger'" size="small" effect="plain">
+              {{ testResult?.ok ? t('ai.provider.testSuccess') : t('ai.provider.testFailed') }}
+            </el-tag>
+          </div>
+          <template v-if="testResult?.ok">
+            <p>
+              {{
+                t('ai.provider.draftModelLatency', {
+                  model: testResult.model,
+                  latency: testResult.latencyMs,
+                })
+              }}
+            </p>
+            <p>
+              {{
+                t('ai.provider.testReply', {
+                  reply: testResult.reply || t('ai.provider.testEmptyReply'),
+                })
+              }}
+            </p>
+          </template>
+          <p v-else class="ai-provider-dialog__test-error">
+            {{ testError || testResult?.error || t('ai.provider.testEmptyReply') }}
+          </p>
+        </div>
       </div>
     </el-form>
     <template #footer>
-      <el-button
-        v-if="canTest"
-        class="ai-provider-dialog__test-button"
-        :loading="testing"
-        :disabled="submitting"
-        :title="t('ai.provider.testDraftHint')"
-        data-testid="ai-provider-test-draft"
-        @click="testConnection"
-      >
-        {{ testing ? t('ai.provider.testing') : t('ai.provider.testConnection') }}
-      </el-button>
-      <el-button :disabled="submitting || testing" @click="visible = false">
+      <el-button :disabled="submitting || testing || modelsLoading" @click="visible = false">
         {{ t('common.cancel') }}
       </el-button>
       <el-button
         type="primary"
         :loading="submitting"
-        :disabled="testing"
+        :disabled="testing || modelsLoading"
         data-testid="ai-provider-save"
         @click="submit"
       >
@@ -358,6 +470,51 @@ async function submit(): Promise<void> {
     color: var(--admin-text-muted);
     font-size: 12px;
     line-height: 1.6;
+  }
+
+  &__connection {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+    padding: 14px;
+    border: 1px solid var(--admin-border);
+    border-radius: 10px;
+    background: var(--admin-surface-soft);
+  }
+
+  &__connection-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+
+    strong {
+      color: var(--admin-text);
+      font-size: 13px;
+    }
+
+    .ai-provider-dialog__hint {
+      margin-top: 2px;
+    }
+  }
+
+  &__model-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .el-select {
+      flex: 1;
+    }
+  }
+
+  &__connection-error {
+    margin: 0;
+    color: var(--el-color-danger);
+    font-size: 12px;
+    line-height: 1.6;
+    word-break: break-word;
   }
 
   &__test-result {
@@ -404,15 +561,16 @@ async function submit(): Promise<void> {
   &__test-error {
     color: var(--el-color-danger) !important;
   }
-
-  &__test-button {
-    margin-right: auto;
-  }
 }
 
 @media (max-width: 680px) {
   .ai-provider-dialog__grid {
     grid-template-columns: 1fr;
+  }
+
+  .ai-provider-dialog__model-select {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

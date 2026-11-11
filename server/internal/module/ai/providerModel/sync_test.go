@@ -12,14 +12,12 @@ import (
 	aiprovider "admin/server/internal/module/ai/provider"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/yesno"
-	"gorm.io/gorm"
 )
 
 type syncFakeRepository struct {
 	officials []Official
 	items     []SyncItem
 	seenAt    time.Time
-	chatModel *Model
 }
 
 func (f *syncFakeRepository) List(context.Context, int64, ListQuery) ([]Model, int64, error) {
@@ -28,12 +26,7 @@ func (f *syncFakeRepository) List(context.Context, int64, ListQuery) ([]Model, i
 func (f *syncFakeRepository) FindByID(context.Context, int64, int64) (Model, error) {
 	return Model{}, nil
 }
-func (f *syncFakeRepository) TestChatModel(context.Context, int64) (Model, error) {
-	if f.chatModel == nil {
-		return Model{}, gorm.ErrRecordNotFound
-	}
-	return *f.chatModel, nil
-}
+
 func (f *syncFakeRepository) PricesByModelIDs(context.Context, []int64) (map[int64][]Price, error) {
 	return map[int64][]Price{}, nil
 }

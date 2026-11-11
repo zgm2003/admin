@@ -75,7 +75,18 @@ export interface ProviderTestResult {
   latencyMs: number
   reply: string
   error: string
-  modelsFound: number
+  checkedAt: string
+}
+
+export interface ProviderPreviewModel {
+  id: string
+  displayName: string
+}
+
+export interface ProviderModelPreviewResult {
+  ok: boolean
+  models: ProviderPreviewModel[]
+  error: string
   checkedAt: string
 }
 
@@ -123,8 +134,13 @@ export function deleteProvider(id: number): Promise<Record<string, never>> {
   return request.delete<Record<string, never>>(`${base}/${id}`)
 }
 
-export function testProvider(id: number): Promise<ProviderTestResult> {
-  return request.post<ProviderTestResult>(`${base}/${id}/test`)
+export function previewProviderModels(
+  input: ProviderDraftTestInput,
+): Promise<ProviderModelPreviewResult> {
+  return request.post<ProviderModelPreviewResult, ProviderDraftTestInput>(
+    `${base}/models/preview`,
+    input,
+  )
 }
 
 export function testProviderDraft(input: ProviderDraftTestInput): Promise<ProviderTestResult> {
