@@ -67,6 +67,17 @@ func (r *Repository) FindByID(ctx context.Context, providerID, id int64) (Model,
 	return row, nil
 }
 
+func (r *Repository) TestChatModel(ctx context.Context, providerID int64) (Model, error) {
+	var row Model
+	if err := r.db.WithContext(ctx).
+		Where("provider_id = ? AND model_kind = ?", providerID, pricing.KindChat).
+		Order("status DESC, id ASC").
+		First(&row).Error; err != nil {
+		return Model{}, err
+	}
+	return row, nil
+}
+
 func (r *Repository) PricesByModelIDs(ctx context.Context, ids []int64) (map[int64][]Price, error) {
 	result := make(map[int64][]Price, len(ids))
 	if len(ids) == 0 {

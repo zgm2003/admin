@@ -15,6 +15,8 @@ type handlerService interface {
 	Get(context.Context, int64, int64) (SafeValue, error)
 	Update(context.Context, int64, int64, UpdateInput) error
 	Sync(context.Context, int64) (SyncResult, error)
+	Test(context.Context, int64) (TestResult, error)
+	TestDraft(context.Context, TestDraftInput) (TestResult, error)
 	Options(context.Context, int64) (Options, error)
 }
 
@@ -113,6 +115,43 @@ func (h *Handler) Sync(c *gin.Context) {
 		return
 	}
 	result, err := h.service.Sync(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, result)
+}
+
+func (h *Handler) Test(c *gin.Context) {
+	id, err := providerID(c)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if err = validate.RequireEmptyBody(c); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	result, err := h.service.Test(c.Request.Context(), id)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, result)
+}
+
+func (h *Handler) TestDraft(c *gin.Context) {
+	var request testDraftRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	input, err := request.input()
+	if err != nil {
+		response.Fail(c, invalid(err))
+		return
+	}
+	result, err := h.service.TestDraft(c.Request.Context(), input)
 	if err != nil {
 		response.Fail(c, err)
 		return

@@ -67,6 +67,27 @@ export interface UpdateProviderInput {
   status: number
 }
 
+export interface ProviderTestResult {
+  ok: boolean
+  model: string
+  displayName: string
+  httpStatus: number
+  latencyMs: number
+  reply: string
+  error: string
+  modelsFound: number
+  checkedAt: string
+}
+
+export interface ProviderDraftTestInput {
+  providerId?: number
+  protocol: number
+  baseUrl: string
+  apiKey?: string
+  timeoutMs: number
+  model?: string
+}
+
 const base = '/api/admin/v1/ai/provider'
 
 export function getProviders(query: ProviderQuery): Promise<PageResult<AiProvider>> {
@@ -100,4 +121,12 @@ export function updateProviderStatus(id: number, status: number): Promise<Record
 
 export function deleteProvider(id: number): Promise<Record<string, never>> {
   return request.delete<Record<string, never>>(`${base}/${id}`)
+}
+
+export function testProvider(id: number): Promise<ProviderTestResult> {
+  return request.post<ProviderTestResult>(`${base}/${id}/test`)
+}
+
+export function testProviderDraft(input: ProviderDraftTestInput): Promise<ProviderTestResult> {
+  return request.post<ProviderTestResult, ProviderDraftTestInput>(`${base}/test`, input)
 }

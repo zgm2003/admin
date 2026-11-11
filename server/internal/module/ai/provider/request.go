@@ -281,6 +281,14 @@ func validateName(value string) (string, error) {
 	return value, nil
 }
 
+func NormalizeBaseURL(value string) (string, error) {
+	return validateBaseURL(value)
+}
+
+func NormalizeAPIKey(value string, required bool) (string, error) {
+	return validateAPIKey(value, required)
+}
+
 func validateBaseURL(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" || len(value) > 2048 || strings.ContainsAny(value, " \t\r\n") {

@@ -20,6 +20,9 @@ func (f *updateFakeRepository) List(context.Context, int64, ListQuery) ([]Model,
 func (f *updateFakeRepository) FindByID(context.Context, int64, int64) (Model, error) {
 	return Model{ID: 9, ProviderID: 3}, nil
 }
+func (f *updateFakeRepository) TestChatModel(context.Context, int64) (Model, error) {
+	return Model{}, nil
+}
 func (f *updateFakeRepository) PricesByModelIDs(context.Context, []int64) (map[int64][]Price, error) {
 	return map[int64][]Price{}, nil
 }

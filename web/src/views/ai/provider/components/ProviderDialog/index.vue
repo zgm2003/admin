@@ -4,7 +4,12 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
 
-import type { AiProvider, ProviderOptions } from '@/api/ai/provider'
+import {
+  testProviderDraft,
+  type AiProvider,
+  type ProviderOptions,
+  type ProviderTestResult,
+} from '@/api/ai/provider'
 import AppDialog from '@/components/AppDialog/index.vue'
 import type { ProviderForm } from './types'
 
@@ -14,6 +19,7 @@ const props = defineProps<{
   model: AiProvider | null
   options: ProviderOptions
   submitting: boolean
+  canTest: boolean
   error?: string
 }>()
 const emit = defineEmits<{ save: [payload: ProviderForm] }>()
@@ -22,6 +28,9 @@ const { t } = useI18n()
 
 const formRef = ref<FormInstance>()
 const form = ref<ProviderForm>(emptyForm())
+const testing = ref(false)
+const testResult = ref<ProviderTestResult | null>(null)
+const testError = ref('')
 const title = computed(() =>
   props.model === null ? t('ai.provider.createTitle') : t('ai.provider.editTitle'),
 )
@@ -63,6 +72,8 @@ watch(
   () => [visible.value, props.model?.id] as const,
   () => {
     if (!visible.value) return
+    testResult.value = null
+    testError.value = ''
     if (props.model === null) {
       form.value = emptyForm()
     } else {
@@ -82,6 +93,43 @@ watch(
   },
   { immediate: true },
 )
+
+watch(
+  () => [form.value.protocol, form.value.baseUrl, form.value.apiKey, form.value.timeoutMs],
+  () => {
+    if (!testing.value) {
+      testResult.value = null
+      testError.value = ''
+    }
+  },
+)
+
+async function testConnection(): Promise<void> {
+  if (!props.canTest || props.submitting || testing.value || formRef.value === undefined) return
+  try {
+    await formRef.value.validateField(['baseUrl', 'apiKey'])
+  } catch {
+    return
+  }
+  testing.value = true
+  testResult.value = null
+  testError.value = ''
+  try {
+    const apiKey = form.value.apiKey.trim()
+    const result = await testProviderDraft({
+      ...(props.model === null ? {} : { providerId: props.model.id }),
+      protocol: form.value.protocol,
+      baseUrl: form.value.baseUrl.trim(),
+      ...(apiKey === '' ? {} : { apiKey }),
+      timeoutMs: form.value.timeoutMs,
+    })
+    if (visible.value) testResult.value = result
+  } catch {
+    testError.value = t('ai.provider.testRequestFailed')
+  } finally {
+    testing.value = false
+  }
+}
 
 async function submit(): Promise<void> {
   if (props.submitting || formRef.value === undefined) return
@@ -106,14 +154,14 @@ async function submit(): Promise<void> {
     :title="title"
     width="660px"
     :close-on-click-modal="false"
-    :close-on-press-escape="!submitting"
-    :show-close="!submitting"
+    :close-on-press-escape="!submitting && !testing"
+    :show-close="!submitting && !testing"
   >
     <el-form
       ref="formRef"
       :model="form"
       :rules="rules"
-      :disabled="submitting"
+      :disabled="submitting || testing"
       label-position="top"
       class="ai-provider-dialog"
       @submit.prevent="submit"
@@ -224,14 +272,61 @@ async function submit(): Promise<void> {
       </div>
 
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
+
+      <div
+        v-if="testResult !== null || testError !== ''"
+        class="ai-provider-dialog__test-result"
+        :class="testResult?.ok ? 'is-success' : 'is-error'"
+      >
+        <div class="ai-provider-dialog__test-head">
+          <el-tag :type="testResult?.ok ? 'success' : 'danger'" size="small" effect="plain">
+            {{ testResult?.ok ? t('ai.provider.testSuccess') : t('ai.provider.testFailed') }}
+          </el-tag>
+          <span v-if="testResult?.ok && testResult.modelsFound > 0">
+            {{ t('ai.provider.draftModelsFound', { count: testResult.modelsFound }) }}
+          </span>
+        </div>
+        <template v-if="testResult?.ok">
+          <p>
+            {{
+              t('ai.provider.draftModelLatency', {
+                model: testResult.model,
+                latency: testResult.latencyMs,
+              })
+            }}
+          </p>
+          <p>
+            {{
+              t('ai.provider.testReply', {
+                reply: testResult.reply || t('ai.provider.testEmptyReply'),
+              })
+            }}
+          </p>
+        </template>
+        <p v-else class="ai-provider-dialog__test-error">
+          {{ testError || testResult?.error || t('ai.provider.testEmptyReply') }}
+        </p>
+      </div>
     </el-form>
     <template #footer>
-      <el-button :disabled="submitting" @click="visible = false">
+      <el-button
+        v-if="canTest"
+        class="ai-provider-dialog__test-button"
+        :loading="testing"
+        :disabled="submitting"
+        :title="t('ai.provider.testDraftHint')"
+        data-testid="ai-provider-test-draft"
+        @click="testConnection"
+      >
+        {{ testing ? t('ai.provider.testing') : t('ai.provider.testConnection') }}
+      </el-button>
+      <el-button :disabled="submitting || testing" @click="visible = false">
         {{ t('common.cancel') }}
       </el-button>
       <el-button
         type="primary"
         :loading="submitting"
+        :disabled="testing"
         data-testid="ai-provider-save"
         @click="submit"
       >
@@ -263,6 +358,55 @@ async function submit(): Promise<void> {
     color: var(--admin-text-muted);
     font-size: 12px;
     line-height: 1.6;
+  }
+
+  &__test-result {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--admin-border);
+    border-radius: 10px;
+    background: var(--admin-surface-soft);
+
+    p {
+      margin: 0;
+      color: var(--admin-text-soft);
+      font-size: 12px;
+      line-height: 1.6;
+      word-break: break-word;
+    }
+
+    &.is-success {
+      border-color: var(--el-color-success-light-7);
+      background: var(--el-color-success-light-9);
+    }
+
+    &.is-error {
+      border-color: var(--el-color-danger-light-7);
+      background: var(--el-color-danger-light-9);
+    }
+  }
+
+  &__test-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+
+    span {
+      color: var(--admin-text-muted);
+      font-size: 12px;
+    }
+  }
+
+  &__test-error {
+    color: var(--el-color-danger) !important;
+  }
+
+  &__test-button {
+    margin-right: auto;
   }
 }
 

@@ -1780,3 +1780,13 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 含输入视频时火山方舟官方按 token 和输入/输出总时长计费，不提供固定每秒价，因此对应档位保留 NULL，页面显示“未提供固定每秒价”，不编造价格。
 - 供应商模型同步遇到非 chat 官方模型时，默认改为供应商单位价格：视频 `second`、图片 `image`、音频 `request`，避免视频模型误用 0 token 价格。
 - 当前手动运行的 `16301` 若是在本次改动前启动的，需要重启一次才能加载 `vendor=4`、`videoPrices` 和 Seedance 路由；数据库和前端构建已完成。
+
+### 供应商模型拉取与 hello 测试（2026-11-10）
+
+- 供应商列表保留“模型”入口：弹窗内“拉取模型”调用上游 `/models`，按厂商协议解析并同步到 `ai_provider_model`。
+- 新增/编辑供应商弹窗新增“测试连接”，不要求先保存：`POST /api/admin/v1/ai/provider/test` 接收当前表单的协议、Base URL、可选 API Key 和超时时间。
+- 编辑时 API Key 留空会使用已保存的密钥；新增时必须填写 Key。测试会先拉取 `/models`，自动排除 embedding/image/video 等非对话模型，选一个对话模型发送最小 hello。
+- 新增 `ai:provider:test` 动作权限和迁移 `2026-11-10-ai-provider-test-permission.sql`；测试接口和两个前端测试入口都按该权限显示。
+- 已保存供应商仍保留 `POST /api/admin/v1/ai/provider/:id/test` 快捷测试；测试支持 OpenAI Chat、OpenAI Responses、Anthropic、Gemini。
+- 测试返回 `ok`、模型、HTTP 状态、耗时、回复、发现模型数和经过脱敏的失败原因；失败原因会脱敏 API Key、压缩空白并截断。
+- 草稿测试会尝试用保存的对话模型兜底 `/models` 不可用的编辑场景；新增场景若 `/models` 不可用会明确提示拉取失败。

@@ -10,6 +10,7 @@ const (
 	PermissionUpdate = "ai:provider:update"
 	PermissionStatus = "ai:provider:status"
 	PermissionDelete = "ai:provider:delete"
+	PermissionTest   = "ai:provider:test"
 )
 
 func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate gin.HandlerFunc, requirePermission func(string) gin.HandlerFunc) {

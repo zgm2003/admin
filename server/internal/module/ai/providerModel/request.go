@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"admin/server/internal/module/ai/pricing"
+	aiprovider "admin/server/internal/module/ai/provider"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 )
@@ -24,6 +25,68 @@ type PriceInput struct {
 	TierKey        string
 	TierLabel      string
 	PriceCNYMicros int64
+}
+
+type TestDraftInput struct {
+	ProviderID *int64
+	Protocol   aiprovider.Protocol
+	BaseURL    string
+	APIKey     string
+	TimeoutMS  int32
+	Model      string
+}
+
+type testDraftRequest struct {
+	ProviderID *int64               `json:"providerId"`
+	Protocol   *aiprovider.Protocol `json:"protocol"`
+	BaseURL    *string              `json:"baseUrl"`
+	APIKey     *string              `json:"apiKey"`
+	TimeoutMS  *int32               `json:"timeoutMs"`
+	Model      *string              `json:"model"`
+}
+
+func (r testDraftRequest) input() (TestDraftInput, error) {
+	if r.Protocol == nil || r.BaseURL == nil {
+		return TestDraftInput{}, fmt.Errorf("protocol and baseUrl are required")
+	}
+	if !r.Protocol.Valid() {
+		return TestDraftInput{}, fmt.Errorf("protocol is invalid")
+	}
+	baseURL, err := aiprovider.NormalizeBaseURL(*r.BaseURL)
+	if err != nil {
+		return TestDraftInput{}, fmt.Errorf("baseUrl: %w", err)
+	}
+	apiKey := ""
+	if r.APIKey != nil {
+		apiKey, err = aiprovider.NormalizeAPIKey(*r.APIKey, false)
+		if err != nil {
+			return TestDraftInput{}, fmt.Errorf("apiKey: %w", err)
+		}
+	}
+	if r.ProviderID == nil && apiKey == "" {
+		return TestDraftInput{}, fmt.Errorf("apiKey is required")
+	}
+	if r.ProviderID != nil && *r.ProviderID < 1 {
+		return TestDraftInput{}, fmt.Errorf("providerId is invalid")
+	}
+	timeout := int32(20000)
+	if r.TimeoutMS != nil {
+		timeout = *r.TimeoutMS
+		if timeout < 1000 || timeout > 300000 {
+			return TestDraftInput{}, fmt.Errorf("timeoutMs must be between 1000 and 300000")
+		}
+	}
+	model := ""
+	if r.Model != nil {
+		model = strings.TrimSpace(*r.Model)
+		if len(model) > 512 || strings.ContainsAny(model, "\r\n") {
+			return TestDraftInput{}, fmt.Errorf("model is invalid")
+		}
+	}
+	return TestDraftInput{
+		ProviderID: r.ProviderID, Protocol: *r.Protocol, BaseURL: baseURL,
+		APIKey: apiKey, TimeoutMS: timeout, Model: model,
+	}, nil
 }
 
 type UpdateInput struct {
