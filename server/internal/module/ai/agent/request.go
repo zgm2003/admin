@@ -16,6 +16,9 @@ const (
 	maxNameRunes         = 128
 	maxDescriptionRunes  = 500
 	maxSystemPromptRunes = 20000
+	defaultTimeoutMS     = 60000
+	minTimeoutMS         = 1000
+	maxTimeoutMS         = 300000
 )
 
 type ListQuery struct {
@@ -34,6 +37,7 @@ type CreateInput struct {
 	Scene           Scene
 	AgentType       pricing.ModelKind
 	ProviderModelID int64
+	TimeoutMS       int32
 	Status          yesno.Value
 }
 
@@ -44,6 +48,7 @@ type UpdateInput struct {
 	Scene           Scene
 	AgentType       pricing.ModelKind
 	ProviderModelID int64
+	TimeoutMS       int32
 	Status          yesno.Value
 }
 
@@ -58,6 +63,7 @@ type createRequest struct {
 	Scene           *int16       `json:"scene"`
 	Type            *int16       `json:"type"`
 	ProviderModelID *int64       `json:"providerModelId"`
+	TimeoutMS       *int32       `json:"timeoutMs"`
 	Status          *yesno.Value `json:"status"`
 }
 
@@ -66,8 +72,13 @@ func (r createRequest) input() (CreateInput, error) {
 		r.Type == nil || r.ProviderModelID == nil || r.Status == nil {
 		return CreateInput{}, fmt.Errorf("name, description, systemPrompt, scene, type, providerModelId and status are required")
 	}
+	timeoutMS := int32(defaultTimeoutMS)
+	if r.TimeoutMS != nil {
+		timeoutMS = *r.TimeoutMS
+	}
 	value, err := validateInput(
-		*r.Name, *r.Description, *r.SystemPrompt, *r.Scene, *r.ProviderModelID, *r.Type, *r.Status,
+		*r.Name, *r.Description, *r.SystemPrompt, *r.Scene,
+		*r.ProviderModelID, *r.Type, timeoutMS, *r.Status,
 	)
 	if err != nil {
 		return CreateInput{}, err
@@ -75,7 +86,7 @@ func (r createRequest) input() (CreateInput, error) {
 	return CreateInput{
 		Name: value.Name, Description: value.Description, SystemPrompt: value.SystemPrompt,
 		Scene: value.Scene, AgentType: value.AgentType,
-		ProviderModelID: value.ProviderModelID, Status: value.Status,
+		ProviderModelID: value.ProviderModelID, TimeoutMS: value.TimeoutMS, Status: value.Status,
 	}, nil
 }
 
@@ -86,6 +97,7 @@ type updateRequest struct {
 	Scene           *int16       `json:"scene"`
 	Type            *int16       `json:"type"`
 	ProviderModelID *int64       `json:"providerModelId"`
+	TimeoutMS       *int32       `json:"timeoutMs"`
 	Status          *yesno.Value `json:"status"`
 }
 
@@ -94,8 +106,13 @@ func (r updateRequest) input() (UpdateInput, error) {
 		r.Type == nil || r.ProviderModelID == nil || r.Status == nil {
 		return UpdateInput{}, fmt.Errorf("name, description, systemPrompt, scene, type, providerModelId and status are required")
 	}
+	timeoutMS := int32(defaultTimeoutMS)
+	if r.TimeoutMS != nil {
+		timeoutMS = *r.TimeoutMS
+	}
 	value, err := validateInput(
-		*r.Name, *r.Description, *r.SystemPrompt, *r.Scene, *r.ProviderModelID, *r.Type, *r.Status,
+		*r.Name, *r.Description, *r.SystemPrompt, *r.Scene,
+		*r.ProviderModelID, *r.Type, timeoutMS, *r.Status,
 	)
 	if err != nil {
 		return UpdateInput{}, err
@@ -103,7 +120,7 @@ func (r updateRequest) input() (UpdateInput, error) {
 	return UpdateInput{
 		Name: value.Name, Description: value.Description, SystemPrompt: value.SystemPrompt,
 		Scene: value.Scene, AgentType: value.AgentType,
-		ProviderModelID: value.ProviderModelID, Status: value.Status,
+		ProviderModelID: value.ProviderModelID, TimeoutMS: value.TimeoutMS, Status: value.Status,
 	}, nil
 }
 
@@ -114,6 +131,7 @@ type inputValues struct {
 	Scene           Scene
 	AgentType       pricing.ModelKind
 	ProviderModelID int64
+	TimeoutMS       int32
 	Status          yesno.Value
 }
 
@@ -122,11 +140,15 @@ func validateInput(
 	scene int16,
 	providerModelID int64,
 	agentType int16,
+	timeoutMS int32,
 	status yesno.Value,
 ) (inputValues, error) {
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
 	systemPrompt = strings.TrimSpace(systemPrompt)
+	if timeoutMS == 0 {
+		timeoutMS = defaultTimeoutMS
+	}
 	modelKind := pricing.ModelKind(agentType)
 	sceneValue := Scene(scene)
 	if name == "" || utf8.RuneCountInString(name) > maxNameRunes {
@@ -147,13 +169,16 @@ func validateInput(
 	if providerModelID < 1 {
 		return inputValues{}, fmt.Errorf("providerModelId is invalid")
 	}
+	if timeoutMS < minTimeoutMS || timeoutMS > maxTimeoutMS {
+		return inputValues{}, fmt.Errorf("timeoutMs must be between %d and %d", minTimeoutMS, maxTimeoutMS)
+	}
 	if !yesno.IsValid(status) {
 		return inputValues{}, fmt.Errorf("status is invalid")
 	}
 	return inputValues{
 		Name: name, Description: description, SystemPrompt: systemPrompt,
 		Scene: sceneValue, AgentType: modelKind,
-		ProviderModelID: providerModelID, Status: status,
+		ProviderModelID: providerModelID, TimeoutMS: timeoutMS, Status: status,
 	}, nil
 }
 

@@ -71,6 +71,38 @@ func (r *Repository) LockOrCreate(ctx context.Context, tx *gorm.DB, userID int64
 	return row, nil
 }
 
+// DebitTx deducts usage from the wallet without a non-negative balance floor.
+// AI usage is settled after the upstream request finishes, so the wallet may
+// legitimately become negative. A zero amount still locks the wallet row and
+// returns the current balance for an auditable zero-cost settlement.
+func (r *Repository) DebitTx(ctx context.Context, tx *gorm.DB, userID, amountUnits int64, now time.Time) (Model, int64, error) {
+	if r == nil || tx == nil || userID < 1 || amountUnits < 0 {
+		return Model{}, 0, errors.New("wallet debit input invalid")
+	}
+	row, err := r.LockOrCreate(ctx, tx, userID, now)
+	if err != nil {
+		return Model{}, 0, err
+	}
+	before := row.BalanceUnits
+	after, err := checkedAdd(before, -amountUnits)
+	if err != nil {
+		return Model{}, 0, err
+	}
+	if amountUnits > 0 {
+		result := tx.WithContext(ctx).Model(&Model{}).
+			Where("user_id = ?", userID).
+			Updates(map[string]any{"balance_units": after, "updated_at": now})
+		if result.Error != nil {
+			return Model{}, 0, result.Error
+		}
+		if result.RowsAffected != 1 {
+			return Model{}, 0, gorm.ErrRecordNotFound
+		}
+	}
+	row.BalanceUnits, row.UpdatedAt = after, now
+	return row, before, nil
+}
+
 func (r *Repository) CreditTx(ctx context.Context, tx *gorm.DB, userID, amountUnits int64, now time.Time) (Model, int64, error) {
 	if r == nil || tx == nil || userID < 1 || amountUnits < 1 {
 		return Model{}, 0, errors.New("wallet credit input invalid")

@@ -10,7 +10,12 @@ import { useAuthStore } from '@/store/auth'
 import { useBrandStore } from '@/store/brand'
 import { useUIPreferencesStore } from '@/store/uiPreferences'
 import { useNotificationStore } from '@/store/notification'
-import { RealtimeRuntime } from '@/realtime'
+import {
+  RealtimeRuntime,
+  emitChatRealtime,
+  emitChatReconnect,
+  isChatRealtimeEvent,
+} from '@/realtime'
 import { authPlatform } from '@/auth/platform'
 import { ElNotification } from 'element-plus'
 import { resolveBreadcrumbs } from './breadcrumbs'
@@ -118,29 +123,37 @@ watch(
       auth.accessToken,
       access.status,
       access.hasPermission('message:notification:list'),
+      access.hasPermission('ai:workbench:view'),
+      access.hasPermission('ai:run:list'),
     ] as const,
-  ([status, userId, token, accessStatus, canListNotifications]) => {
+  ([status, userId, token, accessStatus, canListNotifications, canUseWorkbench, canViewRuns]) => {
     realtimeRuntime.stop()
     if (
       status !== 'authenticated' ||
       userId === undefined ||
       token === '' ||
       accessStatus !== 'ready' ||
-      !canListNotifications
+      (!canListNotifications && !canUseWorkbench && !canViewRuns)
     )
       return
     realtimeRuntime.start(
       { platformCode: authPlatform, userId },
       {
         event: async (event) => {
+          if (isChatRealtimeEvent(event)) {
+            emitChatRealtime(event)
+            return
+          }
           if (
             (event.type === 'notification.created.v1' ||
               event.type === 'notification.stateChanged.v1') &&
             access.hasPermission('message:notification:list')
           )
             notifications.scheduleRefresh()
+          if (event.type === 'realtime.resumed.v1') emitChatReconnect()
         },
         resync: async () => {
+          emitChatReconnect()
           if (access.hasPermission('message:notification:list')) await notifications.load()
         },
         urgent: async (event) => {

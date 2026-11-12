@@ -1818,3 +1818,13 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 模型选项接口返回所有可用模型及其 `modelKind`；前端按当前 Agent 类型过滤“供应商 → 模型”级联，切换类型会清空不匹配的模型。
 - 页面新增类型/场景筛选、类型标签和业务场景列；表单新增类型下拉、业务场景下拉，模型文案从“对话模型”改为通用的“模型”。
 - 验证通过：Agent/cmd/api 测试、`go vet`、真实 PostgreSQL 场景枚举迁移、前端 `typecheck`、ESLint、`pnpm build`；`docs/database/current.sql` 已刷新。
+
+### AI 工作台与运行日志（2026-11-12）
+
+- 模块按职责拆分：`server/internal/module/ai/chat` 只负责会话、消息读取、对话智能体列表和余额；`server/internal/module/ai/run` 负责运行创建、流式执行、停止/超时、运行日志和按实际 usage 结算。`run` 单向依赖 `chat` 的会话/消息仓储，`chat` 不依赖 `run`。
+- 迁移：`docs/database/2026-11-12-ai-chat.sql`（会话/消息/运行/运行事件/用量账单）、`2026-11-12-ai-agent-timeout.sql`（Agent 超时）、`2026-11-12-ai-workbench-menu.sql`（菜单与动作权限）。`ai_agent.timeout_ms` 默认 60000，范围 1000–300000，由 Agent 配置控制运行超时。
+- `ai_chat_run` 允许同一用户并发多个会话运行，但同一会话只允许一个活动运行；`ai_usage_charge.run_id` 唯一保证结算幂等。结算在运行结束后按实际 token 一次扣款，允许余额为负，不冻结；余额小于等于 0 时下一次发送返回 402。
+- 实时事件走现有 WS：`ai.chat.started.v1`/`ai.chat.delta.v1` 为 ephemeral（sequence=0，不写 outbox），`ai.chat.completed.v1`/`failed.v1`/`canceled.v1` 为 durable；前端按 `deliverySeq` 缺口检测并拉取 HTTP 快照，切换会话和重连都从快照恢复。
+- 前端新增 `web/src/views/ai/workbench`（Markdown + DOMPurify + highlight.js、流式追加、停止、余额、会话切换恢复）和 `web/src/views/ai/run`（本人日志 + `ai:run:viewAll` 全员日志、详情时间线）。
+- 权限：`ai:workbench:view/list/detail/create/update/delete/send` 与 `ai:run:view/list/detail/viewAll`；普通角色获得工作台和个人运行日志，`ai:run:viewAll` 只授予超级管理员。
+- 验证通过：`go test ./internal/module/ai/chat ./internal/module/ai/run ./internal/module/ai/agent ./internal/module/realtime ./cmd/api -count=1`、`go vet`、真实 PostgreSQL 流式对话/金额换算/负数余额/超时/取消 smoke、前端 `typecheck`、ESLint、架构检查和 `pnpm build`。

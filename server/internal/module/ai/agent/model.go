@@ -16,6 +16,7 @@ type Model struct {
 	AgentType       pricing.ModelKind `gorm:"column:agent_type;type:smallint;not null"`
 	Scene           Scene             `gorm:"column:scene;type:smallint;not null"`
 	ProviderModelID int64             `gorm:"column:provider_model_id;not null"`
+	TimeoutMS       int32             `gorm:"column:timeout_ms;type:integer;not null"`
 	Status          yesno.Value       `gorm:"column:status;type:smallint;not null"`
 	Version         int64             `gorm:"column:version;not null"`
 	CreatedAt       time.Time         `gorm:"column:created_at;type:timestamptz;not null"`

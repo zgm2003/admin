@@ -26,6 +26,7 @@ const (
 	KeyConflict                         MessageKey = "error.conflict"
 	KeyDependencyUnavailable            MessageKey = "error.dependencyUnavailable"
 	KeyRateLimited                      MessageKey = "error.rateLimited"
+	KeyAIChatInsufficientBalance        MessageKey = "error.aiChatInsufficientBalance"
 	KeyUsernameConflict                 MessageKey = "auth.usernameConflict"
 	KeyEmailConflict                    MessageKey = "auth.emailConflict"
 	KeySuperAdminExists                 MessageKey = "auth.superAdminExists"
@@ -298,6 +299,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyConflict:                          "数据冲突",
 		KeyDependencyUnavailable:             "服务暂未就绪",
 		KeyRateLimited:                       "请求过于频繁",
+	KeyAIChatInsufficientBalance:         "余额不足，请充值后再继续对话",
 		KeyUsernameConflict:                  "用户名已存在",
 		KeyEmailConflict:                     "邮箱已存在",
 		KeySuperAdminExists:                  "超级管理员已存在",
@@ -550,6 +552,7 @@ var catalogs = map[Locale]map[MessageKey]string{
 		KeyConflict:                          "Data conflict",
 		KeyDependencyUnavailable:             "Service is temporarily unavailable",
 		KeyRateLimited:                       "Too many requests",
+	KeyAIChatInsufficientBalance:         "Insufficient balance. Recharge before sending another message.",
 		KeyUsernameConflict:                  "Username already exists",
 		KeyEmailConflict:                     "Email already exists",
 		KeySuperAdminExists:                  "A super administrator already exists",

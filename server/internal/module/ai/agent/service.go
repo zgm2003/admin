@@ -91,7 +91,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	}
 	values, err := validateInput(
 		input.Name, input.Description, input.SystemPrompt, int16(input.Scene),
-		input.ProviderModelID, int16(input.AgentType), input.Status,
+		input.ProviderModelID, int16(input.AgentType), input.TimeoutMS, input.Status,
 	)
 	if err != nil {
 		return 0, invalid(err)
@@ -106,8 +106,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	id, err := s.repo.Create(ctx, Model{
 		Name: values.Name, Description: values.Description, SystemPrompt: values.SystemPrompt,
 		Scene: values.Scene, AgentType: values.AgentType,
-		ProviderModelID: values.ProviderModelID, Status: values.Status,
-		Version: 1, CreatedAt: now, UpdatedAt: now,
+		ProviderModelID: values.ProviderModelID, TimeoutMS: values.TimeoutMS,
+		Status: values.Status, Version: 1, CreatedAt: now, UpdatedAt: now,
 	})
 	if err != nil {
 		return 0, mapError(err)
@@ -127,7 +127,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	}
 	values, err := validateInput(
 		input.Name, input.Description, input.SystemPrompt, int16(input.Scene),
-		input.ProviderModelID, int16(input.AgentType), input.Status,
+		input.ProviderModelID, int16(input.AgentType), input.TimeoutMS, input.Status,
 	)
 	if err != nil {
 		return invalid(err)
@@ -141,7 +141,8 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if err := s.repo.Update(ctx, id, UpdateValues{
 		Name: values.Name, Description: values.Description, SystemPrompt: values.SystemPrompt,
 		Scene: values.Scene, AgentType: values.AgentType,
-		ProviderModelID: values.ProviderModelID, Status: values.Status, UpdatedAt: s.now().UTC(),
+		ProviderModelID: values.ProviderModelID, TimeoutMS: values.TimeoutMS,
+		Status: values.Status, UpdatedAt: s.now().UTC(),
 	}); err != nil {
 		return mapError(err)
 	}

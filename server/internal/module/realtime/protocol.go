@@ -19,7 +19,8 @@ const (
 	TargetUser     TargetType = "user"
 	TargetPlatform TargetType = "platform"
 
-	DurabilityDurable = "durable"
+	DurabilityDurable   = "durable"
+	DurabilityEphemeral = "ephemeral"
 
 	EventRealtimeConnected        = "realtime.connected.v1"
 	EventRealtimePong             = "realtime.pong.v1"
@@ -28,6 +29,11 @@ const (
 	EventRealtimeError            = "realtime.error.v1"
 	EventNotificationCreated      = "notification.created.v1"
 	EventNotificationStateChanged = "notification.stateChanged.v1"
+	EventAIChatStarted            = "ai.chat.started.v1"
+	EventAIChatDelta              = "ai.chat.delta.v1"
+	EventAIChatCompleted          = "ai.chat.completed.v1"
+	EventAIChatFailed             = "ai.chat.failed.v1"
+	EventAIChatCanceled           = "ai.chat.canceled.v1"
 
 	ClientPing   = "realtime.ping.v1"
 	ClientResume = "realtime.resume.v1"
@@ -168,14 +174,20 @@ func validateEnvelope(envelope Envelope) error {
 	if envelope.RequestID != nil && (len(*envelope.RequestID) == 0 || len(*envelope.RequestID) > 128) {
 		return errors.New("requestId must contain 1..128 bytes")
 	}
-	if envelope.Sequence <= 0 {
-		return errors.New("sequence must be positive")
+	switch envelope.Durability {
+	case DurabilityDurable:
+		if envelope.Sequence <= 0 {
+			return errors.New("durable sequence must be positive")
+		}
+	case DurabilityEphemeral:
+		if envelope.Sequence != 0 {
+			return errors.New("ephemeral sequence must be zero")
+		}
+	default:
+		return errors.New("durability must be durable or ephemeral")
 	}
 	if envelope.OccurredAt.IsZero() {
 		return errors.New("occurredAt is required")
-	}
-	if envelope.Durability != DurabilityDurable {
-		return errors.New("durability must be durable")
 	}
 	if err := validateJSONObject(envelope.Data, "data"); err != nil {
 		return err
@@ -230,7 +242,8 @@ func ValidateEventInput(input EventInput) error {
 func validServerEventType(value string) bool {
 	switch value {
 	case EventRealtimeConnected, EventRealtimePong, EventRealtimeResumed, EventRealtimeResyncRequired,
-		EventRealtimeError, EventNotificationCreated, EventNotificationStateChanged:
+		EventRealtimeError, EventNotificationCreated, EventNotificationStateChanged,
+		EventAIChatStarted, EventAIChatDelta, EventAIChatCompleted, EventAIChatFailed, EventAIChatCanceled:
 		return true
 	default:
 		return false

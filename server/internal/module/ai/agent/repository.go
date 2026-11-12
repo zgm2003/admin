@@ -20,6 +20,7 @@ type UpdateValues struct {
 	Scene           Scene
 	AgentType       pricing.ModelKind
 	ProviderModelID int64
+	TimeoutMS       int32
 	Status          yesno.Value
 	UpdatedAt       time.Time
 }
@@ -76,7 +77,7 @@ func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues) 
 	result := r.db.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{
 		"name": values.Name, "description": values.Description,
 		"system_prompt": values.SystemPrompt, "scene": values.Scene, "agent_type": values.AgentType,
-		"provider_model_id": values.ProviderModelID, "status": values.Status,
+		"provider_model_id": values.ProviderModelID, "timeout_ms": values.TimeoutMS, "status": values.Status,
 		"updated_at": values.UpdatedAt, "version": gorm.Expr("version + 1"),
 	})
 	if result.Error != nil {

@@ -83,12 +83,48 @@ export type RealtimeEvent =
         | { kind: 'read' | 'delete'; notificationId: number; readThroughNotificationId: null }
         | { kind: 'readAll'; notificationId: null; readThroughNotificationId: number }
     }
+  | {
+      type: 'ai.chat.started.v1'
+      data: {
+        runId: number
+        requestId: string
+        conversationId: number
+        assistantMessageId: number
+        deliverySeq: number
+      }
+    }
+  | {
+      type: 'ai.chat.delta.v1'
+      data: {
+        runId: number
+        conversationId: number
+        assistantMessageId: number
+        deliverySeq: number
+        delta: string
+      }
+    }
+  | {
+      type: 'ai.chat.completed.v1' | 'ai.chat.failed.v1' | 'ai.chat.canceled.v1'
+      data: {
+        runId: number
+        requestId: string
+        conversationId: number
+        assistantMessageId: number
+        status: number
+        billingStatus: number
+        amountUnits: number
+        errorCode: string
+        message: string
+        balanceBeforeUnits: number
+        balanceAfterUnits: number
+      }
+    }
 export type RealtimeEnvelope = RealtimeEvent & {
   eventId: string
   requestId?: string
   sequence: number
   occurredAt: string
-  durability: 'durable'
+  durability: 'durable' | 'ephemeral'
 }
 
 function empty(value: unknown): Record<string, never> {
@@ -105,7 +141,16 @@ function nonnegative(value: unknown, context: string): number {
   if (n < 0) throw new ProtocolError(`${context} must be nonnegative`)
   return n
 }
-function metadata(value: unknown) {
+interface EnvelopeMetadata {
+  r: Record<string, unknown>
+  eventId: string
+  requestId?: string
+  sequence: number
+  occurredAt: string
+  durability: 'durable' | 'ephemeral'
+}
+
+function metadata(value: unknown): EnvelopeMetadata {
   const raw =
     value !== null && typeof value === 'object' && !Array.isArray(value)
       ? (value as Record<string, unknown>)
@@ -120,15 +165,24 @@ function metadata(value: unknown) {
   const requestId = Object.prototype.hasOwnProperty.call(r, 'requestId')
     ? eventText(r.requestId, 'requestId')
     : undefined
-  if (r.durability !== 'durable') throw new ProtocolError('durability is invalid')
+  const durability = r.durability
+  if (durability !== 'durable' && durability !== 'ephemeral')
+    throw new ProtocolError('durability is invalid')
   return {
     r,
     eventId,
     requestId,
-    sequence: positive(r.sequence, 'sequence'),
+    sequence:
+      durability === 'durable'
+        ? positive(r.sequence, 'sequence')
+        : nonnegative(r.sequence, 'sequence'),
     occurredAt: eventTime(r.occurredAt, 'occurredAt'),
-    durability: 'durable' as const,
+    durability,
   }
+}
+
+function signed(value: unknown, context: string): number {
+  return eventInteger(value, context)
 }
 export function parseRealtimeEnvelope(value: unknown): RealtimeEnvelope {
   const m = metadata(value)
@@ -171,6 +225,76 @@ export function parseRealtimeEnvelope(value: unknown): RealtimeEnvelope {
         linkType: linkType as NotificationLinkType,
         link: eventText(d.link, 'link'),
         publishedAt: eventTime(d.publishedAt, 'publishedAt'),
+      },
+    }
+  } else if (type === 'ai.chat.started.v1') {
+    const d = eventFields(
+      m.r.data,
+      ['runId', 'requestId', 'conversationId', 'assistantMessageId', 'deliverySeq'],
+      'chat started data',
+    )
+    event = {
+      type,
+      data: {
+        runId: positive(d.runId, 'runId'),
+        requestId: eventText(d.requestId, 'requestId'),
+        conversationId: positive(d.conversationId, 'conversationId'),
+        assistantMessageId: positive(d.assistantMessageId, 'assistantMessageId'),
+        deliverySeq: nonnegative(d.deliverySeq, 'deliverySeq'),
+      },
+    }
+  } else if (type === 'ai.chat.delta.v1') {
+    const d = eventFields(
+      m.r.data,
+      ['runId', 'conversationId', 'assistantMessageId', 'deliverySeq', 'delta'],
+      'chat delta data',
+    )
+    event = {
+      type,
+      data: {
+        runId: positive(d.runId, 'runId'),
+        conversationId: positive(d.conversationId, 'conversationId'),
+        assistantMessageId: positive(d.assistantMessageId, 'assistantMessageId'),
+        deliverySeq: positive(d.deliverySeq, 'deliverySeq'),
+        delta: eventText(d.delta, 'delta'),
+      },
+    }
+  } else if (
+    type === 'ai.chat.completed.v1' ||
+    type === 'ai.chat.failed.v1' ||
+    type === 'ai.chat.canceled.v1'
+  ) {
+    const d = eventFields(
+      m.r.data,
+      [
+        'runId',
+        'requestId',
+        'conversationId',
+        'assistantMessageId',
+        'status',
+        'billingStatus',
+        'amountUnits',
+        'errorCode',
+        'message',
+        'balanceBeforeUnits',
+        'balanceAfterUnits',
+      ],
+      'chat terminal data',
+    )
+    event = {
+      type,
+      data: {
+        runId: positive(d.runId, 'runId'),
+        requestId: eventText(d.requestId, 'requestId'),
+        conversationId: positive(d.conversationId, 'conversationId'),
+        assistantMessageId: positive(d.assistantMessageId, 'assistantMessageId'),
+        status: positive(d.status, 'status'),
+        billingStatus: positive(d.billingStatus, 'billingStatus'),
+        amountUnits: nonnegative(d.amountUnits, 'amountUnits'),
+        errorCode: eventText(d.errorCode, 'errorCode'),
+        message: eventText(d.message, 'message'),
+        balanceBeforeUnits: signed(d.balanceBeforeUnits, 'balanceBeforeUnits'),
+        balanceAfterUnits: signed(d.balanceAfterUnits, 'balanceAfterUnits'),
       },
     }
   } else if (type === 'notification.stateChanged.v1') {

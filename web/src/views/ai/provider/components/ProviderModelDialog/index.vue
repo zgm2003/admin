@@ -16,7 +16,7 @@ import type { AiProvider } from '@/api/ai/provider'
 import { usePermissionStore } from '@/store/permission'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import AppDialog from '@/components/AppDialog/index.vue'
-import ModelEditDialog from './ModelEditDialog.vue'
+import ModelEditDialog from './ModelEditDialog/index.vue'
 
 defineOptions({ name: 'AIProviderModelDialog' })
 

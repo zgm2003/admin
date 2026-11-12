@@ -63,6 +63,7 @@ const rules = computed<FormRules<AgentForm>>(() => ({
   type: [{ required: true, message: t('ai.agent.typeRequired'), trigger: 'change' }],
   scene: [{ required: true, message: t('ai.agent.sceneRequired'), trigger: 'change' }],
   providerModelId: [{ required: true, message: t('ai.agent.modelRequired'), trigger: 'change' }],
+  timeoutMs: [{ required: true, message: t('ai.agent.timeoutRequired'), trigger: 'blur' }],
   systemPrompt: [
     { required: true, message: t('ai.agent.systemPromptRequired'), trigger: 'blur' },
     { max: 20000, message: t('ai.agent.systemPromptMax'), trigger: 'blur' },
@@ -96,6 +97,7 @@ watch(
         scene: props.model.scene,
         type: props.model.type,
         providerModelId: boundModelAvailable ? props.model.providerModelId : null,
+        timeoutMs: props.model.timeoutMs,
         status: props.model.status,
       }
     }
@@ -119,6 +121,7 @@ async function submit(): Promise<void> {
     scene: form.value.scene,
     type: form.value.type,
     providerModelId: form.value.providerModelId,
+    timeoutMs: form.value.timeoutMs,
     status: form.value.status,
   })
 }
@@ -153,39 +156,38 @@ async function submit(): Promise<void> {
           />
         </el-form-item>
         <el-form-item :label="t('ai.agent.type')" prop="type">
-          <el-select v-model="form.type" :placeholder="t('ai.agent.typePlaceholder')">
-            <el-option
-              v-for="item in options.types"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2
+            v-model="form.type"
+            :options="options.types"
+            :placeholder="t('ai.agent.typePlaceholder')"
+          />
         </el-form-item>
       </div>
 
       <div class="ai-agent-dialog__grid">
         <el-form-item :label="t('ai.agent.scene')" prop="scene">
-          <el-select v-model="form.scene" :placeholder="t('ai.agent.scenePlaceholder')">
-            <el-option
-              v-for="item in options.scenes"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2
+            v-model="form.scene"
+            :options="options.scenes"
+            :placeholder="t('ai.agent.scenePlaceholder')"
+          />
         </el-form-item>
         <el-form-item :label="t('ai.agent.status')" prop="status">
-          <el-select v-model="form.status">
-            <el-option
-              v-for="item in options.statuses"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2 v-model="form.status" :options="options.statuses" />
         </el-form-item>
       </div>
+
+      <el-form-item :label="t('ai.agent.timeout')" prop="timeoutMs">
+        <el-input-number
+          v-model="form.timeoutMs"
+          :min="1000"
+          :max="300000"
+          :step="1000"
+          controls-position="right"
+          class="ai-agent-dialog__timeout"
+        />
+        <span class="ai-agent-dialog__suffix">{{ t('ai.agent.millisecond') }}</span>
+      </el-form-item>
 
       <el-form-item :label="t('ai.agent.model')" prop="providerModelId">
         <div class="ai-agent-dialog__model">
@@ -249,6 +251,16 @@ async function submit(): Promise<void> {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 180px;
     gap: 16px;
+  }
+
+  &__timeout {
+    width: 220px;
+  }
+
+  &__suffix {
+    margin-left: 8px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
   }
 
   &__model {

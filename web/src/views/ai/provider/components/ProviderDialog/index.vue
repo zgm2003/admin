@@ -251,34 +251,25 @@ async function submit(): Promise<void> {
           />
         </el-form-item>
         <el-form-item prop="vendor" :label="t('ai.provider.vendor')">
-          <el-select v-model="form.vendor" class="ai-provider-dialog__select">
-            <el-option
-              v-for="item in options.vendors"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2
+            v-model="form.vendor"
+            class="ai-provider-dialog__select"
+            :options="options.vendors"
+          />
         </el-form-item>
         <el-form-item prop="protocol" :label="t('ai.provider.protocol')">
-          <el-select v-model="form.protocol" class="ai-provider-dialog__select">
-            <el-option
-              v-for="item in options.protocols"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2
+            v-model="form.protocol"
+            class="ai-provider-dialog__select"
+            :options="options.protocols"
+          />
         </el-form-item>
         <el-form-item prop="status" :label="t('ai.provider.status')">
-          <el-select v-model="form.status" class="ai-provider-dialog__select">
-            <el-option
-              v-for="item in options.statuses"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
+          <el-select-v2
+            v-model="form.status"
+            class="ai-provider-dialog__select"
+            :options="options.statuses"
+          />
         </el-form-item>
       </div>
 
@@ -366,20 +357,14 @@ async function submit(): Promise<void> {
         </div>
 
         <div v-if="models.length > 0" class="ai-provider-dialog__model-select">
-          <el-select
+          <el-select-v2
             v-model="selectedModel"
             filterable
             clearable
+            :options="models.map((item) => ({ label: modelLabel(item), value: item.id }))"
             :placeholder="t('ai.provider.selectModelPlaceholder')"
             :disabled="testing || modelsLoading"
-          >
-            <el-option
-              v-for="item in models"
-              :key="item.id"
-              :label="modelLabel(item)"
-              :value="item.id"
-            />
-          </el-select>
+          />
           <el-button
             type="primary"
             :loading="testing"

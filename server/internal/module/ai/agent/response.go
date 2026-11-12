@@ -26,6 +26,7 @@ type SafeValue struct {
 	Type            pricing.ModelKind `json:"type"`
 	TypeName        string            `json:"typeName"`
 	ProviderModelID int64             `json:"providerModelId"`
+	TimeoutMS       int32             `json:"timeoutMs"`
 	ProviderName    string            `json:"providerName"`
 	ModelName       string            `json:"modelName"`
 	ModelKey        string            `json:"modelKey"`
@@ -77,7 +78,8 @@ func safeValue(ctx context.Context, row Model, ref *ModelRef) (SafeValue, error)
 		ID: row.ID, Name: row.Name, Description: row.Description, SystemPrompt: row.SystemPrompt,
 		Scene: row.Scene, SceneName: sceneName(ctx, row.Scene),
 		Type: row.AgentType, TypeName: agentTypeName(ctx, row.AgentType),
-		ProviderModelID: row.ProviderModelID, Status: row.Status, StatusName: statusName,
+		ProviderModelID: row.ProviderModelID, TimeoutMS: row.TimeoutMS,
+		Status: row.Status, StatusName: statusName,
 		Version: row.Version, Actions: Actions{Update: true, Status: true, Delete: true},
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}

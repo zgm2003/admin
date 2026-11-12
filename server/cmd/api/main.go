@@ -15,9 +15,11 @@ import (
 	"admin/server/internal/database"
 	projectmiddleware "admin/server/internal/middleware"
 	aiagent "admin/server/internal/module/ai/agent"
+	aichat "admin/server/internal/module/ai/chat"
 	"admin/server/internal/module/ai/officialModel"
 	aiprovider "admin/server/internal/module/ai/provider"
 	providermodel "admin/server/internal/module/ai/providerModel"
+	airun "admin/server/internal/module/ai/run"
 	authcaptcha "admin/server/internal/module/auth/captcha"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
@@ -84,6 +86,8 @@ import (
 
 type routerDependencies struct {
 	AIAgent            *aiagent.Handler
+	AIChat             *aichat.Handler
+	AIRun              *airun.Handler
 	AIOfficialModel    *officialmodel.Handler
 	AIProvider         *aiprovider.Handler
 	AIProviderModel    *providermodel.Handler
@@ -254,6 +258,18 @@ func run(logger *slog.Logger) error {
 	paymentPackageService := rechargepackage.NewService(paymentPackageRepository)
 	paymentWalletRepository := paymentwallet.NewRepository(postgres.GORM)
 	paymentWalletService := paymentwallet.NewService(paymentWalletRepository)
+	chatRepository := aichat.NewRepository(postgres.GORM)
+	chatService := aichat.NewService(chatRepository, paymentWalletRepository)
+	runRepository := airun.NewRepository(postgres.GORM)
+	runService := airun.NewService(
+		runRepository, chatRepository, postgres.GORM, paymentWalletRepository, keys,
+		redisClient, airun.NewProviderClient(nil), logger,
+	)
+	if recovered, recoverErr := runService.RecoverInterrupted(processContext); recoverErr != nil {
+		logger.Error("recover interrupted chat runs", "error", recoverErr)
+	} else if recovered > 0 {
+		logger.Warn("interrupted chat runs marked failed", "count", recovered)
+	}
 	paymentTransactionRepository := paymenttransaction.NewRepository(postgres.GORM)
 	paymentTransactionService := paymenttransaction.NewService(paymentTransactionRepository)
 	paymentOrderRepository := paymentorder.NewRepository(postgres.GORM)
@@ -528,6 +544,8 @@ func run(logger *slog.Logger) error {
 		}),
 		COSConfig:          cosconfig.NewHandler(cosConfigService),
 		AIAgent:            aiagent.NewHandler(agentService),
+		AIChat:             aichat.NewHandler(chatService),
+		AIRun:              airun.NewHandler(runService),
 		AIOfficialModel:    officialmodel.NewHandler(officialModelService),
 		AIProvider:         aiprovider.NewHandler(providerService),
 		AIProviderModel:    providermodel.NewHandler(providerModelService),
@@ -696,6 +714,12 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	if dependencies.AIAgent != nil {
 		aiagent.RegisterAdminRoutes(adminRoutes, dependencies.AIAgent, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIChat != nil {
+		aichat.RegisterAdminRoutes(adminRoutes, dependencies.AIChat, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AIRun != nil {
+		airun.RegisterAdminRoutes(adminRoutes, dependencies.AIRun, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.PaymentConfig != nil {
 		paymentconfig.RegisterAdminRoutes(adminRoutes, dependencies.PaymentConfig, dependencies.Authenticate, dependencies.RequirePermission)

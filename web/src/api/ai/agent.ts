@@ -17,6 +17,7 @@ export interface AiAgent {
   type: number
   typeName: string
   providerModelId: number
+  timeoutMs: number
   providerName: string
   modelName: string
   modelKey: string
@@ -71,6 +72,7 @@ export interface CreateAgentInput {
   scene: number
   type: number
   providerModelId: number
+  timeoutMs: number
   status: number
 }
 
