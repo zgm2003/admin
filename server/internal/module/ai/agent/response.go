@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"admin/server/internal/module/ai/pricing"
 	"admin/server/internal/shared/option"
 	"admin/server/internal/shared/yesno"
 )
@@ -16,31 +17,38 @@ type Actions struct {
 }
 
 type SafeValue struct {
-	ID              int64       `json:"id"`
-	Name            string      `json:"name"`
-	Description     string      `json:"description"`
-	SystemPrompt    string      `json:"systemPrompt"`
-	ProviderModelID int64       `json:"providerModelId"`
-	ProviderName    string      `json:"providerName"`
-	ModelName       string      `json:"modelName"`
-	ModelKey        string      `json:"modelKey"`
-	ModelAvailable  bool        `json:"modelAvailable"`
-	Status          yesno.Value `json:"status"`
-	StatusName      string      `json:"statusName"`
-	Version         int64       `json:"version"`
-	Actions         Actions     `json:"actions"`
-	CreatedAt       time.Time   `json:"createdAt"`
-	UpdatedAt       time.Time   `json:"updatedAt"`
+	ID              int64             `json:"id"`
+	Name            string            `json:"name"`
+	Description     string            `json:"description"`
+	SystemPrompt    string            `json:"systemPrompt"`
+	Scene           Scene             `json:"scene"`
+	SceneName       string            `json:"sceneName"`
+	Type            pricing.ModelKind `json:"type"`
+	TypeName        string            `json:"typeName"`
+	ProviderModelID int64             `json:"providerModelId"`
+	ProviderName    string            `json:"providerName"`
+	ModelName       string            `json:"modelName"`
+	ModelKey        string            `json:"modelKey"`
+	ModelAvailable  bool              `json:"modelAvailable"`
+	Status          yesno.Value       `json:"status"`
+	StatusName      string            `json:"statusName"`
+	Version         int64             `json:"version"`
+	Actions         Actions           `json:"actions"`
+	CreatedAt       time.Time         `json:"createdAt"`
+	UpdatedAt       time.Time         `json:"updatedAt"`
 }
 
 type Options struct {
-	Statuses []option.Option[yesno.Value] `json:"statuses"`
+	Types    []option.Option[pricing.ModelKind] `json:"types"`
+	Scenes   []option.Option[Scene]             `json:"scenes"`
+	Statuses []option.Option[yesno.Value]       `json:"statuses"`
 }
 
 type ModelOption struct {
-	Value    int64  `json:"value"`
-	Label    string `json:"label"`
-	ModelKey string `json:"modelKey"`
+	Value     int64             `json:"value"`
+	Label     string            `json:"label"`
+	ModelKey  string            `json:"modelKey"`
+	ModelKind pricing.ModelKind `json:"modelKind"`
 }
 
 type ProviderModelOption struct {
@@ -57,7 +65,8 @@ func safeValue(ctx context.Context, row Model, ref *ModelRef) (SafeValue, error)
 	if row.ID < 1 || !yesno.IsValid(row.Status) || row.Version < 1 {
 		return SafeValue{}, dependency(fmt.Errorf("agent row has invalid selectable values"))
 	}
-	if row.Name == "" || row.SystemPrompt == "" || row.ProviderModelID < 1 {
+	if row.Name == "" || row.SystemPrompt == "" ||
+		!row.Scene.Valid() || !row.AgentType.Valid() || row.ProviderModelID < 1 {
 		return SafeValue{}, dependency(fmt.Errorf("agent row has incomplete configuration"))
 	}
 	statusName := option.New(ctx, row.Status, "停用", "Disabled").Label
@@ -66,6 +75,8 @@ func safeValue(ctx context.Context, row Model, ref *ModelRef) (SafeValue, error)
 	}
 	result := SafeValue{
 		ID: row.ID, Name: row.Name, Description: row.Description, SystemPrompt: row.SystemPrompt,
+		Scene: row.Scene, SceneName: sceneName(ctx, row.Scene),
+		Type: row.AgentType, TypeName: agentTypeName(ctx, row.AgentType),
 		ProviderModelID: row.ProviderModelID, Status: row.Status, StatusName: statusName,
 		Version: row.Version, Actions: Actions{Update: true, Status: true, Delete: true},
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
@@ -90,5 +101,35 @@ func modelOption(ref ModelRef) ModelOption {
 	if ref.ModelKey != "" && ref.ModelKey != ref.DisplayName {
 		label += " (" + ref.ModelKey + ")"
 	}
-	return ModelOption{Value: ref.ID, Label: label, ModelKey: ref.ModelKey}
+	return ModelOption{
+		Value: ref.ID, Label: label, ModelKey: ref.ModelKey, ModelKind: ref.ModelKind,
+	}
+}
+
+func sceneName(ctx context.Context, scene Scene) string {
+	switch scene {
+	case SceneToolGeneration:
+		return option.New(ctx, scene, "工具生成", "Tool generation").Label
+	case SceneImageGeneration:
+		return option.New(ctx, scene, "生图", "Image generation").Label
+	case SceneVideoGeneration:
+		return option.New(ctx, scene, "视频生成", "Video generation").Label
+	case SceneAudioGeneration:
+		return option.New(ctx, scene, "音频生成", "Audio generation").Label
+	default:
+		return option.New(ctx, scene, "对话", "Conversation").Label
+	}
+}
+
+func agentTypeName(ctx context.Context, kind pricing.ModelKind) string {
+	switch kind {
+	case pricing.KindImage:
+		return option.New(ctx, kind, "图片", "Image").Label
+	case pricing.KindVideo:
+		return option.New(ctx, kind, "视频", "Video").Label
+	case pricing.KindAudio:
+		return option.New(ctx, kind, "音频", "Audio").Label
+	default:
+		return option.New(ctx, kind, "对话", "Chat").Label
+	}
 }

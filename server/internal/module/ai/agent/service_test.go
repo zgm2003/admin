@@ -69,12 +69,12 @@ func (f *fakeRepository) ListUsableModelOptions(context.Context) ([]ModelRef, er
 	}
 	return result, nil
 }
-func (f *fakeRepository) FindUsableModel(_ context.Context, id int64) (ModelRef, error) {
+func (f *fakeRepository) FindUsableModel(_ context.Context, id int64, kind pricing.ModelKind) (ModelRef, error) {
 	if f.usableErr != nil {
 		return ModelRef{}, f.usableErr
 	}
 	ref, ok := f.usable[id]
-	if !ok {
+	if !ok || ref.ModelKind != kind {
 		return ModelRef{}, gorm.ErrRecordNotFound
 	}
 	return ref, nil
@@ -99,13 +99,15 @@ func TestCreateStoresAgentAndNormalizesInput(t *testing.T) {
 	service := newTestService(repo)
 	id, err := service.Create(context.Background(), CreateInput{
 		Name: "  Support Agent  ", Description: "  helps users  ", SystemPrompt: "  be helpful  ",
+		Scene: SceneConversation, AgentType: pricing.KindChat,
 		ProviderModelID: 9, Status: yesno.No,
 	})
 	if err != nil || id != 7 {
 		t.Fatalf("Create() = %d, %v", id, err)
 	}
 	if repo.created.Name != "Support Agent" || repo.created.Description != "helps users" ||
-		repo.created.SystemPrompt != "be helpful" || repo.created.ProviderModelID != 9 {
+		repo.created.SystemPrompt != "be helpful" || repo.created.Scene != SceneConversation ||
+		repo.created.AgentType != pricing.KindChat || repo.created.ProviderModelID != 9 {
 		t.Fatalf("created = %+v", repo.created)
 	}
 	if repo.created.Version != 1 || repo.created.CreatedAt.IsZero() {
@@ -117,16 +119,29 @@ func TestCreateRejectsUnavailableModel(t *testing.T) {
 	repo := &fakeRepository{usable: map[int64]ModelRef{}}
 	service := newTestService(repo)
 	_, err := service.Create(context.Background(), CreateInput{
-		Name: "Support", SystemPrompt: "help", ProviderModelID: 9, Status: yesno.No,
+		Name: "Support", SystemPrompt: "help", Scene: SceneConversation,
+		AgentType: pricing.KindChat, ProviderModelID: 9, Status: yesno.No,
 	})
 	if err == nil {
 		t.Fatal("unavailable model was accepted")
 	}
 }
 
+func TestCreateRejectsModelKindMismatch(t *testing.T) {
+	repo := &fakeRepository{usable: map[int64]ModelRef{9: testRef(9)}}
+	service := newTestService(repo)
+	_, err := service.Create(context.Background(), CreateInput{
+		Name: "Poster", SystemPrompt: "draw", Scene: SceneImageGeneration,
+		AgentType: pricing.KindImage, ProviderModelID: 9, Status: yesno.No,
+	})
+	if err == nil {
+		t.Fatal("chat model was accepted for an image agent")
+	}
+}
+
 func TestUpdateStatusRequiresUsableModelWhenEnabling(t *testing.T) {
 	repo := &fakeRepository{
-		row:    Model{ID: 5, ProviderModelID: 9, Status: yesno.No},
+		row:    Model{ID: 5, ProviderModelID: 9, AgentType: pricing.KindChat, Status: yesno.No},
 		usable: map[int64]ModelRef{},
 	}
 	service := newTestService(repo)
@@ -146,7 +161,8 @@ func TestUpdateStatusRequiresUsableModelWhenEnabling(t *testing.T) {
 
 func TestListProjectsBoundModelFields(t *testing.T) {
 	row := Model{
-		ID: 5, Name: "Support", SystemPrompt: "help", ProviderModelID: 9,
+		ID: 5, Name: "Support", SystemPrompt: "help", Scene: SceneConversation,
+		AgentType: pricing.KindChat, ProviderModelID: 9,
 		Status: yesno.Yes, Version: 2, CreatedAt: time.Now(), UpdatedAt: time.Now(),
 	}
 	repo := &fakeRepository{
@@ -163,7 +179,9 @@ func TestListProjectsBoundModelFields(t *testing.T) {
 	}
 	item := result.List[0]
 	if item.ProviderName != "OpenAI" || item.ModelName != "GPT Test" ||
-		item.ModelKey != "gpt-test" || !item.ModelAvailable {
+		item.ModelKey != "gpt-test" || !item.ModelAvailable ||
+		item.Scene != SceneConversation || item.SceneName == "" ||
+		item.Type != pricing.KindChat || item.TypeName == "" {
 		t.Fatalf("item = %+v", item)
 	}
 }
@@ -205,7 +223,8 @@ func TestCreateMapsRepositoryFailure(t *testing.T) {
 	repo.usableErr = errors.New("db down")
 	service := newTestService(repo)
 	if _, err := service.Create(context.Background(), CreateInput{
-		Name: "Support", SystemPrompt: "help", ProviderModelID: 9,
+		Name: "Support", SystemPrompt: "help", Scene: SceneConversation,
+		AgentType: pricing.KindChat, ProviderModelID: 9,
 	}); err == nil {
 		t.Fatal("repository failure was ignored")
 	}

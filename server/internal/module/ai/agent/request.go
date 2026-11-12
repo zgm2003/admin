@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"admin/server/internal/module/ai/pricing"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
 )
@@ -21,6 +22,8 @@ type ListQuery struct {
 	Page     int
 	PageSize int
 	Keyword  string
+	Type     *pricing.ModelKind
+	Scene    *Scene
 	Status   *yesno.Value
 }
 
@@ -28,6 +31,8 @@ type CreateInput struct {
 	Name            string
 	Description     string
 	SystemPrompt    string
+	Scene           Scene
+	AgentType       pricing.ModelKind
 	ProviderModelID int64
 	Status          yesno.Value
 }
@@ -36,6 +41,8 @@ type UpdateInput struct {
 	Name            string
 	Description     string
 	SystemPrompt    string
+	Scene           Scene
+	AgentType       pricing.ModelKind
 	ProviderModelID int64
 	Status          yesno.Value
 }
@@ -48,21 +55,26 @@ type createRequest struct {
 	Name            *string      `json:"name"`
 	Description     *string      `json:"description"`
 	SystemPrompt    *string      `json:"systemPrompt"`
+	Scene           *int16       `json:"scene"`
+	Type            *int16       `json:"type"`
 	ProviderModelID *int64       `json:"providerModelId"`
 	Status          *yesno.Value `json:"status"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
-	if r.Name == nil || r.Description == nil || r.SystemPrompt == nil ||
-		r.ProviderModelID == nil || r.Status == nil {
-		return CreateInput{}, fmt.Errorf("name, description, systemPrompt, providerModelId and status are required")
+	if r.Name == nil || r.Description == nil || r.SystemPrompt == nil || r.Scene == nil ||
+		r.Type == nil || r.ProviderModelID == nil || r.Status == nil {
+		return CreateInput{}, fmt.Errorf("name, description, systemPrompt, scene, type, providerModelId and status are required")
 	}
-	value, err := validateInput(*r.Name, *r.Description, *r.SystemPrompt, *r.ProviderModelID, *r.Status)
+	value, err := validateInput(
+		*r.Name, *r.Description, *r.SystemPrompt, *r.Scene, *r.ProviderModelID, *r.Type, *r.Status,
+	)
 	if err != nil {
 		return CreateInput{}, err
 	}
 	return CreateInput{
 		Name: value.Name, Description: value.Description, SystemPrompt: value.SystemPrompt,
+		Scene: value.Scene, AgentType: value.AgentType,
 		ProviderModelID: value.ProviderModelID, Status: value.Status,
 	}, nil
 }
@@ -71,21 +83,26 @@ type updateRequest struct {
 	Name            *string      `json:"name"`
 	Description     *string      `json:"description"`
 	SystemPrompt    *string      `json:"systemPrompt"`
+	Scene           *int16       `json:"scene"`
+	Type            *int16       `json:"type"`
 	ProviderModelID *int64       `json:"providerModelId"`
 	Status          *yesno.Value `json:"status"`
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
-	if r.Name == nil || r.Description == nil || r.SystemPrompt == nil ||
-		r.ProviderModelID == nil || r.Status == nil {
-		return UpdateInput{}, fmt.Errorf("name, description, systemPrompt, providerModelId and status are required")
+	if r.Name == nil || r.Description == nil || r.SystemPrompt == nil || r.Scene == nil ||
+		r.Type == nil || r.ProviderModelID == nil || r.Status == nil {
+		return UpdateInput{}, fmt.Errorf("name, description, systemPrompt, scene, type, providerModelId and status are required")
 	}
-	value, err := validateInput(*r.Name, *r.Description, *r.SystemPrompt, *r.ProviderModelID, *r.Status)
+	value, err := validateInput(
+		*r.Name, *r.Description, *r.SystemPrompt, *r.Scene, *r.ProviderModelID, *r.Type, *r.Status,
+	)
 	if err != nil {
 		return UpdateInput{}, err
 	}
 	return UpdateInput{
 		Name: value.Name, Description: value.Description, SystemPrompt: value.SystemPrompt,
+		Scene: value.Scene, AgentType: value.AgentType,
 		ProviderModelID: value.ProviderModelID, Status: value.Status,
 	}, nil
 }
@@ -94,14 +111,24 @@ type inputValues struct {
 	Name            string
 	Description     string
 	SystemPrompt    string
+	Scene           Scene
+	AgentType       pricing.ModelKind
 	ProviderModelID int64
 	Status          yesno.Value
 }
 
-func validateInput(name, description, systemPrompt string, providerModelID int64, status yesno.Value) (inputValues, error) {
+func validateInput(
+	name, description, systemPrompt string,
+	scene int16,
+	providerModelID int64,
+	agentType int16,
+	status yesno.Value,
+) (inputValues, error) {
 	name = strings.TrimSpace(name)
 	description = strings.TrimSpace(description)
 	systemPrompt = strings.TrimSpace(systemPrompt)
+	modelKind := pricing.ModelKind(agentType)
+	sceneValue := Scene(scene)
 	if name == "" || utf8.RuneCountInString(name) > maxNameRunes {
 		return inputValues{}, fmt.Errorf("name must be between 1 and %d characters", maxNameRunes)
 	}
@@ -111,6 +138,12 @@ func validateInput(name, description, systemPrompt string, providerModelID int64
 	if systemPrompt == "" || utf8.RuneCountInString(systemPrompt) > maxSystemPromptRunes {
 		return inputValues{}, fmt.Errorf("systemPrompt must be between 1 and %d characters", maxSystemPromptRunes)
 	}
+	if !sceneValue.Valid() {
+		return inputValues{}, fmt.Errorf("scene is invalid")
+	}
+	if !modelKind.Valid() {
+		return inputValues{}, fmt.Errorf("type is invalid")
+	}
 	if providerModelID < 1 {
 		return inputValues{}, fmt.Errorf("providerModelId is invalid")
 	}
@@ -119,6 +152,7 @@ func validateInput(name, description, systemPrompt string, providerModelID int64
 	}
 	return inputValues{
 		Name: name, Description: description, SystemPrompt: systemPrompt,
+		Scene: sceneValue, AgentType: modelKind,
 		ProviderModelID: providerModelID, Status: status,
 	}, nil
 }
@@ -136,7 +170,8 @@ func (r statusRequest) input() (StatusInput, error) {
 
 func parseListQuery(values url.Values) (ListQuery, error) {
 	for key, entries := range values {
-		if (key != "page" && key != "pageSize" && key != "keyword" && key != "status") || len(entries) != 1 {
+		if (key != "page" && key != "pageSize" && key != "keyword" &&
+			key != "status" && key != "type" && key != "scene") || len(entries) != 1 {
 			return ListQuery{}, fmt.Errorf("query invalid")
 		}
 	}
@@ -150,6 +185,28 @@ func parseListQuery(values url.Values) (ListQuery, error) {
 	}
 	if utf8.RuneCountInString(query.Keyword) > 200 {
 		return ListQuery{}, fmt.Errorf("keyword is too long")
+	}
+	if raw := strings.TrimSpace(values.Get("type")); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 8)
+		if err != nil {
+			return ListQuery{}, fmt.Errorf("type is invalid")
+		}
+		modelKind := pricing.ModelKind(value)
+		if !modelKind.Valid() {
+			return ListQuery{}, fmt.Errorf("type is invalid")
+		}
+		query.Type = &modelKind
+	}
+	if raw := strings.TrimSpace(values.Get("scene")); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 8)
+		if err != nil {
+			return ListQuery{}, fmt.Errorf("scene is invalid")
+		}
+		scene := Scene(value)
+		if !scene.Valid() {
+			return ListQuery{}, fmt.Errorf("scene is invalid")
+		}
+		query.Scene = &scene
 	}
 	if raw := strings.TrimSpace(values.Get("status")); raw != "" {
 		value, err := strconv.ParseInt(raw, 10, 8)

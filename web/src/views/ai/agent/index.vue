@@ -22,6 +22,8 @@ const {
   error: optionsError,
   reload: reloadOptions,
 } = useLocalizedOptions<AgentOptions>(api.getAgentOptions, () => ({
+  types: [],
+  scenes: [],
   statuses: [],
 }))
 const {
@@ -36,8 +38,12 @@ const {
 const rows = ref<AiAgent[]>([])
 const total = ref(0)
 const query = ref<AgentQuery>({ page: 1, pageSize: 20 })
-const filters = ref<SearchFormModel<{ keyword: string; status: number | '' }>>({
+const filters = ref<
+  SearchFormModel<{ keyword: string; type: number | ''; scene: number | ''; status: number | '' }>
+>({
   keyword: '',
+  type: '',
+  scene: '',
   status: '',
 })
 const loading = ref(false)
@@ -60,7 +66,9 @@ const pagination = computed<TablePaginationState>(() => ({
   pageSize: query.value.pageSize,
   total: total.value,
 }))
-const searchFields = computed<SearchField<{ keyword: string; status: number | '' }>[]>(() => [
+const searchFields = computed<
+  SearchField<{ keyword: string; type: number | ''; scene: number | ''; status: number | '' }>[]
+>(() => [
   {
     key: 'keyword',
     type: 'input',
@@ -70,18 +78,38 @@ const searchFields = computed<SearchField<{ keyword: string; status: number | ''
     width: 240,
   },
   {
+    key: 'type',
+    type: 'select-v2',
+    label: t('ai.agent.type'),
+    placeholder: t('ai.agent.allTypes'),
+    resetValue: '',
+    options: options.value.types,
+    width: 130,
+  },
+  {
+    key: 'scene',
+    type: 'select-v2',
+    label: t('ai.agent.scene'),
+    placeholder: t('ai.agent.allScenes'),
+    resetValue: '',
+    options: options.value.scenes,
+    width: 140,
+  },
+  {
     key: 'status',
     type: 'select-v2',
     label: t('ai.agent.status'),
     placeholder: t('ai.agent.allStatuses'),
     resetValue: '',
     options: options.value.statuses,
-    width: 140,
+    width: 130,
   },
 ])
 const columns = computed<TableColumn<AiAgent>[]>(() => [
-  { key: 'agent', label: t('ai.agent.agent'), minWidth: 250 },
-  { key: 'model', label: t('ai.agent.model'), minWidth: 280 },
+  { key: 'agent', label: t('ai.agent.agent'), minWidth: 220 },
+  { key: 'type', label: t('ai.agent.type'), width: 90 },
+  { key: 'scene', label: t('ai.agent.scene'), minWidth: 150 },
+  { key: 'model', label: t('ai.agent.model'), minWidth: 240 },
   { key: 'status', label: t('ai.agent.status'), width: 90 },
   { key: 'updatedAt', label: t('ai.agent.updatedAt'), width: 170 },
   { key: 'actions', label: t('common.actions'), width: 260, fixed: 'right' },
@@ -120,14 +148,29 @@ function search(): void {
     page: 1,
     pageSize: query.value.pageSize,
     ...(filters.value.keyword.trim() ? { keyword: filters.value.keyword.trim() } : {}),
+    ...(filters.value.type !== '' ? { type: filters.value.type } : {}),
+    ...(filters.value.scene !== '' ? { scene: filters.value.scene } : {}),
     ...(filters.value.status !== '' ? { status: filters.value.status } : {}),
   }
   void load()
 }
 
 function reset(): void {
-  filters.value = { keyword: '', status: '' }
+  filters.value = { keyword: '', type: '', scene: '', status: '' }
   search()
+}
+
+function typeTagType(type: number): 'primary' | 'success' | 'warning' | 'info' {
+  switch (type) {
+    case 2:
+      return 'success'
+    case 3:
+      return 'warning'
+    case 4:
+      return 'info'
+    default:
+      return 'primary'
+  }
 }
 
 function updatePagination(value: TablePaginationState): void {
@@ -313,6 +356,12 @@ onBeforeUnmount(() => {
           <span>{{ row.description || t('ai.agent.noDescription') }}</span>
         </div>
       </template>
+      <template #cell-type="{ row }: { row: AiAgent }">
+        <el-tag :type="typeTagType(row.type)" effect="plain">{{ row.typeName }}</el-tag>
+      </template>
+      <template #cell-scene="{ row }: { row: AiAgent }">
+        <span class="ai-agent-page__scene">{{ row.sceneName }}</span>
+      </template>
       <template #cell-model="{ row }: { row: AiAgent }">
         <div class="ai-agent-page__identity">
           <strong>{{ row.modelName || t('ai.agent.unknownModel') }}</strong>
@@ -435,6 +484,15 @@ onBeforeUnmount(() => {
   &__muted {
     color: var(--admin-text-muted);
     font-size: 12px;
+  }
+
+  &__scene {
+    display: block;
+    overflow: hidden;
+    color: var(--admin-text);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 </style>

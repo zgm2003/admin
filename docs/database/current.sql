@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict jIcalZ1UIh4flbN5kQdTXnNW2YH5zsfDDq3TeqxSWXcv3YuhVETtMr3JtdU3GwN
+\restrict DR8hpevoTt44mf9ycv65b71vB64VHOuUT7N1jccDxTnhpixErkOuv0ipRG3s2BZ
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -185,8 +185,12 @@ CREATE TABLE public.ai_agent (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     deleted_at timestamp with time zone,
+    agent_type smallint DEFAULT 1 NOT NULL,
+    scene smallint DEFAULT 1 NOT NULL,
+    CONSTRAINT ai_agent_agent_type_check CHECK ((agent_type = ANY (ARRAY[1, 2, 3, 4]))),
     CONSTRAINT ai_agent_description_check CHECK ((length((description)::text) <= 500)),
     CONSTRAINT ai_agent_name_check CHECK (((length((name)::text) >= 1) AND (length((name)::text) <= 128))),
+    CONSTRAINT ai_agent_scene_check CHECK ((scene = ANY (ARRAY[1, 2, 3, 4, 5]))),
     CONSTRAINT ai_agent_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ai_agent_system_prompt_check CHECK (((length(system_prompt) >= 1) AND (length(system_prompt) <= 20000))),
     CONSTRAINT ai_agent_version_check CHECK ((version >= 1))
@@ -197,7 +201,7 @@ CREATE TABLE public.ai_agent (
 -- Name: TABLE ai_agent; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.ai_agent IS '可配置智能体；绑定一个已启用且配置完整的对话模型';
+COMMENT ON TABLE public.ai_agent IS '可配置智能体；按类型绑定一个已启用且配置完整的模型，并记录业务场景';
 
 
 --
@@ -211,7 +215,7 @@ COMMENT ON COLUMN public.ai_agent.system_prompt IS '智能体系统提示词，�
 -- Name: COLUMN ai_agent.provider_model_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.ai_agent.provider_model_id IS '绑定的供应商对话模型；运行时不能使用已停用或已删除的模型';
+COMMENT ON COLUMN public.ai_agent.provider_model_id IS '绑定的供应商模型；运行时不能使用已停用、已删除或类型不匹配的模型';
 
 
 --
@@ -219,6 +223,20 @@ COMMENT ON COLUMN public.ai_agent.provider_model_id IS '绑定的供应商对话
 --
 
 COMMENT ON COLUMN public.ai_agent.status IS '0=停用，1=启用';
+
+
+--
+-- Name: COLUMN ai_agent.agent_type; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.ai_agent.agent_type IS '智能体类型：1=对话，2=图片，3=视频，4=音频；必须与绑定模型的 model_kind 一致';
+
+
+--
+-- Name: COLUMN ai_agent.scene; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.ai_agent.scene IS '业务场景枚举：1=对话，2=工具生成，3=生图，4=视频生成，5=音频生成';
 
 
 --
@@ -3356,10 +3374,24 @@ CREATE INDEX ai_agent_provider_model_id_idx ON public.ai_agent USING btree (prov
 
 
 --
+-- Name: ai_agent_scene_status_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ai_agent_scene_status_id_idx ON public.ai_agent USING btree (scene, status, id DESC) WHERE (deleted_at IS NULL);
+
+
+--
 -- Name: ai_agent_status_id_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ai_agent_status_id_idx ON public.ai_agent USING btree (status, id DESC) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: ai_agent_type_status_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ai_agent_type_status_id_idx ON public.ai_agent USING btree (agent_type, status, id DESC) WHERE (deleted_at IS NULL);
 
 
 --
@@ -4990,5 +5022,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict jIcalZ1UIh4flbN5kQdTXnNW2YH5zsfDDq3TeqxSWXcv3YuhVETtMr3JtdU3GwN
+\unrestrict DR8hpevoTt44mf9ycv65b71vB64VHOuUT7N1jccDxTnhpixErkOuv0ipRG3s2BZ
 

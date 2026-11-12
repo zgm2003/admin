@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"admin/server/internal/module/ai/pricing"
 	"admin/server/internal/shared/option"
 	"admin/server/internal/shared/pagination"
 	"admin/server/internal/shared/yesno"
@@ -21,7 +22,7 @@ type repository interface {
 	Delete(context.Context, int64) error
 	ModelRefsByIDs(context.Context, []int64) (map[int64]ModelRef, error)
 	ListUsableModelOptions(context.Context) ([]ModelRef, error)
-	FindUsableModel(context.Context, int64) (ModelRef, error)
+	FindUsableModel(context.Context, int64, pricing.ModelKind) (ModelRef, error)
 }
 
 type Service struct {
@@ -89,20 +90,22 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		return 0, dependency(fmt.Errorf("agent service is not configured"))
 	}
 	values, err := validateInput(
-		input.Name, input.Description, input.SystemPrompt, input.ProviderModelID, input.Status,
+		input.Name, input.Description, input.SystemPrompt, int16(input.Scene),
+		input.ProviderModelID, int16(input.AgentType), input.Status,
 	)
 	if err != nil {
 		return 0, invalid(err)
 	}
-	if _, err := s.repo.FindUsableModel(ctx, values.ProviderModelID); err != nil {
+	if _, err := s.repo.FindUsableModel(ctx, values.ProviderModelID, values.AgentType); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return 0, invalid(fmt.Errorf("providerModelId does not reference an enabled chat model"))
+			return 0, invalid(fmt.Errorf("providerModelId does not reference an enabled model of the agent type"))
 		}
 		return 0, mapError(err)
 	}
 	now := s.now().UTC()
 	id, err := s.repo.Create(ctx, Model{
 		Name: values.Name, Description: values.Description, SystemPrompt: values.SystemPrompt,
+		Scene: values.Scene, AgentType: values.AgentType,
 		ProviderModelID: values.ProviderModelID, Status: values.Status,
 		Version: 1, CreatedAt: now, UpdatedAt: now,
 	})
@@ -123,19 +126,21 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		return mapError(err)
 	}
 	values, err := validateInput(
-		input.Name, input.Description, input.SystemPrompt, input.ProviderModelID, input.Status,
+		input.Name, input.Description, input.SystemPrompt, int16(input.Scene),
+		input.ProviderModelID, int16(input.AgentType), input.Status,
 	)
 	if err != nil {
 		return invalid(err)
 	}
-	if _, err := s.repo.FindUsableModel(ctx, values.ProviderModelID); err != nil {
+	if _, err := s.repo.FindUsableModel(ctx, values.ProviderModelID, values.AgentType); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return invalid(fmt.Errorf("providerModelId does not reference an enabled chat model"))
+			return invalid(fmt.Errorf("providerModelId does not reference an enabled model of the agent type"))
 		}
 		return mapError(err)
 	}
 	if err := s.repo.Update(ctx, id, UpdateValues{
 		Name: values.Name, Description: values.Description, SystemPrompt: values.SystemPrompt,
+		Scene: values.Scene, AgentType: values.AgentType,
 		ProviderModelID: values.ProviderModelID, Status: values.Status, UpdatedAt: s.now().UTC(),
 	}); err != nil {
 		return mapError(err)
@@ -158,7 +163,7 @@ func (s *Service) UpdateStatus(ctx context.Context, id int64, input StatusInput)
 		return mapError(err)
 	}
 	if input.Status == yesno.Yes {
-		if _, err := s.repo.FindUsableModel(ctx, row.ProviderModelID); err != nil {
+		if _, err := s.repo.FindUsableModel(ctx, row.ProviderModelID, row.AgentType); err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return invalid(fmt.Errorf("bound provider model is unavailable"))
 			}
@@ -185,10 +190,25 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *Service) Options(ctx context.Context) Options {
-	return Options{Statuses: []option.Option[yesno.Value]{
-		option.New(ctx, yesno.No, "停用", "Disabled"),
-		option.New(ctx, yesno.Yes, "启用", "Enabled"),
-	}}
+	return Options{
+		Types: []option.Option[pricing.ModelKind]{
+			option.New(ctx, pricing.KindChat, "对话", "Chat"),
+			option.New(ctx, pricing.KindImage, "图片", "Image"),
+			option.New(ctx, pricing.KindVideo, "视频", "Video"),
+			option.New(ctx, pricing.KindAudio, "音频", "Audio"),
+		},
+		Scenes: []option.Option[Scene]{
+			option.New(ctx, SceneConversation, "对话", "Conversation"),
+			option.New(ctx, SceneToolGeneration, "工具生成", "Tool generation"),
+			option.New(ctx, SceneImageGeneration, "生图", "Image generation"),
+			option.New(ctx, SceneVideoGeneration, "视频生成", "Video generation"),
+			option.New(ctx, SceneAudioGeneration, "音频生成", "Audio generation"),
+		},
+		Statuses: []option.Option[yesno.Value]{
+			option.New(ctx, yesno.No, "停用", "Disabled"),
+			option.New(ctx, yesno.Yes, "启用", "Enabled"),
+		},
+	}
 }
 
 func (s *Service) ModelOptions(ctx context.Context) (ModelOptions, error) {

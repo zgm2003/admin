@@ -33,10 +33,22 @@ const cascaderProps: CascaderProps = {
 const title = computed(() =>
   props.model === null ? t('ai.agent.createTitle') : t('ai.agent.editTitle'),
 )
-const availableModelIDs = computed(
-  () =>
-    new Set(props.modelOptions.flatMap((provider) => provider.children.map((item) => item.value))),
+function availableIDsFor(type: number): Set<number> {
+  return new Set(
+    props.modelOptions.flatMap((provider) =>
+      provider.children.filter((item) => item.modelKind === type).map((item) => item.value),
+    ),
+  )
+}
+const filteredModelOptions = computed(() =>
+  props.modelOptions
+    .map((provider) => ({
+      ...provider,
+      children: provider.children.filter((item) => item.modelKind === form.value.type),
+    }))
+    .filter((provider) => provider.children.length > 0),
 )
+const availableModelIDs = computed(() => availableIDsFor(form.value.type))
 const currentModelUnavailable = computed(
   () =>
     props.model !== null &&
@@ -48,6 +60,8 @@ const rules = computed<FormRules<AgentForm>>(() => ({
     { required: true, message: t('ai.agent.nameRequired'), trigger: 'blur' },
     { max: 128, message: t('ai.agent.nameMax'), trigger: 'blur' },
   ],
+  type: [{ required: true, message: t('ai.agent.typeRequired'), trigger: 'change' }],
+  scene: [{ required: true, message: t('ai.agent.sceneRequired'), trigger: 'change' }],
   providerModelId: [{ required: true, message: t('ai.agent.modelRequired'), trigger: 'change' }],
   systemPrompt: [
     { required: true, message: t('ai.agent.systemPromptRequired'), trigger: 'blur' },
@@ -56,17 +70,31 @@ const rules = computed<FormRules<AgentForm>>(() => ({
 }))
 
 watch(
+  () => form.value.type,
+  (type) => {
+    if (
+      form.value.providerModelId !== null &&
+      !availableIDsFor(type).has(form.value.providerModelId)
+    ) {
+      form.value.providerModelId = null
+    }
+    void nextTick(() => formRef.value?.clearValidate('providerModelId'))
+  },
+)
+
+watch(
   () => [visible.value, props.model?.id] as const,
   () => {
     if (!visible.value) return
-    if (props.model === null) {
-      form.value = emptyAgentForm()
-    } else {
-      const boundModelAvailable = availableModelIDs.value.has(props.model.providerModelId)
+    form.value = emptyAgentForm()
+    if (props.model !== null) {
+      const boundModelAvailable = availableIDsFor(props.model.type).has(props.model.providerModelId)
       form.value = {
         name: props.model.name,
         description: props.model.description,
         systemPrompt: props.model.systemPrompt,
+        scene: props.model.scene,
+        type: props.model.type,
         providerModelId: boundModelAvailable ? props.model.providerModelId : null,
         status: props.model.status,
       }
@@ -88,6 +116,8 @@ async function submit(): Promise<void> {
     name: form.value.name.trim(),
     description: form.value.description.trim(),
     systemPrompt: form.value.systemPrompt.trim(),
+    scene: form.value.scene,
+    type: form.value.type,
     providerModelId: form.value.providerModelId,
     status: form.value.status,
   })
@@ -122,6 +152,29 @@ async function submit(): Promise<void> {
             :placeholder="t('ai.agent.namePlaceholder')"
           />
         </el-form-item>
+        <el-form-item :label="t('ai.agent.type')" prop="type">
+          <el-select v-model="form.type" :placeholder="t('ai.agent.typePlaceholder')">
+            <el-option
+              v-for="item in options.types"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
+      </div>
+
+      <div class="ai-agent-dialog__grid">
+        <el-form-item :label="t('ai.agent.scene')" prop="scene">
+          <el-select v-model="form.scene" :placeholder="t('ai.agent.scenePlaceholder')">
+            <el-option
+              v-for="item in options.scenes"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item :label="t('ai.agent.status')" prop="status">
           <el-select v-model="form.status">
             <el-option
@@ -138,7 +191,7 @@ async function submit(): Promise<void> {
         <div class="ai-agent-dialog__model">
           <el-cascader
             v-model="form.providerModelId"
-            :options="modelOptions"
+            :options="filteredModelOptions"
             :props="cascaderProps"
             :placeholder="t('ai.agent.modelPlaceholder')"
             :no-data-text="t('ai.agent.noModels')"

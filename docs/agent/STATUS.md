@@ -1809,3 +1809,12 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 权限迁移不自动授权普通角色；页面通过动态菜单出现，当前超级管理员按既有全量权限可见。菜单迁移可重复执行，未变更时不会递增 `menu_version`。
 - 数据库迁移：`docs/database/2026-11-11-ai-agent.sql`、`docs/database/2026-11-11-ai-agent-menu.sql`；`docs/database/current.sql` 已刷新。
 - 验证通过：`go test ./internal/module/ai/agent ./cmd/api -count=1`、`go vet ./internal/module/ai/agent ./cmd/api`、真实 PostgreSQL 事务内 CRUD/模型投影 smoke、`pnpm typecheck`、Agent 相关 ESLint、`pnpm build`。
+
+### 智能体类型与业务场景枚举（2026-11-12）
+
+- `ai_agent` 新增 `agent_type` 和 `scene`：类型为 1=对话、2=图片、3=视频、4=音频；场景为固定枚举 1=对话、2=工具生成、3=生图、4=视频生成、5=音频生成，只能从接口选项中选择。
+- 场景不再接受自由文本；迁移 `docs/database/2026-11-12-ai-agent-type-scene.sql` 会把旧的已知自由文本转换为枚举，未知值会中止迁移，迁移可重复执行。
+- Agent 创建/编辑/启用都会校验绑定模型的 `model_kind` 必须等于 `agent_type`；对话 Agent 仍只接受官方 Token 且已映射官方模型的对话模型，非对话 Agent 接受已启用且具备官方映射或已配置价格的同类型模型。
+- 模型选项接口返回所有可用模型及其 `modelKind`；前端按当前 Agent 类型过滤“供应商 → 模型”级联，切换类型会清空不匹配的模型。
+- 页面新增类型/场景筛选、类型标签和业务场景列；表单新增类型下拉、业务场景下拉，模型文案从“对话模型”改为通用的“模型”。
+- 验证通过：Agent/cmd/api 测试、`go vet`、真实 PostgreSQL 场景枚举迁移、前端 `typecheck`、ESLint、`pnpm build`；`docs/database/current.sql` 已刷新。

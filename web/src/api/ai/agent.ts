@@ -12,6 +12,10 @@ export interface AiAgent {
   name: string
   description: string
   systemPrompt: string
+  scene: number
+  sceneName: string
+  type: number
+  typeName: string
   providerModelId: number
   providerName: string
   modelName: string
@@ -27,6 +31,8 @@ export interface AiAgent {
 
 export interface AgentQuery extends PageRequest {
   keyword?: string
+  type?: number
+  scene?: number
   status?: number
 }
 
@@ -36,6 +42,8 @@ export interface AgentOption {
 }
 
 export interface AgentOptions {
+  types: AgentOption[]
+  scenes: AgentOption[]
   statuses: AgentOption[]
 }
 
@@ -43,6 +51,7 @@ export interface AgentModelOption {
   value: number
   label: string
   modelKey: string
+  modelKind: number
 }
 
 export interface AgentProviderModelOption {
@@ -59,6 +68,8 @@ export interface CreateAgentInput {
   name: string
   description: string
   systemPrompt: string
+  scene: number
+  type: number
   providerModelId: number
   status: number
 }

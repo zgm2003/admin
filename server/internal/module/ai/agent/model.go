@@ -9,16 +9,18 @@ import (
 )
 
 type Model struct {
-	ID              int64          `gorm:"column:id;primaryKey;autoIncrement"`
-	Name            string         `gorm:"column:name;type:varchar(128);not null"`
-	Description     string         `gorm:"column:description;type:varchar(500);not null"`
-	SystemPrompt    string         `gorm:"column:system_prompt;type:text;not null"`
-	ProviderModelID int64          `gorm:"column:provider_model_id;not null"`
-	Status          yesno.Value    `gorm:"column:status;type:smallint;not null"`
-	Version         int64          `gorm:"column:version;not null"`
-	CreatedAt       time.Time      `gorm:"column:created_at;type:timestamptz;not null"`
-	UpdatedAt       time.Time      `gorm:"column:updated_at;type:timestamptz;not null"`
-	DeletedAt       gorm.DeletedAt `gorm:"column:deleted_at;type:timestamptz;index"`
+	ID              int64             `gorm:"column:id;primaryKey;autoIncrement"`
+	Name            string            `gorm:"column:name;type:varchar(128);not null"`
+	Description     string            `gorm:"column:description;type:varchar(500);not null"`
+	SystemPrompt    string            `gorm:"column:system_prompt;type:text;not null"`
+	AgentType       pricing.ModelKind `gorm:"column:agent_type;type:smallint;not null"`
+	Scene           Scene             `gorm:"column:scene;type:smallint;not null"`
+	ProviderModelID int64             `gorm:"column:provider_model_id;not null"`
+	Status          yesno.Value       `gorm:"column:status;type:smallint;not null"`
+	Version         int64             `gorm:"column:version;not null"`
+	CreatedAt       time.Time         `gorm:"column:created_at;type:timestamptz;not null"`
+	UpdatedAt       time.Time         `gorm:"column:updated_at;type:timestamptz;not null"`
+	DeletedAt       gorm.DeletedAt    `gorm:"column:deleted_at;type:timestamptz;index"`
 }
 
 func (Model) TableName() string { return "ai_agent" }

@@ -17,6 +17,8 @@ type UpdateValues struct {
 	Name            string
 	Description     string
 	SystemPrompt    string
+	Scene           Scene
+	AgentType       pricing.ModelKind
 	ProviderModelID int64
 	Status          yesno.Value
 	UpdatedAt       time.Time
@@ -58,6 +60,12 @@ func agentFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 		pattern := "%" + query.Keyword + "%"
 		db = db.Where("name ILIKE ? OR description ILIKE ?", pattern, pattern)
 	}
+	if query.Type != nil {
+		db = db.Where("agent_type = ?", *query.Type)
+	}
+	if query.Scene != nil {
+		db = db.Where("scene = ?", *query.Scene)
+	}
 	if query.Status != nil {
 		db = db.Where("status = ?", *query.Status)
 	}
@@ -67,9 +75,9 @@ func agentFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues) error {
 	result := r.db.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{
 		"name": values.Name, "description": values.Description,
-		"system_prompt": values.SystemPrompt, "provider_model_id": values.ProviderModelID,
-		"status": values.Status, "updated_at": values.UpdatedAt,
-		"version": gorm.Expr("version + 1"),
+		"system_prompt": values.SystemPrompt, "scene": values.Scene, "agent_type": values.AgentType,
+		"provider_model_id": values.ProviderModelID, "status": values.Status,
+		"updated_at": values.UpdatedAt, "version": gorm.Expr("version + 1"),
 	})
 	if result.Error != nil {
 		return result.Error
@@ -136,8 +144,19 @@ func (r *Repository) ListUsableModelOptions(ctx context.Context) ([]ModelRef, er
 			pm.status, TRUE AS available`).
 		Joins("JOIN ai_provider p ON p.id = pm.provider_id").
 		Where(`pm.status = 1 AND pm.deleted_at IS NULL AND p.status = 1 AND p.deleted_at IS NULL
-			AND pm.model_kind = ? AND pm.pricing_mode = ? AND pm.official_model_id IS NOT NULL`,
-			pricing.KindChat, pricing.ModeOfficialToken).
+			AND (
+				(pm.model_kind = ? AND pm.pricing_mode = ? AND pm.official_model_id IS NOT NULL)
+				OR (pm.model_kind <> ? AND (
+					(pm.pricing_mode = ? AND pm.official_model_id IS NOT NULL)
+					OR (pm.pricing_mode = ? AND EXISTS (
+						SELECT 1 FROM ai_provider_model_price price
+						WHERE price.provider_model_id = pm.id
+							AND price.status = 1 AND price.deleted_at IS NULL
+					))
+				))
+			)`,
+			pricing.KindChat, pricing.ModeOfficialToken, pricing.KindChat,
+			pricing.ModeOfficialToken, pricing.ModeProviderUnit).
 		Order("p.sort_order ASC, p.id ASC, pm.display_name ASC, pm.id ASC").
 		Find(&rows).Error; err != nil {
 		return nil, err
@@ -145,7 +164,7 @@ func (r *Repository) ListUsableModelOptions(ctx context.Context) ([]ModelRef, er
 	return rows, nil
 }
 
-func (r *Repository) FindUsableModel(ctx context.Context, id int64) (ModelRef, error) {
+func (r *Repository) FindUsableModel(ctx context.Context, id int64, kind pricing.ModelKind) (ModelRef, error) {
 	var row ModelRef
 	if err := r.db.WithContext(ctx).
 		Table("ai_provider_model AS pm").
@@ -153,10 +172,21 @@ func (r *Repository) FindUsableModel(ctx context.Context, id int64) (ModelRef, e
 			pm.model_key, pm.display_name, pm.model_kind, pm.pricing_mode, pm.official_model_id,
 			pm.status, TRUE AS available`).
 		Joins("JOIN ai_provider p ON p.id = pm.provider_id").
-		Where(`pm.id = ? AND pm.status = 1 AND pm.deleted_at IS NULL
+		Where(`pm.id = ? AND pm.model_kind = ? AND pm.status = 1 AND pm.deleted_at IS NULL
 			AND p.status = 1 AND p.deleted_at IS NULL
-			AND pm.model_kind = ? AND pm.pricing_mode = ? AND pm.official_model_id IS NOT NULL`,
-			id, pricing.KindChat, pricing.ModeOfficialToken).
+			AND (
+				(pm.model_kind = ? AND pm.pricing_mode = ? AND pm.official_model_id IS NOT NULL)
+				OR (pm.model_kind <> ? AND (
+					(pm.pricing_mode = ? AND pm.official_model_id IS NOT NULL)
+					OR (pm.pricing_mode = ? AND EXISTS (
+						SELECT 1 FROM ai_provider_model_price price
+						WHERE price.provider_model_id = pm.id
+							AND price.status = 1 AND price.deleted_at IS NULL
+					))
+				))
+			)`,
+			id, kind, pricing.KindChat, pricing.ModeOfficialToken, pricing.KindChat,
+			pricing.ModeOfficialToken, pricing.ModeProviderUnit).
 		Take(&row).Error; err != nil {
 		return ModelRef{}, err
 	}
