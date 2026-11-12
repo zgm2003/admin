@@ -1804,6 +1804,7 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 新增 `server/internal/module/ai/agent`：列表、详情、新增、编辑、启停、删除、状态选项和动态模型选项；路由挂在 `/api/admin/v1/ai/agent`。
 - Agent 只允许绑定已启用、`model_kind=chat`、官方 Token 计价且已映射官方模型、供应商也启用的模型；启用 Agent 时再次校验绑定模型是否仍可用，避免停在非法计费状态。
 - 列表返回绑定模型的供应商名、模型名、上游 key 和 `modelAvailable`；模型被停用或删除后，页面会标为不可用，编辑时必须重新选择可用模型。
+- 对话模型选择使用“供应商 → 模型”两级级联；`GET /api/admin/v1/ai/agent/model-options` 返回 `providers[].children[]`，级联值为模型 ID，避免跨供应商模型混在一个平铺列表。
 - 新增 `ai:agent:view/list/detail/create/update/status/delete` 菜单与动作权限；页面组件 `web/src/views/ai/agent/index.vue`，弹窗 `AgentDialog`，中英文文案和 `navigation.aiAgent` 已补齐。
 - 权限迁移不自动授权普通角色；页面通过动态菜单出现，当前超级管理员按既有全量权限可见。菜单迁移可重复执行，未变更时不会递增 `menu_version`。
 - 数据库迁移：`docs/database/2026-11-11-ai-agent.sql`、`docs/database/2026-11-11-ai-agent-menu.sql`；`docs/database/current.sql` 已刷新。

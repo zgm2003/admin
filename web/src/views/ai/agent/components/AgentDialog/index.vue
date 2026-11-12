@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { CascaderProps, FormInstance, FormRules } from 'element-plus'
 
 import type { AgentOptions, AgentProviderModelOption, AiAgent } from '@/api/ai/agent'
 import AppDialog from '@/components/AppDialog/index.vue'
@@ -13,7 +13,7 @@ defineOptions({ name: 'AIAgentDialog' })
 const props = defineProps<{
   model: AiAgent | null
   options: AgentOptions
-  modelOptions: AgentModelOption[]
+  modelOptions: AgentProviderModelOption[]
   submitting: boolean
   error?: string
 }>()
@@ -23,14 +23,25 @@ const { t } = useI18n()
 
 const formRef = ref<FormInstance>()
 const form = ref<AgentForm>(emptyAgentForm())
+const cascaderProps: CascaderProps = {
+  value: 'value',
+  label: 'label',
+  children: 'children',
+  emitPath: false,
+  expandTrigger: 'hover',
+}
 const title = computed(() =>
   props.model === null ? t('ai.agent.createTitle') : t('ai.agent.editTitle'),
+)
+const availableModelIDs = computed(
+  () =>
+    new Set(props.modelOptions.flatMap((provider) => provider.children.map((item) => item.value))),
 )
 const currentModelUnavailable = computed(
   () =>
     props.model !== null &&
     !props.model.modelAvailable &&
-    !props.modelOptions.some((item) => item.value === props.model?.providerModelId),
+    !availableModelIDs.value.has(props.model.providerModelId),
 )
 const rules = computed<FormRules<AgentForm>>(() => ({
   name: [
@@ -51,9 +62,7 @@ watch(
     if (props.model === null) {
       form.value = emptyAgentForm()
     } else {
-      const boundModelAvailable = props.modelOptions.some(
-        (item) => item.value === props.model?.providerModelId,
-      )
+      const boundModelAvailable = availableModelIDs.value.has(props.model.providerModelId)
       form.value = {
         name: props.model.name,
         description: props.model.description,
@@ -126,15 +135,17 @@ async function submit(): Promise<void> {
       </div>
 
       <el-form-item :label="t('ai.agent.model')" prop="providerModelId">
-        <el-select-v2
-          v-model="form.providerModelId"
-          filterable
-          :options="modelOptions"
-          :placeholder="t('ai.agent.modelPlaceholder')"
-          :no-data-text="t('ai.agent.noModels')"
-          class="ai-agent-dialog__model"
-        />
-        <p class="ai-agent-dialog__hint">{{ t('ai.agent.modelHint') }}</p>
+        <div class="ai-agent-dialog__model">
+          <el-cascader
+            v-model="form.providerModelId"
+            :options="modelOptions"
+            :props="cascaderProps"
+            :placeholder="t('ai.agent.modelPlaceholder')"
+            :no-data-text="t('ai.agent.noModels')"
+            filterable
+            clearable
+          />
+        </div>
       </el-form-item>
 
       <el-alert
@@ -189,13 +200,11 @@ async function submit(): Promise<void> {
 
   &__model {
     width: 100%;
-  }
+    min-width: 0;
 
-  &__hint {
-    margin: 6px 0 0;
-    color: var(--admin-text-muted);
-    font-size: 12px;
-    line-height: 1.5;
+    :deep(.el-cascader) {
+      width: 100%;
+    }
   }
 }
 

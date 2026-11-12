@@ -275,8 +275,7 @@ export const enUS = {
   'ai.agent.systemPromptPlaceholder': 'Describe the role, boundaries, and response style',
   'ai.agent.systemPromptRequired': 'Enter a system prompt',
   'ai.agent.systemPromptMax': 'System prompt must be 20000 characters or fewer',
-  'ai.agent.modelPlaceholder': 'Select an enabled chat model',
-  'ai.agent.modelHint': 'Only enabled chat models with an official mapping and pricing are shown.',
+  'ai.agent.modelPlaceholder': 'Select a provider, then a chat model',
   'ai.agent.modelRequired': 'Select a chat model',
   'ai.agent.noModels': 'No chat models available. Configure and enable one in AI providers first.',
   'ai.agent.modelUnavailable':
