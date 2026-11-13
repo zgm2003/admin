@@ -92,6 +92,10 @@ const balanceText = computed(() => {
   const value = Number(raw)
   return Number.isFinite(value) ? value.toFixed(2) : raw
 })
+function formatTokenCount(value: number): string {
+  return new Intl.NumberFormat().format(value)
+}
+
 const welcomeTitle = computed(() =>
   activeConversation.value === null
     ? t('ai.workbench.startTitle')
@@ -671,6 +675,15 @@ onBeforeUnmount(() => {
                 <span class="ai-workbench__typing-dot" />
                 <span class="ai-workbench__typing-dot" />
               </span>
+              <div v-if="message.usage" class="ai-workbench__message-usage">
+                <span>{{
+                  t('ai.workbench.usageTokens', {
+                    input: formatTokenCount(message.usage.inputTokens),
+                    output: formatTokenCount(message.usage.outputTokens),
+                  })
+                }}</span>
+                <span class="ai-workbench__message-cost">¥{{ message.usage.amount }}</span>
+              </div>
               <div v-if="message.status === 4" class="ai-workbench__message-error">
                 {{ t('ai.workbench.messageFailed') }}
               </div>
@@ -888,28 +901,6 @@ onBeforeUnmount(() => {
 .ai-workbench__head span {
   color: var(--admin-text-muted);
   font-size: 12px;
-}
-
-.ai-workbench__balance {
-  display: flex;
-  align-items: flex-end;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ai-workbench__balance small {
-  color: var(--admin-text-muted);
-  font-size: 11px;
-}
-
-.ai-workbench__balance strong {
-  color: var(--el-color-primary);
-  font-family: var(--admin-font-data);
-  font-size: 15px;
-}
-
-.ai-workbench__balance.is-negative strong {
-  color: var(--el-color-danger);
 }
 
 .ai-workbench__main :deep(.el-alert) {
@@ -1628,6 +1619,26 @@ onBeforeUnmount(() => {
 
 .ai-workbench__plain {
   white-space: pre-wrap;
+}
+
+.ai-workbench__message-usage {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 9px;
+  padding-top: 7px;
+  border-top: 1px dashed #e8edf4;
+  color: #98a2b3;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.ai-workbench__message-cost {
+  color: #1d4ed8;
+  font-family: var(--admin-font-data);
+  font-size: 11px;
+  font-weight: 650;
 }
 
 .ai-workbench__message-error {

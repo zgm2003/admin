@@ -1,6 +1,6 @@
 <!-- 组件：对话 Markdown 渲染 -->
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import 'highlight.js/styles/github-dark.css'
@@ -30,6 +30,7 @@ hljs.registerLanguage('html', xml)
 hljs.registerLanguage('xml', xml)
 
 const props = defineProps<{ content: string; streaming?: boolean }>()
+const root = ref<HTMLElement | null>(null)
 
 const markdown = new MarkdownIt({
   html: false,
@@ -54,10 +55,39 @@ const rendered = computed(() => {
     ADD_ATTR: ['target', 'rel'],
   })
 })
+
+function placeCursor(): void {
+  const host = root.value
+  if (host === null) return
+  host.querySelector('.markdown-cursor')?.remove()
+  if (!props.streaming) return
+
+  let target: HTMLElement = host
+  while (target.lastChild !== null) {
+    const last = target.lastChild
+    if (last.nodeType !== Node.ELEMENT_NODE) break
+    const element = last as HTMLElement
+    if (element.tagName === 'HR' || element.tagName === 'IMG' || element.tagName === 'BR') break
+    target = element
+  }
+  const cursor = document.createElement('span')
+  cursor.className = 'markdown-cursor'
+  cursor.setAttribute('aria-hidden', 'true')
+  target.appendChild(cursor)
+}
+
+watch(
+  () => [props.content, props.streaming],
+  () => {
+    void nextTick(placeCursor)
+  },
+)
+onMounted(() => nextTick(placeCursor))
 </script>
 
 <template>
   <div
+    ref="root"
     class="markdown-content"
     :class="{ 'markdown-content--streaming': streaming }"
     v-html="rendered"
@@ -178,14 +208,14 @@ const rendered = computed(() => {
   border-top: 1px solid var(--admin-border);
 }
 
-.markdown-content--streaming::after {
+.markdown-content :deep(.markdown-cursor) {
   display: inline-block;
-  width: 7px;
-  height: 15px;
-  margin-left: 3px;
+  width: 6px;
+  height: 1em;
+  margin-left: 2px;
+  border-radius: 1px;
   background: var(--el-color-primary);
-  content: '';
-  vertical-align: text-bottom;
+  vertical-align: -2px;
   animation: markdown-cursor 1s steps(2, start) infinite;
 }
 

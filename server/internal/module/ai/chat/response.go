@@ -1,6 +1,10 @@
 package chat
 
-import "time"
+import (
+	"time"
+
+	"admin/server/internal/shared/money"
+)
 
 type AgentValue struct {
 	ID           int64  `json:"id"`
@@ -32,6 +36,14 @@ type MessageValue struct {
 	RunID       *int64        `json:"runId"`
 	DeliverySeq int64         `json:"deliverySeq"`
 	CreatedAt   time.Time     `json:"createdAt"`
+	Usage       *MessageUsage `json:"usage,omitempty"`
+}
+
+type MessageUsage struct {
+	InputTokens       int64  `json:"inputTokens"`
+	CachedInputTokens int64  `json:"cachedInputTokens"`
+	OutputTokens      int64  `json:"outputTokens"`
+	Amount            string `json:"amount"`
 }
 
 type ActiveRunValue struct {
@@ -64,10 +76,27 @@ func conversationValue(row ConversationView) ConversationValue {
 }
 
 func messageValue(row Message) MessageValue {
-	return MessageValue{
+	value := MessageValue{
 		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content, Status: row.Status,
 		RunID: row.RunID, DeliverySeq: row.DeliverySeq, CreatedAt: row.CreatedAt,
 	}
+	if row.Role == RoleAssistant && row.RunID != nil && row.UsageAmountUnits != nil {
+		amount, err := money.FormatRMBUnits(*row.UsageAmountUnits)
+		if err == nil {
+			usage := &MessageUsage{Amount: amount}
+			if row.UsageInputTokens != nil {
+				usage.InputTokens = *row.UsageInputTokens
+			}
+			if row.UsageCachedInputTokens != nil {
+				usage.CachedInputTokens = *row.UsageCachedInputTokens
+			}
+			if row.UsageOutputTokens != nil {
+				usage.OutputTokens = *row.UsageOutputTokens
+			}
+			value.Usage = usage
+		}
+	}
+	return value
 }
 
 func agentValue(row AgentRow) AgentValue {

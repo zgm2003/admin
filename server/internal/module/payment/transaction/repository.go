@@ -41,6 +41,9 @@ func (r *Repository) Count(ctx context.Context, query ListQuery) (int64, error) 
 	if r == nil || r.db == nil {
 		return 0, errors.New("transaction database missing")
 	}
+	if query.Personal {
+		return r.countPersonalLedger(ctx, query)
+	}
 	var total int64
 	db := transactionQuery(r.db.WithContext(ctx).Model(&Model{}), query)
 	return total, db.Count(&total).Error
@@ -50,16 +53,83 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Model, error)
 	if r == nil || r.db == nil {
 		return nil, errors.New("transaction database missing")
 	}
+	if query.Personal {
+		return r.listPersonalLedger(ctx, query)
+	}
 	var rows []Model
 	db := transactionQuery(r.db.WithContext(ctx).Table("payment_transaction"), query)
-	if query.Personal {
-		db = db.Select("payment_transaction.*")
-	} else {
-		db = db.Select("payment_transaction.*, ua.username AS username, ap.code AS platform_code").
-			Joins("LEFT JOIN user_account ua ON ua.id = payment_transaction.user_id").
-			Joins("LEFT JOIN permission_auth_platform ap ON ap.id = payment_transaction.platform_id")
-	}
+	db = db.Select("payment_transaction.*, ua.username AS username, ap.code AS platform_code").
+		Joins("LEFT JOIN user_account ua ON ua.id = payment_transaction.user_id").
+		Joins("LEFT JOIN permission_auth_platform ap ON ap.id = payment_transaction.platform_id")
 	err := db.Order("payment_transaction.created_at DESC, payment_transaction.id DESC").Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Scan(&rows).Error
+	return rows, err
+}
+
+func (r *Repository) countPersonalLedger(ctx context.Context, query ListQuery) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT
+			(SELECT COUNT(*) FROM payment_transaction WHERE user_id = ? AND platform_id = ?) +
+			(SELECT COUNT(*) FROM ai_usage_charge
+			 WHERE user_id = ? AND platform_id = ? AND status = 1 AND amount_units > 0
+			   AND balance_before_units IS NOT NULL AND balance_after_units IS NOT NULL)
+	`, query.UserID, query.PlatformID, query.UserID, query.PlatformID).Scan(&total).Error
+	return total, err
+}
+
+func (r *Repository) listPersonalLedger(ctx context.Context, query ListQuery) ([]Model, error) {
+	var rows []Model
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT ledger.* FROM (
+			SELECT
+				t.id AS id,
+				t.transaction_no AS transaction_no,
+				t.user_id AS user_id,
+				t.platform_id AS platform_id,
+				t.amount_units AS amount_units,
+				NULL::bigint AS balance_before_units,
+				t.balance_after_units AS balance_after_units,
+				t.order_id AS order_id,
+				t.redeem_code_id AS redeem_code_id,
+				t.created_at AS created_at,
+				t.updated_at AS updated_at,
+				CASE WHEN t.order_id IS NOT NULL THEN 1 ELSE 2 END AS source_type,
+				NULL::bigint AS ai_usage_charge_id,
+				NULL::bigint AS run_id,
+				NULL::text AS agent_name,
+				NULL::text AS model_name,
+				0::bigint AS input_tokens,
+				0::bigint AS output_tokens
+			FROM payment_transaction t
+			WHERE t.user_id = ? AND t.platform_id = ?
+			UNION ALL
+			SELECT
+				c.id AS id,
+				('AI-' || c.id) AS transaction_no,
+				c.user_id AS user_id,
+				c.platform_id AS platform_id,
+				(-c.amount_units) AS amount_units,
+				c.balance_before_units AS balance_before_units,
+				c.balance_after_units AS balance_after_units,
+				NULL::bigint AS order_id,
+				NULL::bigint AS redeem_code_id,
+				c.created_at AS created_at,
+				c.created_at AS updated_at,
+				3 AS source_type,
+				c.id AS ai_usage_charge_id,
+				c.run_id AS run_id,
+				r.agent_name AS agent_name,
+				r.model_name AS model_name,
+				c.input_tokens AS input_tokens,
+				c.output_tokens AS output_tokens
+			FROM ai_usage_charge c
+			JOIN ai_chat_run r ON r.id = c.run_id
+			WHERE c.user_id = ? AND c.platform_id = ? AND c.status = 1 AND c.amount_units > 0
+			  AND c.balance_before_units IS NOT NULL AND c.balance_after_units IS NOT NULL
+		) ledger
+		ORDER BY ledger.created_at DESC, ledger.source_type DESC, ledger.id DESC
+		LIMIT ? OFFSET ?
+	`, query.UserID, query.PlatformID, query.UserID, query.PlatformID, query.PageSize, (query.Page-1)*query.PageSize).Scan(&rows).Error
 	return rows, err
 }
 

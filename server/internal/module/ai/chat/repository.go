@@ -120,11 +120,18 @@ func (r *Repository) DeleteConversation(ctx context.Context, platformID, userID,
 
 func (r *Repository) ListMessages(ctx context.Context, conversationID int64, beforeSeq int32, limit int) ([]Message, error) {
 	rows := make([]Message, 0)
-	db := r.db.WithContext(ctx).Where("conversation_id = ?", conversationID)
+	db := r.db.WithContext(ctx).
+		Table("ai_chat_message AS m").
+		Select(`m.*, c.amount_units AS usage_amount_units,
+			c.input_tokens AS usage_input_tokens,
+			c.cached_input_tokens AS usage_cached_input_tokens,
+			c.output_tokens AS usage_output_tokens`).
+		Joins("LEFT JOIN ai_usage_charge c ON c.run_id = m.run_id AND c.status = 1").
+		Where("m.conversation_id = ?", conversationID)
 	if beforeSeq > 0 {
-		db = db.Where("seq < ?", beforeSeq)
+		db = db.Where("m.seq < ?", beforeSeq)
 	}
-	err := db.Order("seq DESC").Limit(limit).Find(&rows).Error
+	err := db.Order("m.seq DESC").Limit(limit).Scan(&rows).Error
 	return rows, err
 }
 

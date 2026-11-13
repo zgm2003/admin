@@ -43,17 +43,31 @@ const pagination = computed<TablePaginationState>(() => ({
   total: total.value,
 }))
 const columns = computed<TableColumn<PersonalTransaction>[]>(() => [
-  { prop: 'transactionNo', label: t('payment.transaction.transactionNo'), minWidth: 190 },
-  { key: 'sourceType', label: t('payment.transaction.sourceType'), width: 120 },
-  { prop: 'amount', label: t('payment.transaction.amount'), width: 130 },
-  { prop: 'balanceBefore', label: t('payment.transaction.balanceBefore'), width: 140 },
-  { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 140 },
-  { key: 'createdAt', label: t('common.createdAt'), minWidth: 180 },
+  { prop: 'transactionNo', label: t('payment.transaction.transactionNo'), minWidth: 170 },
+  { key: 'sourceType', label: t('payment.transaction.sourceType'), width: 110 },
+  { key: 'description', label: t('payment.transaction.description'), minWidth: 220 },
+  { key: 'amount', label: t('payment.transaction.amount'), width: 130 },
+  { prop: 'balanceBefore', label: t('payment.transaction.balanceBefore'), width: 130 },
+  { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 130 },
+  { key: 'createdAt', label: t('common.createdAt'), minWidth: 170 },
 ])
 function transactionSource(value: number): string {
   if (value === 1) return t('payment.transaction.payment')
   if (value === 2) return t('payment.transaction.redeemCode')
+  if (value === 3) return t('payment.transaction.aiUsage')
   return String(value)
+}
+function isDebit(row: PersonalTransaction): boolean {
+  return Number(row.amount) < 0
+}
+function amountText(row: PersonalTransaction): string {
+  return row.amount.startsWith('-') ? `-¥${row.amount.slice(1)}` : `+¥${row.amount}`
+}
+function tokenSummary(row: PersonalTransaction): string {
+  return t('payment.transaction.tokens', {
+    input: new Intl.NumberFormat(locale.value).format(row.inputTokens ?? 0),
+    output: new Intl.NumberFormat(locale.value).format(row.outputTokens ?? 0),
+  })
 }
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
@@ -228,7 +242,7 @@ onBeforeUnmount(() => {
       :data="rows"
       :loading="loading"
       :pagination="pagination"
-      :row-key="(row: PersonalTransaction) => String(row.id)"
+      :row-key="(row: PersonalTransaction) => `${row.sourceType}-${row.id}`"
       :result-state="state()"
       :status-message="loadError"
       :aria-label="t('payment.transaction.title')"
@@ -236,9 +250,24 @@ onBeforeUnmount(() => {
       @update:pagination="updatePagination"
     >
       <template #cell-sourceType="{ row }: { row: PersonalTransaction }">
-        <el-tag size="small" effect="plain" type="info">{{
-          transactionSource(row.sourceType)
-        }}</el-tag>
+        <el-tag size="small" effect="plain" :type="row.sourceType === 3 ? 'warning' : 'info'">
+          {{ transactionSource(row.sourceType) }}
+        </el-tag>
+      </template>
+      <template #cell-description="{ row }: { row: PersonalTransaction }">
+        <div v-if="row.sourceType === 3" class="payment-my-wallet-page__ledger-detail">
+          <strong>{{ row.agentName }} · {{ row.modelName }}</strong>
+          <span>
+            {{ tokenSummary(row) }} ·
+            {{ t('payment.transaction.run', { id: row.runId ?? '-' }) }}
+          </span>
+        </div>
+        <span v-else class="payment-my-wallet-page__muted">—</span>
+      </template>
+      <template #cell-amount="{ row }: { row: PersonalTransaction }">
+        <span :class="{ 'payment-my-wallet-page__debit': isDebit(row) }">{{
+          amountText(row)
+        }}</span>
       </template>
       <template #cell-createdAt="{ row }: { row: PersonalTransaction }">{{
         formatTime(row.createdAt)
@@ -298,5 +327,37 @@ onBeforeUnmount(() => {
   margin: 8px 0 0;
   font-size: 15px;
   font-weight: 600;
+}
+
+.payment-my-wallet-page__ledger-detail {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.payment-my-wallet-page__ledger-detail strong,
+.payment-my-wallet-page__ledger-detail span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payment-my-wallet-page__ledger-detail strong {
+  color: var(--el-text-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payment-my-wallet-page__ledger-detail span,
+.payment-my-wallet-page__muted {
+  color: var(--el-text-color-secondary);
+  font-size: 10px;
+}
+
+.payment-my-wallet-page__debit {
+  color: var(--el-color-danger);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
 }
 </style>

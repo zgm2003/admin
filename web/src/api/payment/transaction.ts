@@ -11,6 +11,11 @@ export interface PersonalTransaction {
   balanceBefore: string
   balanceAfter: string
   createdAt: string
+  runId?: number
+  agentName?: string
+  modelName?: string
+  inputTokens?: number
+  outputTokens?: number
 }
 
 export interface Transaction extends PersonalTransaction {
@@ -27,7 +32,9 @@ export interface TransactionQuery extends PageRequest {
 }
 
 export function getTransactions(query: TransactionQuery): Promise<PageResult<Transaction>> {
-  return request.get<PageResult<Transaction>>('/api/admin/v1/payment/transaction', { params: query })
+  return request.get<PageResult<Transaction>>('/api/admin/v1/payment/transaction', {
+    params: query,
+  })
 }
 
 export function getTransaction(id: number): Promise<Transaction> {

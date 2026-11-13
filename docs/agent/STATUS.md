@@ -1836,3 +1836,11 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 修复 Markdown 代码高亮在 Vite dev 下报 `highlight.js/lib/core` 无 default export 的问题：把 `highlight.js/lib/core`、`markdown-it`、`dompurify` 加入 `optimizeDeps.include`，避免 Vite 直接转换 highlight.js 的 CJS core。
 - 余额统一显示两位小数；输入框占位与快捷键提示去重；用户消息气泡宽度修正，避免短消息被挤成多行。
 - 验证通过：`pnpm typecheck`、工作台 ESLint、`pnpm check:architecture`、`pnpm build`；浏览器检查 `htmlScroll === htmlClient`，工作台外层无滚动，控制台无 Vite 运行错误。
+
+### 个人资金流水补全与对话消费展示（2026-11-13）
+
+- 我的钱包“资金流水”改为完整个人账本：`payment_transaction` 的充值/兑换记录与 `ai_usage_charge` 的已结算 AI 扣费按时间统一分页。AI 行来源为“AI 消费”，金额为负数，展示智能体、模型、运行号、输入/输出 token、扣费前后余额。
+- 不修改 `payment_transaction` 的正数金额约束，也不往支付表伪造负数记录；个人账本在读取层合并两类账本，管理端支付流水保持原语义。
+- AI 消息接口新增 `usage` 字段：助手消息返回本次运行的输入 token、输出 token、缓存 token 和实际扣费金额；工作台在每条助手回复下方直接展示“本次消耗 … tokens · ¥…”。
+- 修复流式 Markdown 光标位置：不再用容器 `::after`（列表末尾会换行到左侧），改为在最后一段文本的 DOM 内插入光标，列表、段落、代码块末尾都能跟随正文。
+- 验证：`payment/transaction` 单测覆盖 AI 负数金额和余额快照；消息投影单测覆盖 usage；真实接口返回 AI 行（`sourceType=3`、负金额、token、runId）并通过前端 typecheck、ESLint、架构检查、构建。

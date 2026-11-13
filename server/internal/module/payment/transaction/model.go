@@ -15,6 +15,18 @@ type Model struct {
 	UpdatedAt         time.Time `gorm:"column:updated_at;type:timestamptz;not null"`
 	Username          string    `gorm:"->;column:username"`
 	PlatformCode      string    `gorm:"->;column:platform_code"`
+
+	// Personal ledger projections. AI settlement stays in ai_usage_charge; the
+	// personal wallet statement reads both sources without weakening the
+	// positive-amount constraints on payment_transaction.
+	SourceType         SourceType `gorm:"->;column:source_type"`
+	BalanceBeforeUnits *int64     `gorm:"->;column:balance_before_units"`
+	AIUsageChargeID    *int64     `gorm:"->;column:ai_usage_charge_id"`
+	RunID              *int64     `gorm:"->;column:run_id"`
+	AgentName          string     `gorm:"->;column:agent_name"`
+	ModelName          string     `gorm:"->;column:model_name"`
+	InputTokens        int64      `gorm:"->;column:input_tokens"`
+	OutputTokens       int64      `gorm:"->;column:output_tokens"`
 }
 
 func (Model) TableName() string { return "payment_transaction" }

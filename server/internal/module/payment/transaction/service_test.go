@@ -69,6 +69,40 @@ func TestServiceRejectsOverflowingBalanceBefore(t *testing.T) {
 	}
 }
 
+func TestServiceProjectsAIUsageAsNegativeLedgerEntry(t *testing.T) {
+	before, after := int64(998_152_000), int64(996_336_000)
+	chargeID, runID := int64(11), int64(9)
+	repo := &fakeTransactionRepository{value: Model{
+		ID: 11, TransactionNo: "AI-11", UserID: 7, PlatformID: 2,
+		AmountUnits: -1_816_000, BalanceBeforeUnits: &before, BalanceAfterUnits: after,
+		SourceType: SourceAIUsage, AIUsageChargeID: &chargeID, RunID: &runID,
+		AgentName: "测试助手", ModelName: "GPT-5.6 Sol", InputTokens: 4400, OutputTokens: 44,
+		CreatedAt: time.Unix(1, 0),
+	}}
+	got, err := NewService(repo).Get(context.Background(), 11)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Amount != "-0.01816" || got.BalanceBefore != "9.98152" || got.BalanceAfter != "9.96336" || got.SourceType != SourceAIUsage {
+		t.Fatalf("unexpected AI ledger projection: %+v", got)
+	}
+	if got.RunID == nil || *got.RunID != 9 || got.AgentName != "测试助手" || got.InputTokens != 4400 || got.OutputTokens != 44 {
+		t.Fatalf("AI ledger context missing: %+v", got)
+	}
+}
+
+func TestServiceRejectsAIUsageWithoutBalanceSnapshot(t *testing.T) {
+	chargeID, runID := int64(11), int64(9)
+	repo := &fakeTransactionRepository{value: Model{
+		ID: 11, TransactionNo: "AI-11", UserID: 7, PlatformID: 2,
+		AmountUnits: -1_816_000, BalanceAfterUnits: 996_336_000,
+		SourceType: SourceAIUsage, AIUsageChargeID: &chargeID, RunID: &runID,
+	}}
+	if _, err := NewService(repo).Get(context.Background(), 11); err == nil {
+		t.Fatal("AI ledger without balance-before snapshot must be rejected")
+	}
+}
+
 func TestServiceListPreservesEmptyListAndPagination(t *testing.T) {
 	repo := &fakeTransactionRepository{}
 	got, err := NewService(repo).List(context.Background(), ListQuery{UserID: 7, Page: 2, PageSize: 20})

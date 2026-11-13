@@ -12,9 +12,12 @@ type SourceType int16
 const (
 	SourcePayment    SourceType = 1
 	SourceRedeemCode SourceType = 2
+	SourceAIUsage    SourceType = 3
 )
 
-func (v SourceType) Valid() bool { return v == SourcePayment || v == SourceRedeemCode }
+func (v SourceType) Valid() bool {
+	return v == SourcePayment || v == SourceRedeemCode || v == SourceAIUsage
+}
 
 type repository interface {
 	Find(context.Context, int64) (Model, error)

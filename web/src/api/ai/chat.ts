@@ -22,6 +22,13 @@ export interface ChatConversation {
   updatedAt: string
 }
 
+export interface ChatMessageUsage {
+  inputTokens: number
+  cachedInputTokens: number
+  outputTokens: number
+  amount: string
+}
+
 export interface ChatMessage {
   id: number
   seq: number
@@ -31,6 +38,7 @@ export interface ChatMessage {
   runId: number | null
   deliverySeq: number
   createdAt: string
+  usage?: ChatMessageUsage
 }
 
 export interface ChatActiveRun {
