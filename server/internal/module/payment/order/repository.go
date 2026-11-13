@@ -58,6 +58,18 @@ func orderQuery(db *gorm.DB, query ListQuery) *gorm.DB {
 	if query.PlatformID > 0 {
 		db = db.Where("payment_order.platform_id = ?", query.PlatformID)
 	}
+	if query.Keyword != "" {
+		db = db.Where("payment_order.order_no ILIKE ?", "%"+query.Keyword+"%")
+	}
+	if query.Status != nil {
+		db = db.Where("payment_order.status = ?", *query.Status)
+	}
+	if query.From != nil {
+		db = db.Where("payment_order.created_at >= ?", *query.From)
+	}
+	if query.To != nil {
+		db = db.Where("payment_order.created_at <= ?", *query.To)
+	}
 	return db
 }
 

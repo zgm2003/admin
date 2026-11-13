@@ -26,7 +26,16 @@ export interface Transaction extends PersonalTransaction {
   orderId: number | null
 }
 
-export interface TransactionQuery extends PageRequest {
+export type LedgerFlow = 'credit' | 'debit'
+
+export interface PersonalTransactionQuery extends PageRequest {
+  flow?: LedgerFlow
+  keyword?: string
+  from?: string
+  to?: string
+}
+
+export interface TransactionQuery extends PersonalTransactionQuery {
   userId?: number
   platformId?: number
 }
@@ -41,7 +50,9 @@ export function getTransaction(id: number): Promise<Transaction> {
   return request.get<Transaction>(`/api/admin/v1/payment/transaction/${id}`)
 }
 
-export function getMyTransactions(query: PageRequest): Promise<PageResult<PersonalTransaction>> {
+export function getMyTransactions(
+  query: PersonalTransactionQuery,
+): Promise<PageResult<PersonalTransaction>> {
   return request.get<PageResult<PersonalTransaction>>('/api/admin/v1/payment/wallet/transaction', {
     params: query,
   })

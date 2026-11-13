@@ -5,13 +5,20 @@ import { useI18n } from 'vue-i18n'
 
 import * as redeemApi from '@/api/payment/redeemCode'
 import { getMyTransactions } from '@/api/payment/transaction'
-import type { PersonalTransaction } from '@/api/payment/transaction'
+import type { PersonalTransaction, PersonalTransactionQuery } from '@/api/payment/transaction'
 import { getMyWallet } from '@/api/payment/wallet'
 import type { MyWallet } from '@/api/payment/wallet'
+import type { SearchDateRange, SearchField, SearchFormModel } from '@/components/AppSearch'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
 import AppDialog from '@/components/AppDialog/index.vue'
+
+interface LedgerFilters {
+  flow: 'all' | 'credit' | 'debit'
+  keyword: string
+  timeRange: SearchDateRange
+}
 
 const emit = defineEmits<{ recharge: [] }>()
 const { t, locale } = useI18n()
@@ -20,6 +27,11 @@ const canDetail = computed(() => access.hasPermission('payment:myWallet:detail')
 const canList = computed(() => access.hasPermission('payment:myWallet:list'))
 const canRecharge = computed(() => access.hasPermission('payment:recharge:view'))
 const canRedeem = computed(() => access.hasPermission('payment:myWallet:redeem'))
+const filters = ref<SearchFormModel<LedgerFilters>>({
+  flow: 'all',
+  keyword: '',
+  timeRange: [],
+})
 const wallet = ref<MyWallet | null>(null)
 const walletLoading = ref(false)
 const walletError = ref('')
@@ -37,6 +49,39 @@ let sequence = 0
 let walletSequence = 0
 let alive = true
 
+const searchFields = computed<SearchField<LedgerFilters>[]>(() => [
+  {
+    key: 'flow',
+    type: 'select-v2',
+    label: t('payment.transaction.sourceType'),
+    placeholder: t('payment.transaction.allSources'),
+    resetValue: 'all',
+    width: 150,
+    options: [
+      { label: t('payment.transaction.allSources'), value: 'all' },
+      { label: t('payment.transaction.credit'), value: 'credit' },
+      { label: t('payment.transaction.debit'), value: 'debit' },
+    ],
+  },
+  {
+    key: 'keyword',
+    type: 'input',
+    label: t('payment.transaction.keyword'),
+    placeholder: t('payment.transaction.keywordPlaceholder'),
+    resetValue: '',
+    width: 200,
+  },
+  {
+    key: 'timeRange',
+    type: 'date-range',
+    label: t('payment.transaction.timeRange'),
+    resetValue: [],
+    width: 360,
+    valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',
+    startPlaceholder: t('common.startTime'),
+    endPlaceholder: t('common.endTime'),
+  },
+])
 const pagination = computed<TablePaginationState>(() => ({
   currentPage: query.value.page,
   pageSize: query.value.pageSize,
@@ -91,13 +136,28 @@ async function loadWallet(): Promise<void> {
     if (alive && current === walletSequence) walletLoading.value = false
   }
 }
+function loadQuery(): PersonalTransactionQuery {
+  const next: PersonalTransactionQuery = {
+    page: query.value.page,
+    pageSize: query.value.pageSize,
+  }
+  if (filters.value.flow !== 'all') next.flow = filters.value.flow
+  const keyword = filters.value.keyword.trim()
+  if (keyword !== '') next.keyword = keyword
+  const [from, to] = filters.value.timeRange
+  if (from !== undefined && to !== undefined) {
+    next.from = from
+    next.to = to
+  }
+  return next
+}
 async function loadTransactions(): Promise<void> {
   if (!canList.value) return
   const current = ++sequence
   loading.value = true
   loadError.value = ''
   try {
-    const result = await getMyTransactions(query.value)
+    const result = await getMyTransactions(loadQuery())
     if (alive && current === sequence && canList.value) {
       rows.value = result.list
       total.value = result.total
@@ -111,6 +171,14 @@ async function loadTransactions(): Promise<void> {
   } finally {
     if (alive && current === sequence) loading.value = false
   }
+}
+function search(): void {
+  query.value = { page: 1, pageSize: query.value.pageSize }
+  void loadTransactions()
+}
+function reset(): void {
+  filters.value = { flow: 'all', keyword: '', timeRange: [] }
+  search()
 }
 function openRedeem(): void {
   if (!canRedeem.value) return
@@ -197,9 +265,14 @@ onBeforeUnmount(() => {
         </el-button>
       </div>
     </section>
-    <h2 v-if="canList" class="payment-my-wallet-page__section-title">
-      {{ t('payment.transaction.title') }}
-    </h2>
+    <AppSearch
+      v-if="canList"
+      v-model="filters"
+      :fields="searchFields"
+      :query-label="t('common.search')"
+      @query="search"
+      @reset="reset"
+    />
     <AppDialog v-model="redeemVisible" :title="t('payment.redeemCode.redeemTitle')" width="520px">
       <el-form label-position="top" @submit.prevent="redeem">
         <el-form-item :label="t('payment.redeemCode.code')">
@@ -249,6 +322,11 @@ onBeforeUnmount(() => {
       @refresh="loadTransactions"
       @update:pagination="updatePagination"
     >
+      <template #toolbar-left>
+        <h2 class="payment-my-wallet-page__section-title">
+          {{ t('payment.transaction.title') }}
+        </h2>
+      </template>
       <template #cell-sourceType="{ row }: { row: PersonalTransaction }">
         <el-tag size="small" effect="plain" :type="row.sourceType === 3 ? 'warning' : 'info'">
           {{ transactionSource(row.sourceType) }}
@@ -324,7 +402,7 @@ onBeforeUnmount(() => {
   margin-left: 0;
 }
 .payment-my-wallet-page__section-title {
-  margin: 8px 0 0;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
 }

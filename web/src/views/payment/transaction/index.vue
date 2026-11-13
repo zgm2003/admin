@@ -6,19 +6,29 @@ import { useI18n } from 'vue-i18n'
 import * as api from '@/api/payment/transaction'
 import type { Transaction, TransactionQuery } from '@/api/payment/transaction'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
-import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import type { SearchDateRange, SearchField, SearchFormModel } from '@/components/AppSearch'
 import AppDialog from '@/components/AppDialog/index.vue'
 import { usePermissionStore } from '@/store/permission'
 import { formatTime } from '@/utils/datetime'
+
+interface LedgerFilters {
+  userId: string
+  platformId: string
+  keyword: string
+  timeRange: SearchDateRange
+}
 
 const { t, locale } = useI18n()
 const access = usePermissionStore()
 const canList = computed(() => access.hasPermission('payment:transaction:list'))
 const canDetail = computed(() => access.hasPermission('payment:transaction:detail'))
-const filters = ref<SearchFormModel<{ userId: string; platformId: string }>>({
+const filters = ref<SearchFormModel<LedgerFilters>>({
   userId: '',
   platformId: '',
+  keyword: '',
+  timeRange: [],
 })
+const activeFlow = ref<'all' | 'credit' | 'debit'>('all')
 const query = ref<TransactionQuery>({ page: 1, pageSize: 20 })
 const rows = ref<Transaction[]>([])
 const total = ref(0)
@@ -29,14 +39,14 @@ const detailVisible = ref(false)
 let sequence = 0
 let alive = true
 
-const searchFields = computed<SearchField<{ userId: string; platformId: string }>[]>(() => [
+const searchFields = computed<SearchField<LedgerFilters>[]>(() => [
   {
     key: 'userId',
     type: 'input',
     label: t('payment.transaction.userId'),
     placeholder: t('payment.wallet.userIdPlaceholder'),
     resetValue: '',
-    width: 180,
+    width: 150,
   },
   {
     key: 'platformId',
@@ -44,7 +54,25 @@ const searchFields = computed<SearchField<{ userId: string; platformId: string }
     label: t('payment.transaction.platformId'),
     placeholder: t('payment.order.platformIdPlaceholder'),
     resetValue: '',
-    width: 180,
+    width: 150,
+  },
+  {
+    key: 'keyword',
+    type: 'input',
+    label: t('payment.transaction.keyword'),
+    placeholder: t('payment.transaction.keywordPlaceholder'),
+    resetValue: '',
+    width: 190,
+  },
+  {
+    key: 'timeRange',
+    type: 'date-range',
+    label: t('payment.transaction.timeRange'),
+    resetValue: [],
+    width: 360,
+    valueFormat: 'YYYY-MM-DDTHH:mm:ssZ',
+    startPlaceholder: t('common.startTime'),
+    endPlaceholder: t('common.endTime'),
   },
 ])
 const pagination = computed<TablePaginationState>(() => ({
@@ -99,6 +127,14 @@ function loadQuery(): TransactionQuery {
   const platformId = positive(filters.value.platformId)
   if (userId !== undefined) next.userId = userId
   if (platformId !== undefined) next.platformId = platformId
+  if (activeFlow.value !== 'all') next.flow = activeFlow.value
+  const keyword = filters.value.keyword.trim()
+  if (keyword !== '') next.keyword = keyword
+  const [from, to] = filters.value.timeRange
+  if (from !== undefined && to !== undefined) {
+    next.from = from
+    next.to = to
+  }
   return next
 }
 async function load(): Promise<void> {
@@ -127,7 +163,11 @@ function search(): void {
   void load()
 }
 function reset(): void {
-  filters.value = { userId: '', platformId: '' }
+  filters.value = { userId: '', platformId: '', keyword: '', timeRange: [] }
+  activeFlow.value = 'all'
+  search()
+}
+function onFlowChange(_name: string | number): void {
   search()
 }
 function updatePagination(value: TablePaginationState): void {
@@ -169,6 +209,16 @@ onBeforeUnmount(() => {
 
 <template>
   <AppPage class="payment-transaction-page">
+    <el-tabs
+      v-model="activeFlow"
+      class="payment-transaction-page__flow-tabs"
+      data-testid="payment-transaction-flow-tabs"
+      @tab-change="onFlowChange"
+    >
+      <el-tab-pane name="all" :label="t('payment.transaction.allFlows')" />
+      <el-tab-pane name="credit" :label="t('payment.transaction.credit')" />
+      <el-tab-pane name="debit" :label="t('payment.transaction.debit')" />
+    </el-tabs>
     <AppSearch
       v-model="filters"
       class="management-page__filters"
@@ -270,6 +320,10 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .payment-transaction-page {
   min-width: 0;
+}
+
+.payment-transaction-page__flow-tabs :deep(.el-tabs__header) {
+  margin: 0;
 }
 
 .payment-transaction-page__usage {

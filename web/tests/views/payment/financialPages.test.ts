@@ -190,6 +190,23 @@ it('loads management transactions only with the list action', async () => {
   expect(wrapper.findAll('button').some((button) => button.text() === '查看')).toBe(false)
 })
 
+it('switches the admin ledger between recharge and AI spend tabs', async () => {
+  permissions(['payment:transaction:list'])
+  const wrapper = await page(TransactionPage)
+  await wrapper.get('#tab-debit').trigger('click')
+  await flushPromises()
+  expect(vi.mocked(transactionApi.getTransactions).mock.lastCall?.[0]).toMatchObject({
+    flow: 'debit',
+    page: 1,
+  })
+  await wrapper.get('#tab-credit').trigger('click')
+  await flushPromises()
+  expect(vi.mocked(transactionApi.getTransactions).mock.lastCall?.[0]).toMatchObject({
+    flow: 'credit',
+    page: 1,
+  })
+})
+
 it('renders admin orders and keeps callback audit behind its own permission', async () => {
   permissions(['payment:order:list', 'payment:order:detail'])
   const wrapper = await page(OrderPage)

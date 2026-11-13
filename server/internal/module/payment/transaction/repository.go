@@ -3,6 +3,8 @@ package transaction
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -47,33 +49,81 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Model, error)
 	return r.listAdminLedger(ctx, query)
 }
 
+type ledgerFilter struct {
+	where string
+	args  []any
+}
+
+func makeLedgerFilter(alias string, query ListQuery, personal bool) ledgerFilter {
+	conditions := make([]string, 0, 8)
+	args := make([]any, 0, 8)
+	if personal {
+		conditions = append(conditions, alias+".user_id = ?", alias+".platform_id = ?")
+		args = append(args, query.UserID, query.PlatformID)
+	} else {
+		if query.UserID > 0 {
+			conditions = append(conditions, alias+".user_id = ?")
+			args = append(args, query.UserID)
+		}
+		if query.PlatformID > 0 {
+			conditions = append(conditions, alias+".platform_id = ?")
+			args = append(args, query.PlatformID)
+		}
+	}
+	if (query.Flow == FlowCredit && alias == "c") || (query.Flow == FlowDebit && alias == "t") {
+		conditions = append(conditions, "1 = 0")
+	}
+	if query.Keyword != "" {
+		if alias == "c" {
+			conditions = append(conditions, "('AI-' || c.id) ILIKE ?")
+		} else {
+			conditions = append(conditions, "t.transaction_no ILIKE ?")
+		}
+		args = append(args, "%"+query.Keyword+"%")
+	}
+	if query.From != nil {
+		conditions = append(conditions, alias+".created_at >= ?")
+		args = append(args, *query.From)
+	}
+	if query.To != nil {
+		conditions = append(conditions, alias+".created_at <= ?")
+		args = append(args, *query.To)
+	}
+	if len(conditions) == 0 {
+		conditions = append(conditions, "1 = 1")
+	}
+	return ledgerFilter{where: strings.Join(conditions, " AND "), args: args}
+}
+
 func (r *Repository) countAdminLedger(ctx context.Context, query ListQuery) (int64, error) {
-	payments := r.db.WithContext(ctx).Table("payment_transaction")
-	charges := r.db.WithContext(ctx).Table("ai_usage_charge")
-	if query.UserID > 0 {
-		payments = payments.Where("user_id = ?", query.UserID)
-		charges = charges.Where("user_id = ?", query.UserID)
-	}
-	if query.PlatformID > 0 {
-		payments = payments.Where("platform_id = ?", query.PlatformID)
-		charges = charges.Where("platform_id = ?", query.PlatformID)
-	}
-	var paymentTotal, chargeTotal int64
-	if err := payments.Count(&paymentTotal).Error; err != nil {
-		return 0, err
-	}
-	if err := charges.
-		Where("status = 1 AND amount_units > 0").
-		Where("balance_before_units IS NOT NULL AND balance_after_units IS NOT NULL").
-		Count(&chargeTotal).Error; err != nil {
-		return 0, err
-	}
-	return paymentTotal + chargeTotal, nil
+	return r.countLedger(ctx, query, false)
+}
+
+func (r *Repository) countPersonalLedger(ctx context.Context, query ListQuery) (int64, error) {
+	return r.countLedger(ctx, query, true)
+}
+
+func (r *Repository) countLedger(ctx context.Context, query ListQuery, personal bool) (int64, error) {
+	payments := makeLedgerFilter("t", query, personal)
+	charges := makeLedgerFilter("c", query, personal)
+	sql := fmt.Sprintf(`
+		SELECT
+			(SELECT COUNT(*) FROM payment_transaction t WHERE %s) +
+			(SELECT COUNT(*) FROM ai_usage_charge c
+			 JOIN ai_chat_run r ON r.id = c.run_id
+			 WHERE %s AND c.status = 1 AND c.amount_units > 0
+			   AND c.balance_before_units IS NOT NULL AND c.balance_after_units IS NOT NULL)
+	`, payments.where, charges.where)
+	args := append(append([]any{}, payments.args...), charges.args...)
+	var total int64
+	err := r.db.WithContext(ctx).Raw(sql, args...).Scan(&total).Error
+	return total, err
 }
 
 func (r *Repository) listAdminLedger(ctx context.Context, query ListQuery) ([]Model, error) {
-	var rows []Model
-	err := r.db.WithContext(ctx).Raw(`
+	payments := makeLedgerFilter("t", query, false)
+	charges := makeLedgerFilter("c", query, false)
+	sql := fmt.Sprintf(`
 		SELECT ledger.*, ua.username AS username, ap.code AS platform_code
 		FROM (
 			SELECT
@@ -96,7 +146,7 @@ func (r *Repository) listAdminLedger(ctx context.Context, query ListQuery) ([]Mo
 				0::bigint AS input_tokens,
 				0::bigint AS output_tokens
 			FROM payment_transaction t
-			WHERE (? = 0 OR t.user_id = ?) AND (? = 0 OR t.platform_id = ?)
+			WHERE %s
 			UNION ALL
 			SELECT
 				c.id AS id,
@@ -119,37 +169,25 @@ func (r *Repository) listAdminLedger(ctx context.Context, query ListQuery) ([]Mo
 				c.output_tokens AS output_tokens
 			FROM ai_usage_charge c
 			JOIN ai_chat_run r ON r.id = c.run_id
-			WHERE (? = 0 OR c.user_id = ?) AND (? = 0 OR c.platform_id = ?)
-			  AND c.status = 1 AND c.amount_units > 0
+			WHERE %s AND c.status = 1 AND c.amount_units > 0
 			  AND c.balance_before_units IS NOT NULL AND c.balance_after_units IS NOT NULL
 		) ledger
 		LEFT JOIN user_account ua ON ua.id = ledger.user_id
 		LEFT JOIN permission_auth_platform ap ON ap.id = ledger.platform_id
 		ORDER BY ledger.created_at DESC, ledger.source_type DESC, ledger.id DESC
 		LIMIT ? OFFSET ?
-	`,
-		query.UserID, query.UserID, query.PlatformID, query.PlatformID,
-		query.UserID, query.UserID, query.PlatformID, query.PlatformID,
-		query.PageSize, (query.Page-1)*query.PageSize,
-	).Scan(&rows).Error
+	`, payments.where, charges.where)
+	args := append(append([]any{}, payments.args...), charges.args...)
+	args = append(args, query.PageSize, (query.Page-1)*query.PageSize)
+	var rows []Model
+	err := r.db.WithContext(ctx).Raw(sql, args...).Scan(&rows).Error
 	return rows, err
 }
 
-func (r *Repository) countPersonalLedger(ctx context.Context, query ListQuery) (int64, error) {
-	var total int64
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT
-			(SELECT COUNT(*) FROM payment_transaction WHERE user_id = ? AND platform_id = ?) +
-			(SELECT COUNT(*) FROM ai_usage_charge
-			 WHERE user_id = ? AND platform_id = ? AND status = 1 AND amount_units > 0
-			   AND balance_before_units IS NOT NULL AND balance_after_units IS NOT NULL)
-	`, query.UserID, query.PlatformID, query.UserID, query.PlatformID).Scan(&total).Error
-	return total, err
-}
-
 func (r *Repository) listPersonalLedger(ctx context.Context, query ListQuery) ([]Model, error) {
-	var rows []Model
-	err := r.db.WithContext(ctx).Raw(`
+	payments := makeLedgerFilter("t", query, true)
+	charges := makeLedgerFilter("c", query, true)
+	sql := fmt.Sprintf(`
 		SELECT ledger.* FROM (
 			SELECT
 				t.id AS id,
@@ -171,7 +209,7 @@ func (r *Repository) listPersonalLedger(ctx context.Context, query ListQuery) ([
 				0::bigint AS input_tokens,
 				0::bigint AS output_tokens
 			FROM payment_transaction t
-			WHERE t.user_id = ? AND t.platform_id = ?
+			WHERE %s
 			UNION ALL
 			SELECT
 				c.id AS id,
@@ -194,12 +232,16 @@ func (r *Repository) listPersonalLedger(ctx context.Context, query ListQuery) ([
 				c.output_tokens AS output_tokens
 			FROM ai_usage_charge c
 			JOIN ai_chat_run r ON r.id = c.run_id
-			WHERE c.user_id = ? AND c.platform_id = ? AND c.status = 1 AND c.amount_units > 0
+			WHERE %s AND c.status = 1 AND c.amount_units > 0
 			  AND c.balance_before_units IS NOT NULL AND c.balance_after_units IS NOT NULL
 		) ledger
 		ORDER BY ledger.created_at DESC, ledger.source_type DESC, ledger.id DESC
 		LIMIT ? OFFSET ?
-	`, query.UserID, query.PlatformID, query.UserID, query.PlatformID, query.PageSize, (query.Page-1)*query.PageSize).Scan(&rows).Error
+	`, payments.where, charges.where)
+	args := append(append([]any{}, payments.args...), charges.args...)
+	args = append(args, query.PageSize, (query.Page-1)*query.PageSize)
+	var rows []Model
+	err := r.db.WithContext(ctx).Raw(sql, args...).Scan(&rows).Error
 	return rows, err
 }
 

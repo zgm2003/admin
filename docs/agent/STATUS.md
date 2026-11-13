@@ -1844,3 +1844,11 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - AI 消息接口新增 `usage` 字段：助手消息返回本次运行的输入 token、输出 token、缓存 token 和实际扣费金额；工作台在每条助手回复下方直接展示“本次消耗 … tokens · ¥…”。
 - 修复流式 Markdown 光标位置：不再用容器 `::after`（列表末尾会换行到左侧），改为在最后一段文本的 DOM 内插入光标，列表、段落、代码块末尾都能跟随正文。
 - 验证：`payment/transaction` 单测覆盖 AI 负数金额和余额快照；消息投影单测覆盖 usage；真实接口返回 AI 行（`sourceType=3`、负金额、token、runId）并通过前端 typecheck、ESLint、架构检查、构建。
+
+### 钱包 Tab 拆分与流水筛选（2026-11-13）
+
+- 钱包页拆为“我的钱包 / 充值中心 / 充值订单”三个 Tab；订单表格和继续支付逻辑抽到 `web/src/views/payment/recharge/components/RechargeOrders`，充值中心只保留选金额、支付方式和创建订单。
+- 钱包资金流水新增来源（全部来源/充值收入/AI 支出）、流水号、创建时间筛选；充值订单新增订单号、状态、创建时间筛选。筛选均走后端分页查询，不在前端对当前页做假过滤。
+- 管理端资金流水增加“全部流水 / 充值收入 / AI 支出”Tab，并补齐流水号、创建时间、用户 ID、平台 ID 筛选；AI 行仍直接从合并账本读取详情，不调用支付流水详情接口。
+- 后端 `payment/transaction` 与 `payment/order` 的列表查询支持 `flow`、`keyword`、`status`、`from`、`to`，日期使用 RFC3339；非法枚举、非法日期和未知参数返回 400。
+- 验证：真实接口 `flow=credit/debit`、`keyword`、日期区间、订单状态筛选均返回预期结果；非法参数返回 400；前端 typecheck、ESLint、架构检查和构建通过。

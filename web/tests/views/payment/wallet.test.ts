@@ -101,6 +101,22 @@ it('removes the decorative hero and switches from the balance card to recharge',
   expect(wrapper.get('#tab-recharge').attributes('aria-selected')).toBe('true')
 })
 
+it('exposes recharge orders as a separate tab and loads them lazily', async () => {
+  usePermissionStore().applySnapshot({
+    roleCodes: [],
+    menuTree: [],
+    permissionCodes: ['payment:myWallet:view', 'payment:recharge:list'],
+  })
+  wrapper = mount(WalletManagement, { global: { plugins: [ElementPlus, appI18n] } })
+  await flushPromises()
+  expect(wrapper.find('#tab-orders').exists()).toBe(true)
+  expect(orderApi.getMyRechargeOrders).not.toHaveBeenCalled()
+  await wrapper.get('#tab-orders').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('#tab-orders').attributes('aria-selected')).toBe('true')
+  expect(orderApi.getMyRechargeOrders).toHaveBeenCalledOnce()
+})
+
 it('updates the active tab if its page permission is revoked', async () => {
   const permission = usePermissionStore()
   permission.applySnapshot({

@@ -38,7 +38,14 @@ export type CreateRechargeInput = {
   returnUrl: string
 } & ({ packageId: number; amount?: never } | { amount: string; packageId?: never })
 
-export interface OrderQuery extends PageRequest {
+export interface RechargeOrderQuery extends PageRequest {
+  keyword?: string
+  status?: number
+  from?: string
+  to?: string
+}
+
+export interface OrderQuery extends RechargeOrderQuery {
   userId?: number
   platformId?: number
 }
@@ -47,7 +54,7 @@ export function getRechargeOptions(): Promise<RechargeOptions> {
   return request.get<RechargeOptions>('/api/admin/v1/payment/recharge/options')
 }
 
-export function getMyRechargeOrders(query: PageRequest): Promise<PageResult<RechargeOrder>> {
+export function getMyRechargeOrders(query: RechargeOrderQuery): Promise<PageResult<RechargeOrder>> {
   return request.get<PageResult<RechargeOrder>>('/api/admin/v1/payment/recharge', { params: query })
 }
 
