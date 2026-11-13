@@ -67,7 +67,7 @@ func TestOptionsAreLocalizedAuthenticatedAndStatic(t *testing.T) {
 				t.Fatalf("option value must be string: %s", option.Value)
 			}
 		}
-		if len(envelope.Data["extensions"]) != 11 || len(envelope.Data["mimeTypes"]) != 6 {
+		if len(envelope.Data["extensions"]) != 23 || len(envelope.Data["mimeTypes"]) != 23 {
 			t.Fatalf("upload preset counts = %s", recorder.Body.String())
 		}
 		if permissionCalls != 0 {

@@ -170,7 +170,7 @@ func (r *Repository) RuntimeFacts(ctx context.Context, id int64) (RuntimeConfig,
 		SecretIDCiphertext  string
 		SecretKeyCiphertext string
 		CurrentVersion      int64
-		Status           yesno.Value
+		Status              yesno.Value
 		Deleted             bool
 	}
 	if err := r.db.WithContext(ctx).Raw(

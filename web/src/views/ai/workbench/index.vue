@@ -6,23 +6,26 @@ import {
   ChatDotRound,
   Delete,
   Edit,
+  FolderOpened,
   MoreFilled,
   Plus,
   Promotion,
   Search,
   VideoPause,
 } from '@element-plus/icons-vue'
-import { Copy, ThumbsDown, ThumbsUp } from 'lucide-vue-next'
+import { Copy, FileText, ThumbsDown, ThumbsUp, Upload, X } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 
 import * as api from '@/api/ai/chat'
 import type { ChatActiveRun, ChatAgent, ChatConversation, ChatMessage } from '@/api/ai/chat'
+import type { StorageFile } from '@/api/storage/file'
 import { requestObjectURL } from '@/api/storage/upload'
-import UpMedia from '@/components/UpMedia/index.vue'
+import FileSelectDialog from '@/components/FileSelectDialog/index.vue'
 import { subscribeChatRealtime, subscribeChatReconnect } from '@/realtime'
 import { usePermissionStore } from '@/store/permission'
 import MarkdownContent from './components/MarkdownContent/index.vue'
+import { uploadAttachmentFiles } from './attachmentUpload'
 
 defineOptions({ name: 'AIWorkbenchPage' })
 
@@ -40,6 +43,13 @@ interface ConversationGroup {
   items: ChatConversation[]
 }
 
+interface PendingAttachment {
+  objectKey: string
+  fileName: string
+  kind: 'image' | 'file'
+  previewUrl: string
+}
+
 const { t } = useI18n()
 const access = usePermissionStore()
 const agents = ref<ChatAgent[]>([])
@@ -48,8 +58,13 @@ const conversations = ref<ChatConversation[]>([])
 const activeId = ref<number | null>(null)
 const newAgentId = ref<number | null>(null)
 const input = ref('')
-const attachments = ref<string[]>([])
+const attachments = ref<PendingAttachment[]>([])
 const attachmentUrls = ref<Record<string, string>>({})
+const attachmentInput = ref<HTMLInputElement | null>(null)
+const attachmentUploading = ref(false)
+const fileLibraryVisible = ref(false)
+const dragActive = ref(false)
+let dragDepth = 0
 const sending = ref(false)
 const canceling = ref(false)
 const loading = ref(false)
@@ -87,6 +102,7 @@ const canSend = computed(
     activeId.value !== null &&
     !sending.value &&
     !streaming.value &&
+    !attachmentUploading.value &&
     (input.value.trim() !== '' || attachments.value.length > 0) &&
     balance.value?.canSend === true,
 )
@@ -378,7 +394,7 @@ async function send(): Promise<void> {
     const result = await api.sendMessage(conversationID, {
       content,
       requestId: crypto.randomUUID(),
-      attachments: attachments.value.map((objectKey) => ({ objectKey })),
+      attachments: attachments.value.map((attachment) => ({ objectKey: attachment.objectKey })),
     })
     input.value = ''
     attachments.value = []
@@ -423,6 +439,129 @@ function onKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
   event.preventDefault()
   void send()
+}
+
+function eventFiles(data: DataTransfer | null): File[] {
+  if (data === null) return []
+  const direct = Array.from(data.files)
+  if (direct.length > 0) return direct
+  return Array.from(data.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+}
+
+function attachmentKind(fileName: string, mimeType: string): 'image' | 'file' {
+  return mimeType.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(fileName)
+    ? 'image'
+    : 'file'
+}
+
+async function resolveAttachmentPreview(item: PendingAttachment): Promise<void> {
+  if (item.kind !== 'image' || item.previewUrl !== '') return
+  try {
+    const result = await requestObjectURL(item.objectKey)
+    item.previewUrl = result.url
+  } catch {
+    // Keep the filename when a preview cannot be resolved.
+  }
+}
+
+async function addAttachmentFiles(files: File[]): Promise<void> {
+  if (files.length === 0) return
+  if (!canUploadAttachment.value) {
+    ElMessage.warning(t('ai.workbench.uploadDenied'))
+    return
+  }
+  if (attachmentUploading.value) return
+  if (attachments.value.length >= 6) {
+    ElMessage.warning(t('ai.workbench.attachmentLimit'))
+    return
+  }
+  const remaining = 6 - attachments.value.length
+  if (files.length > remaining) ElMessage.warning(t('ai.workbench.attachmentLimit'))
+  const selected = files.slice(0, remaining)
+  attachmentUploading.value = true
+  try {
+    const completed = await uploadAttachmentFiles(selected)
+    for (const [index, file] of selected.entries()) {
+      const result = completed[index]
+      if (result === undefined) continue
+      if (attachments.value.some((item) => item.objectKey === result.objectKey)) continue
+      const item: PendingAttachment = {
+        objectKey: result.objectKey,
+        fileName: file.name || t('ai.workbench.attachments'),
+        kind: attachmentKind(file.name, file.type),
+        previewUrl: result.publicUrl ?? '',
+      }
+      attachments.value.push(item)
+      void resolveAttachmentPreview(item)
+    }
+  } catch {
+    ElMessage.error(t('ai.workbench.uploadFailed'))
+  } finally {
+    attachmentUploading.value = false
+  }
+}
+
+function openAttachmentPicker(): void {
+  if (canUploadAttachment.value && !attachmentUploading.value) attachmentInput.value?.click()
+}
+
+function onAttachmentChange(event: Event): void {
+  const target = event.target as HTMLInputElement
+  const files = Array.from(target.files ?? [])
+  target.value = ''
+  void addAttachmentFiles(files)
+}
+
+function openAttachmentLibrary(): void {
+  if (canSelectAttachment.value) fileLibraryVisible.value = true
+}
+
+function selectAttachmentFromLibrary(file: StorageFile): void {
+  if (attachments.value.length >= 6) {
+    ElMessage.warning(t('ai.workbench.attachmentLimit'))
+    return
+  }
+  if (attachments.value.some((item) => item.objectKey === file.objectKey)) return
+  const item: PendingAttachment = {
+    objectKey: file.objectKey,
+    fileName: file.fileName,
+    kind: attachmentKind(file.fileName, file.mimeType),
+    previewUrl: '',
+  }
+  attachments.value.push(item)
+  void resolveAttachmentPreview(item)
+}
+
+function removeAttachment(index: number): void {
+  attachments.value.splice(index, 1)
+}
+
+function onPasteAttachments(event: ClipboardEvent): void {
+  const files = eventFiles(event.clipboardData)
+  if (files.length === 0) return
+  event.preventDefault()
+  void addAttachmentFiles(files)
+}
+
+function onDragEnter(event: DragEvent): void {
+  if (!event.dataTransfer?.types.includes('Files')) return
+  dragDepth += 1
+  dragActive.value = true
+}
+
+function onDragLeave(): void {
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) dragActive.value = false
+}
+
+function onDropAttachments(event: DragEvent): void {
+  dragDepth = 0
+  dragActive.value = false
+  const files = eventFiles(event.dataTransfer)
+  if (files.length > 0) void addAttachmentFiles(files)
 }
 
 function scrollToBottom(): void {
@@ -578,7 +717,7 @@ onBeforeUnmount(() => {
           :disabled="newAgentId === null"
           @click="createConversation"
         >
-          <Plus :size="16" />
+          <el-icon :size="16"><Plus /></el-icon>
           <span>{{ t('ai.workbench.newConversation') }}</span>
         </el-button>
         <el-input
@@ -649,7 +788,9 @@ onBeforeUnmount(() => {
           </div>
         </section>
         <div v-if="!loading && conversations.length === 0" class="ai-workbench__sidebar-empty">
-          <ChatDotRound :size="34" />
+          <span class="ai-workbench__sidebar-empty-icon">
+            <el-icon :size="21" aria-hidden="true"><ChatDotRound /></el-icon>
+          </span>
           <strong>
             {{ searchActive ? t('ai.workbench.searchEmpty') : t('ai.workbench.empty') }}
           </strong>
@@ -665,7 +806,14 @@ onBeforeUnmount(() => {
       </footer>
     </aside>
 
-    <section class="ai-workbench__main">
+    <section
+      class="ai-workbench__main"
+      @paste="onPasteAttachments"
+      @dragenter.prevent="onDragEnter"
+      @dragover.prevent
+      @dragleave.prevent="onDragLeave"
+      @drop.prevent="onDropAttachments"
+    >
       <header class="ai-workbench__head">
         <div class="ai-workbench__head-copy">
           <strong>{{ activeConversation?.title || t('ai.workbench.welcome') }}</strong>
@@ -704,7 +852,7 @@ onBeforeUnmount(() => {
 
         <div v-else-if="showWelcome" class="ai-workbench__welcome">
           <span class="ai-workbench__welcome-mark">
-            <ChatDotRound :size="30" />
+            <el-icon :size="30"><ChatDotRound /></el-icon>
           </span>
           <h1>{{ welcomeTitle }}</h1>
           <p>{{ welcomeTip }}</p>
@@ -715,7 +863,7 @@ onBeforeUnmount(() => {
             :disabled="newAgentId === null"
             @click="createConversation"
           >
-            <Plus :size="16" />
+            <el-icon :size="16"><Plus /></el-icon>
             <span>{{ t('ai.workbench.newConversation') }}</span>
           </el-button>
           <div v-else-if="!showEmpty" class="ai-workbench__starters">
@@ -745,7 +893,7 @@ onBeforeUnmount(() => {
             :class="message.role === 1 ? 'is-user' : 'is-assistant'"
           >
             <span v-if="message.role === 2" class="ai-workbench__message-mark">
-              <ChatDotRound :size="15" />
+              <el-icon :size="15"><ChatDotRound /></el-icon>
             </span>
             <div class="ai-workbench__message-body">
               <div v-if="message.attachments.length > 0" class="ai-workbench__message-files">
@@ -857,21 +1005,61 @@ onBeforeUnmount(() => {
       </button>
 
       <footer v-if="!showEmpty" class="ai-workbench__composer">
-        <div class="ai-workbench__composer-shell">
+        <div class="ai-workbench__composer-shell" :class="{ 'is-dragging': dragActive }">
           <div
             v-if="canUploadAttachment || canSelectAttachment"
             class="ai-workbench__composer-attachments"
           >
-            <UpMedia
-              v-model="attachments"
-              rule-code="file"
-              variant="file"
+            <input
+              ref="attachmentInput"
+              class="ai-workbench__attachment-input"
+              type="file"
               multiple
-              compact
-              :upload-disabled="!canUploadAttachment"
-              :allow-file-library="canSelectAttachment"
-              file-library-purpose=""
+              @change="onAttachmentChange"
             />
+            <el-button
+              v-if="canUploadAttachment"
+              type="primary"
+              circle
+              :icon="Plus"
+              :loading="attachmentUploading"
+              :title="t('ai.workbench.uploadAttachment')"
+              :aria-label="t('ai.workbench.uploadAttachment')"
+              @click="openAttachmentPicker"
+            />
+            <el-button
+              v-if="canSelectAttachment"
+              type="primary"
+              plain
+              circle
+              :icon="FolderOpened"
+              :title="t('ai.workbench.selectAttachment')"
+              :aria-label="t('ai.workbench.selectAttachment')"
+              @click="openAttachmentLibrary"
+            />
+            <div v-if="attachments.length > 0" class="ai-workbench__attachment-list">
+              <div
+                v-for="(attachment, index) in attachments"
+                :key="attachment.objectKey"
+                class="ai-workbench__attachment-item"
+              >
+                <img
+                  v-if="attachment.kind === 'image' && attachment.previewUrl"
+                  :src="attachment.previewUrl"
+                  :alt="attachment.fileName"
+                />
+                <FileText v-else :size="14" aria-hidden="true" />
+                <span>{{ attachment.fileName }}</span>
+                <button
+                  type="button"
+                  :aria-label="t('common.delete')"
+                  :title="t('common.delete')"
+                  @click="removeAttachment(index)"
+                >
+                  <X :size="12" />
+                </button>
+              </div>
+            </div>
           </div>
           <el-input
             v-model="input"
@@ -912,9 +1100,18 @@ onBeforeUnmount(() => {
               />
             </div>
           </div>
+          <div v-if="dragActive" class="ai-workbench__composer-drop">
+            <Upload :size="20" />
+            <span>{{ t('ai.workbench.dropAttachments') }}</span>
+          </div>
         </div>
       </footer>
     </section>
+    <FileSelectDialog
+      v-if="fileLibraryVisible"
+      v-model="fileLibraryVisible"
+      @select="selectAttachmentFromLibrary"
+    />
   </div>
 </template>
 
@@ -1510,19 +1707,32 @@ onBeforeUnmount(() => {
 
 .ai-workbench__sidebar-empty {
   display: flex;
-  min-height: 170px;
+  min-height: 180px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 6px;
-  padding: 20px;
+  gap: 7px;
+  padding: 24px 20px;
   color: #a3adbd;
   text-align: center;
 }
 
-.ai-workbench__sidebar-empty svg {
-  margin-bottom: 4px;
-  color: #c5cedb;
+.ai-workbench__sidebar-empty-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 5px;
+  place-items: center;
+  border: 1px solid #e7edf6;
+  border-radius: 13px;
+  color: #8fa2ba;
+  background: linear-gradient(145deg, #f8fbff, #f2f6fc);
+}
+
+.ai-workbench__sidebar-empty-icon svg {
+  width: 21px;
+  height: 21px;
+  margin: 0;
 }
 
 .ai-workbench__sidebar-empty strong {
@@ -1531,8 +1741,9 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.ai-workbench__sidebar-empty span {
+.ai-workbench__sidebar-empty > span:last-child {
   font-size: 11px;
+  line-height: 1.5;
 }
 
 .ai-workbench__aside-footer {
@@ -1841,62 +2052,68 @@ onBeforeUnmount(() => {
 }
 
 .ai-workbench__composer-attachments {
+  display: flex;
   max-height: 160px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   padding: 4px 4px 0;
   overflow-y: auto;
 }
 
-.ai-workbench__composer-attachments :deep(.up-media) {
+.ai-workbench__attachment-input {
+  display: none;
+}
+
+.ai-workbench__attachment-list {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
-.ai-workbench__composer-attachments :deep(.up-media__controls) {
-  gap: 4px;
-}
-
-.ai-workbench__composer-attachments :deep(.up-media__controls.is-compact .el-button) {
-  width: 26px;
-  padding: 0;
-  border-radius: 50%;
-}
-
-.ai-workbench__composer-attachments :deep(.up-media__controls .el-button) {
-  height: 26px;
-  margin: 0;
-  padding: 0 9px;
-  border-color: #e5eaf2;
+.ai-workbench__attachment-item {
+  display: inline-flex;
+  max-width: 220px;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px 4px 8px;
+  border: 1px solid #e1e8f3;
   border-radius: 999px;
-  color: #64748b;
+  color: #475569;
   background: #f8fafc;
   font-size: 11px;
-  font-weight: 500;
 }
 
-.ai-workbench__composer-attachments :deep(.up-media__controls .el-button:hover) {
-  border-color: #bfdbfe;
-  color: #2563eb;
-  background: #eff6ff;
+.ai-workbench__attachment-item img {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 4px;
+  object-fit: cover;
 }
 
-.ai-workbench__composer-attachments :deep(.up-media__controls .el-button--primary) {
-  border-color: #e5eaf2;
-  color: #64748b;
-  background: #f8fafc;
+.ai-workbench__attachment-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ai-workbench__composer-attachments :deep(.up-media__controls .el-button--primary:hover) {
-  border-color: #bfdbfe;
-  color: #2563eb;
-  background: #eff6ff;
+.ai-workbench__attachment-item button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  color: #94a3b8;
+  background: transparent;
+  cursor: pointer;
 }
 
-.ai-workbench__composer-attachments :deep(.up-media__library) {
-  margin: 0;
-}
-
-.ai-workbench__composer-attachments :deep(.up-media__error) {
-  margin: 4px 0 0;
-  font-size: 11px;
+.ai-workbench__attachment-item button:hover {
+  color: #dc2626;
+  background: #fee2e2;
 }
 
 .ai-workbench__message-actions {
@@ -1980,6 +2197,7 @@ onBeforeUnmount(() => {
 }
 
 .ai-workbench__composer-shell {
+  position: relative;
   width: min(820px, 100%);
   margin: 0 auto;
   padding: 9px 11px 8px;
@@ -1990,6 +2208,27 @@ onBeforeUnmount(() => {
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
+}
+
+.ai-workbench__composer-shell.is-dragging {
+  border-color: #7aa7e8;
+}
+
+.ai-workbench__composer-drop {
+  position: absolute;
+  inset: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed #7aa7e8;
+  border-radius: 12px;
+  color: #2563eb;
+  background: rgb(239 246 255 / 92%);
+  font-size: 12px;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .ai-workbench__composer-shell:focus-within {

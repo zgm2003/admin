@@ -154,10 +154,10 @@ function onSelectionChange(selection: Row[]): void {
     :aria-busy="busy"
   >
     <div class="app-table__toolbar">
-      <el-space class="app-table__toolbar-left" wrap size="small"
+      <el-space class="app-table__toolbar-left" wrap size="default"
         ><slot name="toolbar-left"
       /></el-space>
-      <el-space class="app-table__toolbar-right" wrap size="small">
+      <el-space class="app-table__toolbar-right" wrap size="default">
         <slot name="toolbar-right" />
         <el-button
           data-testid="app-table-refresh"
@@ -298,7 +298,8 @@ function onSelectionChange(selection: Row[]): void {
     .el-button.is-link,
     .el-button.is-text {
       min-height: 28px;
-      padding: 4px 0;
+      margin-left: 0;
+      padding: 4px 7px;
       border-radius: 4px;
     }
   }

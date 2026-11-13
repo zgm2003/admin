@@ -4,7 +4,6 @@ import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue
 import {
   Delete,
   Download,
-  FolderOpened,
   FullScreen,
   Picture,
   Plus,
@@ -39,7 +38,6 @@ const props = withDefaults(defineProps<UpMediaProps>(), {
   disabled: false,
   clearable: true,
   width: '112px',
-  compact: false,
 })
 
 const emit = defineEmits<{
@@ -508,18 +506,14 @@ async function downloadFile(objectKey: string): Promise<void> {
         <Plus aria-hidden="true" />
       </button>
     </div>
-    <div class="up-media__controls" :class="{ 'is-compact': compact }">
+    <div class="up-media__controls">
       <el-button
         v-if="!square"
         data-testid="up-media-upload"
         type="primary"
-        :icon="compact ? Plus : undefined"
-        :circle="compact"
-        :title="t('components.upMedia.upload')"
-        :aria-label="t('components.upMedia.upload')"
         :disabled="disabled || uploadDisabled || loading"
         @click="openPicker"
-        >{{ compact ? '' : t('components.upMedia.upload') }}</el-button
+        >{{ t('components.upMedia.upload') }}</el-button
       >
       <el-button
         v-if="allowFileLibrary"
@@ -527,13 +521,9 @@ async function downloadFile(objectKey: string): Promise<void> {
         class="up-media__library"
         type="primary"
         plain
-        :icon="compact ? FolderOpened : undefined"
-        :circle="compact"
-        :title="t('components.upMedia.chooseFromFiles')"
-        :aria-label="t('components.upMedia.chooseFromFiles')"
         :disabled="disabled || loading"
         @click="openLibrary"
-        >{{ compact ? '' : t('components.upMedia.chooseFromFiles') }}</el-button
+        >{{ t('components.upMedia.chooseFromFiles') }}</el-button
       >
     </div>
     <FileList

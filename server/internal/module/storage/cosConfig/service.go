@@ -161,7 +161,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		AppID:               strings.TrimSpace(input.AppID),
 		SecretIDCiphertext:  secretIDCiphertext,
 		SecretKeyCiphertext: secretKeyCiphertext,
-		Status:           input.Status,
+		Status:              input.Status,
 		Remark:              strings.TrimSpace(input.Remark),
 		CreatedAt:           now,
 		UpdatedAt:           now,

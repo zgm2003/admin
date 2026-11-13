@@ -187,7 +187,7 @@ func TestRepositoryStatusDeleteAndRuleReferences(t *testing.T) {
 		t.Fatalf("find after delete error = %v", err)
 	}
 	var deleted struct {
-		Status int16
+		Status    int16
 		DeletedAt *time.Time
 	}
 	if err := db.WithContext(ctx).Raw(`SELECT status, deleted_at FROM storage_cos_config WHERE id = ?`, model.ID).Scan(&deleted).Error; err != nil {

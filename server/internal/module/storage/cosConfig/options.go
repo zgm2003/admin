@@ -30,12 +30,31 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 		}
 		result.Regions = append(result.Regions, Option{Value: value, Label: label})
 	}
-	result.Extensions = make([]Option, 0, 11)
-	for _, value := range []string{"jpg", "jpeg", "png", "gif", "webp", "pdf", "doc", "docx", "xls", "xlsx", "zip"} {
+	extensions := []string{
+		"jpg", "jpeg", "png", "gif", "webp",
+		"pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx",
+		"txt", "md", "json", "xml", "yaml", "yml", "log",
+		"zip", "rar", "7z",
+	}
+	result.Extensions = make([]Option, 0, len(extensions))
+	for _, value := range extensions {
 		result.Extensions = append(result.Extensions, Option{Value: value, Label: value})
 	}
-	result.MimeTypes = make([]Option, 0, 6)
-	for _, value := range []string{"image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "application/zip"} {
+	mimeTypes := []string{
+		"image/jpeg", "image/png", "image/gif", "image/webp",
+		"application/pdf", "application/msword",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"application/vnd.ms-excel",
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		"text/csv", "application/vnd.ms-powerpoint",
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		"text/plain", "text/markdown", "application/json",
+		"application/xml", "text/xml", "application/x-yaml", "text/yaml",
+		"application/zip", "application/vnd.rar", "application/x-rar-compressed",
+		"application/x-7z-compressed",
+	}
+	result.MimeTypes = make([]Option, 0, len(mimeTypes))
+	for _, value := range mimeTypes {
 		result.MimeTypes = append(result.MimeTypes, Option{Value: value, Label: value})
 	}
 

@@ -202,7 +202,7 @@ function reset(): void {
       </el-form-item>
     </template>
     <el-form-item class="search-form__actions">
-      <el-space wrap size="small">
+      <el-space wrap size="default">
         <el-button type="primary" :data-testid="queryTestId" @click="emitForm('query')">{{
           resolvedQueryLabel
         }}</el-button>

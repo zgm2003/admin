@@ -28,7 +28,7 @@ type idResponse struct {
 	ID int64 `json:"id"`
 }
 type statusResponse struct {
-	ID        int64 `json:"id"`
+	ID     int64 `json:"id"`
 	Status int16 `json:"status"`
 }
 type emptyResponse struct{}

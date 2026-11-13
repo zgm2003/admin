@@ -77,13 +77,11 @@ const { t } = useI18n()
     </template>
     <template #cell-status="{ row }">
       <el-tag size="small" :type="row.status === YesNo.Yes ? 'success' : 'info'">
-        {{
-          row.status === YesNo.Yes ? t('common.enable') : t('common.disable')
-        }}
+        {{ row.status === YesNo.Yes ? t('common.enable') : t('common.disable') }}
       </el-tag>
     </template>
     <template #cell-actions="{ row }">
-      <el-space wrap :size="4">
+      <el-space wrap :size="8">
         <el-button v-if="props.canUpdate" text type="primary" @click="emit('open', row)">
           {{ t('common.edit') }}
         </el-button>

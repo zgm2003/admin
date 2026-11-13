@@ -14,10 +14,10 @@ import (
 )
 
 type ListQuery struct {
-	Page      int
-	PageSize  int
-	Keyword   string
-	Status *yesno.Value
+	Page     int
+	PageSize int
+	Keyword  string
+	Status   *yesno.Value
 }
 type SecretInput struct {
 	Present bool
@@ -26,7 +26,7 @@ type SecretInput struct {
 type CreateInput struct {
 	Name, AppID, SecretID, SecretKey, Bucket, Region string
 	Endpoint, BucketDomain                           *string
-	Status                                        yesno.Value
+	Status                                           yesno.Value
 	Remark                                           string
 }
 
@@ -47,7 +47,7 @@ type createRequest struct {
 	Region       *string               `json:"region"`
 	Endpoint     nullableStringRequest `json:"endpoint"`
 	BucketDomain nullableStringRequest `json:"bucketDomain"`
-	Status    *yesno.Value          `json:"status"`
+	Status       *yesno.Value          `json:"status"`
 	Remark       *string               `json:"remark"`
 }
 
