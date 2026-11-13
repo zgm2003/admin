@@ -4,7 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"math"
+	"net/http"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -19,11 +23,76 @@ import (
 )
 
 const (
-	streamFlushInterval = 50 * time.Millisecond
-	streamFlushBytes    = 2048
-	maxHistoryMessages  = 40
-	maxHistoryRunes     = 60000
+	streamFlushInterval    = 50 * time.Millisecond
+	streamFlushBytes       = 2048
+	maxHistoryMessages     = 40
+	maxHistoryRunes        = 60000
+	maxAttachmentTextBytes = 256 * 1024
+	maxAttachmentTextRunes = 20000
+	attachmentReadTimeout  = 10 * time.Second
 )
+
+func isTextAttachment(mimeType, fileName string) bool {
+	normalizedMime := strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0]))
+	if strings.HasPrefix(normalizedMime, "text/") {
+		return true
+	}
+	switch normalizedMime {
+	case "application/json", "application/xml", "application/xhtml+xml",
+		"application/x-yaml", "application/yaml", "application/toml",
+		"application/javascript", "application/x-sh":
+		return true
+	}
+	switch strings.ToLower(filepath.Ext(fileName)) {
+	case ".txt", ".md", ".markdown", ".csv", ".json", ".xml", ".yaml", ".yml",
+		".log", ".toml", ".ini", ".conf", ".sql", ".go", ".js", ".jsx", ".ts", ".tsx",
+		".py", ".java", ".kt", ".c", ".h", ".cpp", ".hpp", ".cs", ".php", ".rb",
+		".rs", ".sh", ".bash", ".zsh", ".ps1", ".html", ".css", ".scss", ".less":
+		return true
+	default:
+		return false
+	}
+}
+
+func readAttachmentText(ctx context.Context, url string) (string, error) {
+	readCtx, cancel := context.WithTimeout(ctx, attachmentReadTimeout)
+	defer cancel()
+	request, err := http.NewRequestWithContext(readCtx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("attachment download returned %d", response.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxAttachmentTextBytes+1))
+	if err != nil {
+		return "", err
+	}
+	truncated := len(data) > maxAttachmentTextBytes
+	if truncated {
+		data = data[:maxAttachmentTextBytes]
+	}
+	content := strings.TrimPrefix(strings.ToValidUTF8(string(data), "\uFFFD"), "\uFEFF")
+	content = strings.ReplaceAll(content, "\x00", "")
+	content = strings.TrimSpace(content)
+	runes := []rune(content)
+	if len(runes) > maxAttachmentTextRunes {
+		content = string(runes[:maxAttachmentTextRunes])
+		truncated = true
+	}
+	if content == "" {
+		return "", nil
+	}
+	if truncated {
+		content += "\n\n[附件内容已截断]"
+	}
+	return content, nil
+}
 
 func (s *Service) Execute(parent context.Context, runID int64) error {
 	if s == nil || s.repo == nil || s.chat == nil {
@@ -105,6 +174,12 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 					URL: resolved.URL, IsImage: true, FileName: attachment.FileName,
 				})
 				continue
+			}
+			if isTextAttachment(attachment.MimeType, attachment.FileName) {
+				if text, textErr := readAttachmentText(parent, resolved.URL); textErr == nil && text != "" {
+					content += "\n\n[附件: " + attachment.FileName + "]\n" + text
+					continue
+				}
 			}
 			content += "\n\n[附件: " + attachment.FileName + "](" + resolved.URL + ")"
 		}

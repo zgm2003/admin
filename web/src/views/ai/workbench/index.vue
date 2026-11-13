@@ -913,9 +913,13 @@ onBeforeUnmount(() => {
                     rel="noopener noreferrer"
                     class="ai-workbench__message-file"
                   >
-                    {{ attachment.fileName }}
+                    <FileText :size="13" aria-hidden="true" />
+                    <span>{{ attachment.fileName }}</span>
                   </a>
-                  <span v-else class="ai-workbench__message-file">{{ attachment.fileName }}</span>
+                  <span v-else class="ai-workbench__message-file">
+                    <FileText :size="13" aria-hidden="true" />
+                    <span>{{ attachment.fileName }}</span>
+                  </span>
                 </template>
               </div>
               <MarkdownContent
@@ -2025,20 +2029,26 @@ onBeforeUnmount(() => {
 .ai-workbench__message-files {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 8px;
   margin-bottom: 8px;
 }
 
 .ai-workbench__message-image {
-  width: 128px;
-  height: 96px;
+  width: 148px;
+  height: 108px;
+  flex: 0 0 auto;
   border-radius: 8px;
   cursor: zoom-in;
 }
 
 .ai-workbench__message-file {
   display: inline-flex;
-  max-width: 240px;
+  max-width: 220px;
+  min-height: 30px;
+  align-self: flex-start;
+  align-items: center;
+  gap: 5px;
   overflow: hidden;
   padding: 5px 9px;
   border: 1px solid #e1e8f3;
@@ -2046,7 +2056,12 @@ onBeforeUnmount(() => {
   color: #2563eb;
   background: #f8fafc;
   font-size: 11px;
+  line-height: 1.4;
   text-decoration: none;
+}
+
+.ai-workbench__message-file span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
