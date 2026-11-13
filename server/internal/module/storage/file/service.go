@@ -263,6 +263,38 @@ func (s *Service) URL(ctx context.Context, id auth.Identity, fileID int64, dispo
 	signed, e := s.cos.PresignGet(ctx, credentials, storagecos.GetRequest{ObjectKey: m.ObjectKey, ContentDisposition: mime.FormatMediaType(disposition, map[string]string{"filename": m.OriginalName})})
 	return URLResult{signed.URL, signed.ExpiresAt}, mapError(e)
 }
+
+// ObjectURL resolves an owned original object for a trusted internal caller such
+// as the AI runtime. It intentionally does not accept avatar copies.
+func (s *Service) ObjectURL(ctx context.Context, id auth.Identity, objectKey, disposition string) (URLResult, error) {
+	if disposition != "inline" && disposition != "attachment" {
+		return URLResult{}, apperror.InvalidRequest(errors.New("disposition invalid"))
+	}
+	if !validIdentity(id) || strings.TrimSpace(objectKey) == "" {
+		return URLResult{}, apperror.InvalidRequest(errors.New("object identity invalid"))
+	}
+	m, e := s.repository.FindObject(ctx, objectKey)
+	if errors.Is(e, gorm.ErrRecordNotFound) {
+		return URLResult{}, apperror.NotFound(gorm.ErrRecordNotFound)
+	}
+	if e != nil {
+		return URLResult{}, mapError(e)
+	}
+	if m.DeletedAt.Valid || m.Status != StatusReady || m.Kind != KindOriginal ||
+		m.UserID != id.UserID || m.PlatformID != id.PlatformID {
+		return URLResult{}, apperror.NotFound(gorm.ErrRecordNotFound)
+	}
+	credentials, _, e := s.physical(ctx, m)
+	if e != nil {
+		return URLResult{}, e
+	}
+	if disposition == "inline" && m.MimeType != "image/png" && m.MimeType != "image/jpeg" && m.MimeType != "image/gif" && m.MimeType != "image/webp" {
+		disposition = "attachment"
+	}
+	signed, e := s.cos.PresignGet(ctx, credentials, storagecos.GetRequest{ObjectKey: m.ObjectKey, ContentDisposition: mime.FormatMediaType(disposition, map[string]string{"filename": m.OriginalName})})
+	return URLResult{signed.URL, signed.ExpiresAt}, mapError(e)
+}
+
 func (s *Service) Delete(ctx context.Context, id auth.Identity, fileID int64) error {
 	if !validIdentity(id) || fileID < 1 {
 		return apperror.InvalidRequest(errors.New("file identity invalid"))
@@ -288,7 +320,13 @@ func (s *Service) AuthorizeObject(ctx context.Context, id auth.Identity, key str
 		return apperror.NotFound(gorm.ErrRecordNotFound)
 	}
 	if m.Kind == KindOriginal && (m.UserID != id.UserID || m.PlatformID != id.PlatformID) {
-		return apperror.NotFound(gorm.ErrRecordNotFound)
+		public, e := s.publicAccess(ctx, m)
+		if e != nil {
+			return e
+		}
+		if !public {
+			return apperror.NotFound(gorm.ErrRecordNotFound)
+		}
 	}
 	if m.Kind == KindAvatar {
 		if m.UserID != id.UserID || m.PlatformID != id.PlatformID {

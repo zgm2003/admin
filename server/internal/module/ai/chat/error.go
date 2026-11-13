@@ -32,7 +32,7 @@ func mapError(err error) error {
 		return nil
 	case errors.As(err, &public):
 		return err
-	case errors.Is(err, ErrConversationNotFound), errors.Is(err, ErrAgentNotFound):
+	case errors.Is(err, ErrConversationNotFound), errors.Is(err, ErrAgentNotFound), errors.Is(err, ErrMessageNotFound):
 		return apperror.NotFound(err)
 	default:
 		return dependency(err)

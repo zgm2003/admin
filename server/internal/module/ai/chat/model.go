@@ -47,6 +47,8 @@ type Message struct {
 	Status         MessageStatus `gorm:"column:status;type:smallint;not null"`
 	RunID          *int64        `gorm:"column:run_id"`
 	DeliverySeq    int64         `gorm:"column:delivery_seq;not null"`
+	Feedback       int16         `gorm:"column:feedback;type:smallint;not null"`
+	FeedbackAt     *time.Time    `gorm:"column:feedback_at;type:timestamptz"`
 	CreatedAt      time.Time     `gorm:"column:created_at;type:timestamptz;not null"`
 	UpdatedAt      time.Time     `gorm:"column:updated_at;type:timestamptz;not null"`
 
@@ -55,6 +57,39 @@ type Message struct {
 	UsageInputTokens       *int64 `gorm:"->;column:usage_input_tokens"`
 	UsageCachedInputTokens *int64 `gorm:"->;column:usage_cached_input_tokens"`
 	UsageOutputTokens      *int64 `gorm:"->;column:usage_output_tokens"`
+
+	Attachments []MessageAttachment `gorm:"-"`
+}
+
+type AttachmentKind int16
+
+const (
+	AttachmentImage AttachmentKind = 1
+	AttachmentFile  AttachmentKind = 2
+)
+
+type MessageAttachment struct {
+	ID        int64          `gorm:"column:id;primaryKey;autoIncrement"`
+	MessageID int64          `gorm:"column:message_id;not null"`
+	Kind      AttachmentKind `gorm:"column:kind;type:smallint;not null"`
+	ObjectKey string         `gorm:"column:object_key;type:varchar(512);not null"`
+	FileName  string         `gorm:"column:file_name;type:varchar(255);not null"`
+	MimeType  string         `gorm:"column:mime_type;type:varchar(128);not null"`
+	SizeBytes int64          `gorm:"column:size_bytes;not null"`
+	CreatedAt time.Time      `gorm:"column:created_at;type:timestamptz;not null"`
+	UpdatedAt time.Time      `gorm:"column:updated_at;type:timestamptz;not null"`
+}
+
+func (MessageAttachment) TableName() string { return "ai_chat_message_attachment" }
+
+type StorageFileRef struct {
+	ID         int64  `gorm:"column:id"`
+	ObjectKey  string `gorm:"column:object_key"`
+	FileName   string `gorm:"column:original_name"`
+	MimeType   string `gorm:"column:mime_type"`
+	SizeBytes  int64  `gorm:"column:size_bytes"`
+	UserID     int64  `gorm:"column:user_id"`
+	PlatformID int64  `gorm:"column:platform_id"`
 }
 
 func (Message) TableName() string { return "ai_chat_message" }
@@ -71,6 +106,7 @@ type AgentRow struct {
 	ID           int64  `gorm:"column:id"`
 	Name         string `gorm:"column:name"`
 	Description  string `gorm:"column:description"`
+	Avatar       string `gorm:"column:avatar"`
 	Scene        int16  `gorm:"column:scene"`
 	ProviderName string `gorm:"column:provider_name"`
 	ModelName    string `gorm:"column:model_name"`

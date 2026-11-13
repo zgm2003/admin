@@ -11,6 +11,7 @@ export interface AiAgent {
   id: number
   name: string
   description: string
+  avatar: string
   systemPrompt: string
   scene: number
   sceneName: string
@@ -68,6 +69,7 @@ export interface AgentModelOptions {
 export interface CreateAgentInput {
   name: string
   description: string
+  avatar: string
   systemPrompt: string
   scene: number
   type: number

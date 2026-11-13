@@ -130,6 +130,33 @@ func (h *Handler) Messages(c *gin.Context) {
 	response.OK(c, http.StatusOK, result)
 }
 
+func (h *Handler) Feedback(c *gin.Context) {
+	identity := mustIdentity(c)
+	id, err := validate.ParsePositiveInt64(c.Param("id"), "id")
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	var request feedbackRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	feedback, err := request.value()
+	if err != nil {
+		response.Fail(c, invalid(err))
+		return
+	}
+	result, err := h.service.Feedback(c.Request.Context(), identity, id, feedback)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, struct {
+		Feedback int16 `json:"feedback"`
+	}{Feedback: result})
+}
+
 func (h *Handler) Balance(c *gin.Context) {
 	identity := mustIdentity(c)
 	result, err := h.service.Balance(c.Request.Context(), identity.UserID)

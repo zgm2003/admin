@@ -12,11 +12,14 @@ import {
   Search,
   VideoPause,
 } from '@element-plus/icons-vue'
+import { Copy, ThumbsDown, ThumbsUp } from 'lucide-vue-next'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 
 import * as api from '@/api/ai/chat'
 import type { ChatActiveRun, ChatAgent, ChatConversation, ChatMessage } from '@/api/ai/chat'
+import { requestObjectURL } from '@/api/storage/upload'
+import UpMedia from '@/components/UpMedia/index.vue'
 import { subscribeChatRealtime, subscribeChatReconnect } from '@/realtime'
 import { usePermissionStore } from '@/store/permission'
 import MarkdownContent from './components/MarkdownContent/index.vue'
@@ -40,10 +43,13 @@ interface ConversationGroup {
 const { t } = useI18n()
 const access = usePermissionStore()
 const agents = ref<ChatAgent[]>([])
+const agentAvatarUrls = ref<Record<string, string>>({})
 const conversations = ref<ChatConversation[]>([])
 const activeId = ref<number | null>(null)
 const newAgentId = ref<number | null>(null)
 const input = ref('')
+const attachments = ref<string[]>([])
+const attachmentUrls = ref<Record<string, string>>({})
 const sending = ref(false)
 const canceling = ref(false)
 const loading = ref(false)
@@ -51,6 +57,7 @@ const balance = ref<api.ChatBalance | null>(null)
 const listError = ref('')
 const chatError = ref('')
 const searchKeyword = ref('')
+const feedbackBusyID = ref<number | null>(null)
 const sessions = reactive(new Map<number, SessionState>())
 const messagesEl = ref<HTMLElement | null>(null)
 const followBottom = ref(true)
@@ -62,6 +69,10 @@ const canSendPermission = computed(() => access.hasPermission('ai:workbench:send
 const canCreate = computed(() => access.hasPermission('ai:workbench:create'))
 const canUpdate = computed(() => access.hasPermission('ai:workbench:update'))
 const canDelete = computed(() => access.hasPermission('ai:workbench:delete'))
+const canUploadAttachment = computed(() => access.hasPermission('storage:object:upload'))
+const canSelectAttachment = computed(
+  () => access.hasPermission('storage:file:list') && access.hasPermission('storage:file:detail'),
+)
 const activeConversation = computed(
   () => conversations.value.find((item) => item.id === activeId.value) ?? null,
 )
@@ -76,7 +87,7 @@ const canSend = computed(
     activeId.value !== null &&
     !sending.value &&
     !streaming.value &&
-    input.value.trim() !== '' &&
+    (input.value.trim() !== '' || attachments.value.length > 0) &&
     balance.value?.canSend === true,
 )
 const showEmpty = computed(() => activeId.value === null)
@@ -94,6 +105,56 @@ const balanceText = computed(() => {
 })
 function formatTokenCount(value: number): string {
   return new Intl.NumberFormat().format(value)
+}
+
+async function hydrateAttachments(messages: ChatMessage[]): Promise<void> {
+  const keys = [
+    ...new Set(
+      messages.flatMap((message) => message.attachments.map((attachment) => attachment.objectKey)),
+    ),
+  ]
+  await Promise.all(
+    keys.map(async (objectKey) => {
+      if (attachmentUrls.value[objectKey]) return
+      try {
+        const result = await requestObjectURL(objectKey)
+        attachmentUrls.value = { ...attachmentUrls.value, [objectKey]: result.url }
+      } catch {
+        // A missing attachment preview must not block the conversation.
+      }
+    }),
+  )
+}
+
+async function copyMessage(message: ChatMessage): Promise<void> {
+  if (message.content === '') return
+  try {
+    await navigator.clipboard.writeText(message.content)
+    ElMessage.success(t('ai.workbench.copied'))
+  } catch {
+    ElMessage.error(t('ai.workbench.copyFailed'))
+  }
+}
+
+async function setFeedback(message: ChatMessage, feedback: -1 | 1): Promise<void> {
+  if (
+    !canSendPermission.value ||
+    message.status !== 2 ||
+    message.runId === null ||
+    feedbackBusyID.value !== null
+  ) {
+    return
+  }
+  const next: -1 | 0 | 1 = message.feedback === feedback ? 0 : feedback
+  feedbackBusyID.value = message.id
+  try {
+    const result = await api.setMessageFeedback(message.id, next)
+    message.feedback = result.feedback
+  } catch {
+    // request.ts owns the API error notification.
+  } finally {
+    feedbackBusyID.value = null
+  }
 }
 
 const welcomeTitle = computed(() =>
@@ -158,6 +219,17 @@ async function loadAgents(): Promise<void> {
     const result = await api.getChatAgents()
     agents.value = result.list
     if (newAgentId.value === null && result.list.length > 0) newAgentId.value = result.list[0].id
+    const keys = [...new Set(result.list.map((agent) => agent.avatar).filter((key) => key !== ''))]
+    await Promise.all(
+      keys.map(async (objectKey) => {
+        try {
+          const url = await requestObjectURL(objectKey)
+          agentAvatarUrls.value = { ...agentAvatarUrls.value, [objectKey]: url.url }
+        } catch {
+          // Keep the initial as the fallback when an avatar cannot be resolved.
+        }
+      }),
+    )
   } catch {
     chatError.value = t('ai.workbench.agentsFailed')
   }
@@ -217,6 +289,7 @@ async function loadSession(id: number, older = false): Promise<void> {
     state.firstSeq = state.messages.length > 0 ? state.messages[0].seq : 0
     state.activeRun = result.activeRun ?? null
     state.loaded = true
+    void hydrateAttachments(state.messages)
     if (activeId.value === id) await nextTick(() => scrollToBottom())
   } catch {
     chatError.value = t('ai.workbench.messagesFailed')
@@ -305,13 +378,16 @@ async function send(): Promise<void> {
     const result = await api.sendMessage(conversationID, {
       content,
       requestId: crypto.randomUUID(),
+      attachments: attachments.value.map((objectKey) => ({ objectKey })),
     })
     input.value = ''
+    attachments.value = []
     const state = ensureSession(conversationID)
     if (!state.messages.some((message) => message.id === result.userMessage.id))
       state.messages.push(result.userMessage)
     if (!state.messages.some((message) => message.id === result.assistantMessage.id))
       state.messages.push(result.assistantMessage)
+    void hydrateAttachments([result.userMessage])
     state.activeRun = {
       id: result.runId,
       requestId: '',
@@ -432,6 +508,10 @@ const unsubscribeReconnect = subscribeChatReconnect(() => {
   void loadBalance()
 })
 
+watch(activeId, () => {
+  attachments.value = []
+})
+
 watch(
   () => {
     const current = session.value
@@ -473,7 +553,13 @@ onBeforeUnmount(() => {
           :class="{ 'is-active': agent.id === newAgentId }"
           @click="selectAgent(agent.id)"
         >
-          <span class="ai-workbench__agent-avatar">{{ agent.name.slice(0, 1) }}</span>
+          <el-avatar
+            class="ai-workbench__agent-avatar"
+            :size="30"
+            :src="agentAvatarUrls[agent.avatar]"
+          >
+            {{ agent.name.slice(0, 1) }}
+          </el-avatar>
           <span class="ai-workbench__agent-copy">
             <strong>{{ agent.name }}</strong>
             <small>{{ agent.modelName }}</small>
@@ -662,6 +748,28 @@ onBeforeUnmount(() => {
               <ChatDotRound :size="15" />
             </span>
             <div class="ai-workbench__message-body">
+              <div v-if="message.attachments.length > 0" class="ai-workbench__message-files">
+                <template v-for="attachment in message.attachments" :key="attachment.objectKey">
+                  <el-image
+                    v-if="attachment.kind === 1 && attachmentUrls[attachment.objectKey]"
+                    :src="attachmentUrls[attachment.objectKey]"
+                    :preview-src-list="[attachmentUrls[attachment.objectKey]]"
+                    fit="cover"
+                    class="ai-workbench__message-image"
+                    :alt="attachment.fileName"
+                  />
+                  <a
+                    v-else-if="attachmentUrls[attachment.objectKey]"
+                    :href="attachmentUrls[attachment.objectKey]"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ai-workbench__message-file"
+                  >
+                    {{ attachment.fileName }}
+                  </a>
+                  <span v-else class="ai-workbench__message-file">{{ attachment.fileName }}</span>
+                </template>
+              </div>
               <MarkdownContent
                 v-if="message.role === 2 && (message.content || message.status !== 1)"
                 :content="message.content"
@@ -682,7 +790,54 @@ onBeforeUnmount(() => {
                     output: formatTokenCount(message.usage.outputTokens),
                   })
                 }}</span>
+                <span>{{
+                  t('ai.workbench.cachedTokens', {
+                    cached: formatTokenCount(message.usage.cachedInputTokens),
+                  })
+                }}</span>
                 <span class="ai-workbench__message-cost">¥{{ message.usage.amount }}</span>
+              </div>
+              <div
+                v-if="message.role === 2 && message.status === 2"
+                class="ai-workbench__message-actions"
+              >
+                <el-tooltip :content="t('ai.workbench.copy')" placement="top" :show-after="300">
+                  <el-button
+                    text
+                    circle
+                    size="small"
+                    :aria-label="t('ai.workbench.copy')"
+                    @click="copyMessage(message)"
+                  >
+                    <Copy :size="13" aria-hidden="true" />
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('ai.workbench.like')" placement="top" :show-after="300">
+                  <el-button
+                    text
+                    circle
+                    size="small"
+                    :class="{ 'is-liked': message.feedback === 1 }"
+                    :disabled="feedbackBusyID !== null"
+                    :aria-label="t('ai.workbench.like')"
+                    @click="setFeedback(message, 1)"
+                  >
+                    <ThumbsUp :size="13" aria-hidden="true" />
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="t('ai.workbench.dislike')" placement="top" :show-after="300">
+                  <el-button
+                    text
+                    circle
+                    size="small"
+                    :class="{ 'is-disliked': message.feedback === -1 }"
+                    :disabled="feedbackBusyID !== null"
+                    :aria-label="t('ai.workbench.dislike')"
+                    @click="setFeedback(message, -1)"
+                  >
+                    <ThumbsDown :size="13" aria-hidden="true" />
+                  </el-button>
+                </el-tooltip>
               </div>
               <div v-if="message.status === 4" class="ai-workbench__message-error">
                 {{ t('ai.workbench.messageFailed') }}
@@ -703,6 +858,21 @@ onBeforeUnmount(() => {
 
       <footer v-if="!showEmpty" class="ai-workbench__composer">
         <div class="ai-workbench__composer-shell">
+          <div
+            v-if="canUploadAttachment || canSelectAttachment"
+            class="ai-workbench__composer-attachments"
+          >
+            <UpMedia
+              v-model="attachments"
+              rule-code="file"
+              variant="file"
+              multiple
+              compact
+              :upload-disabled="!canUploadAttachment"
+              :allow-file-library="canSelectAttachment"
+              file-library-purpose=""
+            />
+          </div>
           <el-input
             v-model="input"
             class="ai-workbench__composer-input"
@@ -1639,6 +1809,127 @@ onBeforeUnmount(() => {
   font-family: var(--admin-font-data);
   font-size: 11px;
   font-weight: 650;
+}
+
+.ai-workbench__message-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-workbench__message-image {
+  width: 128px;
+  height: 96px;
+  border-radius: 8px;
+  cursor: zoom-in;
+}
+
+.ai-workbench__message-file {
+  display: inline-flex;
+  max-width: 240px;
+  overflow: hidden;
+  padding: 5px 9px;
+  border: 1px solid #e1e8f3;
+  border-radius: 6px;
+  color: #2563eb;
+  background: #f8fafc;
+  font-size: 11px;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-workbench__composer-attachments {
+  max-height: 160px;
+  padding: 4px 4px 0;
+  overflow-y: auto;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media) {
+  gap: 6px;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__controls) {
+  gap: 4px;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__controls.is-compact .el-button) {
+  width: 26px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__controls .el-button) {
+  height: 26px;
+  margin: 0;
+  padding: 0 9px;
+  border-color: #e5eaf2;
+  border-radius: 999px;
+  color: #64748b;
+  background: #f8fafc;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__controls .el-button:hover) {
+  border-color: #bfdbfe;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__controls .el-button--primary) {
+  border-color: #e5eaf2;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__controls .el-button--primary:hover) {
+  border-color: #bfdbfe;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__library) {
+  margin: 0;
+}
+
+.ai-workbench__composer-attachments :deep(.up-media__error) {
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+
+.ai-workbench__message-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ai-workbench__message-actions :deep(.el-button) {
+  width: 27px;
+  height: 27px;
+  margin-left: 0;
+  color: #98a2b3;
+}
+
+.ai-workbench__message-actions :deep(.el-button:hover),
+.ai-workbench__message-actions :deep(.el-button.is-liked) {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.ai-workbench__message-actions :deep(.el-button.is-liked svg) {
+  fill: currentcolor;
+}
+
+.ai-workbench__message-actions :deep(.el-button.is-disliked) {
+  color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
+}
+
+.ai-workbench__message-actions :deep(.el-button.is-disliked svg) {
+  fill: currentcolor;
 }
 
 .ai-workbench__message-error {

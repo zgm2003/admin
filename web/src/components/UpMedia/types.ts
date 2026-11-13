@@ -15,6 +15,8 @@ export interface UpMediaProps {
   disabled?: boolean
   clearable?: boolean
   width?: string
+  /** Render file upload and library actions as compact icon buttons. */
+  compact?: boolean
 }
 
 export interface PreviewState {

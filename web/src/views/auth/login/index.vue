@@ -431,10 +431,6 @@ async function submit(): Promise<void> {
               {{ t('auth.login.privacyPolicy') }}
             </el-button>
           </div>
-
-          <p class="auth-access-note">
-            <el-icon><Lock /></el-icon>{{ t('auth.login.authorizedOnly') }}
-          </p>
         </div>
       </section>
     </div>

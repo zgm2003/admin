@@ -1,6 +1,7 @@
 export interface AgentForm {
   name: string
   description: string
+  avatar: string
   systemPrompt: string
   scene: number
   type: number
@@ -13,6 +14,7 @@ export function emptyAgentForm(): AgentForm {
   return {
     name: '',
     description: '',
+    avatar: '',
     systemPrompt: '',
     scene: 1,
     type: 1,

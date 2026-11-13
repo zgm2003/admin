@@ -16,6 +16,7 @@ func NewRepository(db *gorm.DB) *Repository { return &Repository{db: db} }
 type UpdateValues struct {
 	Name            string
 	Description     string
+	Avatar          string
 	SystemPrompt    string
 	Scene           Scene
 	AgentType       pricing.ModelKind
@@ -75,7 +76,7 @@ func agentFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 
 func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues) error {
 	result := r.db.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{
-		"name": values.Name, "description": values.Description,
+		"name": values.Name, "description": values.Description, "avatar": values.Avatar,
 		"system_prompt": values.SystemPrompt, "scene": values.Scene, "agent_type": values.AgentType,
 		"provider_model_id": values.ProviderModelID, "timeout_ms": values.TimeoutMS, "status": values.Status,
 		"updated_at": values.UpdatedAt, "version": gorm.Expr("version + 1"),

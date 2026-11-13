@@ -10,6 +10,7 @@ type AgentValue struct {
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`
 	Description  string `json:"description"`
+	Avatar       string `json:"avatar"`
 	Scene        int16  `json:"scene"`
 	ProviderName string `json:"providerName"`
 	ModelName    string `json:"modelName"`
@@ -28,15 +29,25 @@ type ConversationValue struct {
 }
 
 type MessageValue struct {
-	ID          int64         `json:"id"`
-	Seq         int32         `json:"seq"`
-	Role        MessageRole   `json:"role"`
-	Content     string        `json:"content"`
-	Status      MessageStatus `json:"status"`
-	RunID       *int64        `json:"runId"`
-	DeliverySeq int64         `json:"deliverySeq"`
-	CreatedAt   time.Time     `json:"createdAt"`
-	Usage       *MessageUsage `json:"usage,omitempty"`
+	ID          int64             `json:"id"`
+	Seq         int32             `json:"seq"`
+	Role        MessageRole       `json:"role"`
+	Content     string            `json:"content"`
+	Status      MessageStatus     `json:"status"`
+	RunID       *int64            `json:"runId"`
+	DeliverySeq int64             `json:"deliverySeq"`
+	Feedback    int16             `json:"feedback"`
+	CreatedAt   time.Time         `json:"createdAt"`
+	Usage       *MessageUsage     `json:"usage,omitempty"`
+	Attachments []AttachmentValue `json:"attachments"`
+}
+
+type AttachmentValue struct {
+	Kind      AttachmentKind `json:"kind"`
+	ObjectKey string         `json:"objectKey"`
+	FileName  string         `json:"fileName"`
+	MimeType  string         `json:"mimeType"`
+	SizeBytes int64          `json:"sizeBytes"`
 }
 
 type MessageUsage struct {
@@ -78,7 +89,14 @@ func conversationValue(row ConversationView) ConversationValue {
 func messageValue(row Message) MessageValue {
 	value := MessageValue{
 		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content, Status: row.Status,
-		RunID: row.RunID, DeliverySeq: row.DeliverySeq, CreatedAt: row.CreatedAt,
+		RunID: row.RunID, DeliverySeq: row.DeliverySeq, Feedback: row.Feedback,
+		CreatedAt: row.CreatedAt, Attachments: make([]AttachmentValue, 0, len(row.Attachments)),
+	}
+	for _, attachment := range row.Attachments {
+		value.Attachments = append(value.Attachments, AttachmentValue{
+			Kind: attachment.Kind, ObjectKey: attachment.ObjectKey, FileName: attachment.FileName,
+			MimeType: attachment.MimeType, SizeBytes: attachment.SizeBytes,
+		})
 	}
 	if row.Role == RoleAssistant && row.RunID != nil && row.UsageAmountUnits != nil {
 		amount, err := money.FormatRMBUnits(*row.UsageAmountUnits)
@@ -101,7 +119,7 @@ func messageValue(row Message) MessageValue {
 
 func agentValue(row AgentRow) AgentValue {
 	return AgentValue{
-		ID: row.ID, Name: row.Name, Description: row.Description, Scene: row.Scene,
+		ID: row.ID, Name: row.Name, Description: row.Description, Avatar: row.Avatar, Scene: row.Scene,
 		ProviderName: row.ProviderName, ModelName: row.ModelName, TimeoutMS: row.TimeoutMS,
 	}
 }

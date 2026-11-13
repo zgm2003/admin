@@ -8,6 +8,7 @@ import { ElNotification } from 'element-plus/es/components/notification/index'
 
 import * as api from '@/api/ai/agent'
 import type { AgentModelOptions, AgentOptions, AgentQuery, AiAgent } from '@/api/ai/agent'
+import { requestObjectURL } from '@/api/storage/upload'
 import { useLocalizedOptions } from '@/composables/useLocalizedOptions'
 import { usePermissionStore } from '@/store/permission'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
@@ -36,6 +37,7 @@ const {
 }))
 
 const rows = ref<AiAgent[]>([])
+const avatarUrls = ref<Record<string, string>>({})
 const total = ref(0)
 const query = ref<AgentQuery>({ page: 1, pageSize: 20 })
 const filters = ref<
@@ -115,6 +117,21 @@ const columns = computed<TableColumn<AiAgent>[]>(() => [
   { key: 'actions', label: t('common.actions'), width: 260, fixed: 'right' },
 ])
 
+async function hydrateAvatars(items: AiAgent[]): Promise<void> {
+  const keys = [...new Set(items.map((item) => item.avatar).filter((key) => key !== ''))]
+  await Promise.all(
+    keys.map(async (key) => {
+      if (avatarUrls.value[key]) return
+      try {
+        const result = await requestObjectURL(key)
+        if (alive) avatarUrls.value = { ...avatarUrls.value, [key]: result.url }
+      } catch {
+        // A missing preview must not block the agent list.
+      }
+    }),
+  )
+}
+
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
   if (loadError.value) return 'error'
@@ -131,6 +148,7 @@ async function load(): Promise<void> {
     if (alive && current === sequence && canList.value) {
       rows.value = result.list
       total.value = result.total
+      void hydrateAvatars(result.list)
     }
   } catch {
     if (alive && current === sequence) {
@@ -351,9 +369,14 @@ onBeforeUnmount(() => {
         <span class="ai-agent-page__hint">{{ t('ai.agent.hint') }}</span>
       </template>
       <template #cell-agent="{ row }: { row: AiAgent }">
-        <div class="ai-agent-page__identity">
-          <strong>{{ row.name }}</strong>
-          <span>{{ row.description || t('ai.agent.noDescription') }}</span>
+        <div class="ai-agent-page__agent-cell">
+          <el-avatar :size="38" :src="avatarUrls[row.avatar]">
+            {{ row.name.slice(0, 1) }}
+          </el-avatar>
+          <div class="ai-agent-page__identity">
+            <strong>{{ row.name }}</strong>
+            <span>{{ row.description || t('ai.agent.noDescription') }}</span>
+          </div>
         </div>
       </template>
       <template #cell-type="{ row }: { row: AiAgent }">
@@ -435,6 +458,13 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .ai-agent-page {
   min-width: 0;
+
+  &__agent-cell {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+  }
 
   &__retry {
     display: flex;

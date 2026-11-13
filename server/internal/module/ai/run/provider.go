@@ -15,9 +15,16 @@ import (
 
 var ErrUnsupportedProtocol = errors.New("provider protocol is not supported by the chat runtime yet")
 
+type ChatAttachment struct {
+	URL      string
+	IsImage  bool
+	FileName string
+}
+
 type ChatMessage struct {
-	Role    string
-	Content string
+	Role        string
+	Content     string
+	Attachments []ChatAttachment
 }
 
 type ChatUsage struct {
@@ -65,16 +72,33 @@ func (c *ProviderClient) Stream(ctx context.Context, request ProviderRequest) (<
 }
 
 func (c *ProviderClient) streamOpenAI(ctx context.Context, request ProviderRequest) (<-chan StreamChunk, error) {
-	messages := make([]map[string]string, 0, len(request.Messages)+1)
+	messages := make([]map[string]any, 0, len(request.Messages)+1)
 	if strings.TrimSpace(request.SystemPrompt) != "" {
-		messages = append(messages, map[string]string{"role": "system", "content": request.SystemPrompt})
+		messages = append(messages, map[string]any{"role": "system", "content": request.SystemPrompt})
 	}
 	for _, message := range request.Messages {
 		role := message.Role
 		if role != "assistant" {
 			role = "user"
 		}
-		messages = append(messages, map[string]string{"role": role, "content": message.Content})
+		var content any = message.Content
+		if len(message.Attachments) > 0 {
+			parts := make([]map[string]any, 0, len(message.Attachments)+1)
+			if message.Content != "" {
+				parts = append(parts, map[string]any{"type": "text", "text": message.Content})
+			}
+			for _, attachment := range message.Attachments {
+				if attachment.IsImage {
+					parts = append(parts, map[string]any{
+						"type": "image_url", "image_url": map[string]string{"url": attachment.URL},
+					})
+				}
+			}
+			if len(parts) > 0 {
+				content = parts
+			}
+		}
+		messages = append(messages, map[string]any{"role": role, "content": content})
 	}
 	body, err := json.Marshal(map[string]any{
 		"model": request.Model, "messages": messages, "stream": true,

@@ -12,6 +12,7 @@ type Model struct {
 	ID              int64             `gorm:"column:id;primaryKey;autoIncrement"`
 	Name            string            `gorm:"column:name;type:varchar(128);not null"`
 	Description     string            `gorm:"column:description;type:varchar(500);not null"`
+	Avatar          string            `gorm:"column:avatar;type:varchar(512);not null"`
 	SystemPrompt    string            `gorm:"column:system_prompt;type:text;not null"`
 	AgentType       pricing.ModelKind `gorm:"column:agent_type;type:smallint;not null"`
 	Scene           Scene             `gorm:"column:scene;type:smallint;not null"`

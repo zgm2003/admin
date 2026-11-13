@@ -15,22 +15,28 @@ import (
 	auth "admin/server/internal/module/auth/login"
 	"admin/server/internal/module/payment/wallet"
 	"admin/server/internal/module/realtime"
+	storagefile "admin/server/internal/module/storage/file"
 	"admin/server/internal/secretkey"
 	"admin/server/internal/shared/pagination"
 
 	"gorm.io/gorm"
 )
 
+type AttachmentURLResolver interface {
+	ObjectURL(ctx context.Context, identity auth.Identity, objectKey, disposition string) (storagefile.URLResult, error)
+}
+
 type Service struct {
-	repo      *Repository
-	chat      *chat.Repository
-	db        *gorm.DB
-	wallet    *wallet.Repository
-	keys      *secretkey.KeyRing
-	publisher realtime.RawPublisher
-	provider  *ProviderClient
-	logger    *slog.Logger
-	now       func() time.Time
+	repo           *Repository
+	chat           *chat.Repository
+	db             *gorm.DB
+	wallet         *wallet.Repository
+	keys           *secretkey.KeyRing
+	publisher      realtime.RawPublisher
+	provider       *ProviderClient
+	logger         *slog.Logger
+	attachmentURLs AttachmentURLResolver
+	now            func() time.Time
 }
 
 func NewService(
@@ -53,6 +59,13 @@ func NewService(
 		repo: repo, chat: chatRepository, db: db, wallet: walletRepository,
 		keys: keys, publisher: publisher, provider: provider, logger: logger, now: time.Now,
 	}
+}
+
+func (s *Service) SetAttachmentURLResolver(resolver AttachmentURLResolver) *Service {
+	if s != nil {
+		s.attachmentURLs = resolver
+	}
+	return s
 }
 
 type SendResult struct {
@@ -85,6 +98,33 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 	if !exists || walletRow.BalanceUnits <= 0 {
 		return SendResult{}, insufficient(errors.New("wallet balance is not positive"))
 	}
+	objectKeys := make([]string, 0, len(input.Attachments))
+	for _, attachment := range input.Attachments {
+		objectKeys = append(objectKeys, attachment.ObjectKey)
+	}
+	fileRefs, err := s.chat.FindReadyFilesByObjectKeys(ctx, identity.PlatformID, identity.UserID, objectKeys)
+	if err != nil {
+		return SendResult{}, dependency(err)
+	}
+	if len(fileRefs) != len(objectKeys) {
+		return SendResult{}, invalid(errors.New("attachment is unavailable"))
+	}
+	attachments := make([]chat.MessageAttachment, 0, len(fileRefs))
+	fileByKey := make(map[string]chat.StorageFileRef, len(fileRefs))
+	for _, file := range fileRefs {
+		fileByKey[file.ObjectKey] = file
+	}
+	for _, objectKey := range objectKeys {
+		file := fileByKey[objectKey]
+		kind := chat.AttachmentFile
+		if strings.HasPrefix(strings.ToLower(file.MimeType), "image/") {
+			kind = chat.AttachmentImage
+		}
+		attachments = append(attachments, chat.MessageAttachment{
+			Kind: kind, ObjectKey: file.ObjectKey, FileName: file.FileName,
+			MimeType: file.MimeType, SizeBytes: file.SizeBytes,
+		})
+	}
 	snapshot, err := json.Marshal(PriceSnapshot{
 		Currency: "CNY", InputCNYMicros: agent.InputCNYMicros, OutputCNYMicros: agent.OutputCNYMicros,
 		CacheReadCNYMicros: agent.CacheReadCNYMicros, CacheWriteCNY: agent.CacheWriteCNY,
@@ -102,11 +142,15 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 		TimeoutMS: agent.TimeoutMS, PricingSnapshot: string(snapshot),
 		Status: RunQueued, BillingStatus: BillingPending, CreatedAt: now, UpdatedAt: now,
 	}
+	title := titleFromContent(input.Content)
+	if title == "" && len(attachments) > 0 {
+		title = titleFromContent(attachments[0].FileName)
+	}
 	var userMessage, assistant chat.Message
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var txErr error
 		userMessage, assistant, txErr = s.repo.CreateTurnTx(
-			ctx, tx, conversation, input.Content, titleFromContent(input.Content), run, now,
+			ctx, tx, conversation, input.Content, title, attachments, run, now,
 		)
 		return txErr
 	})
@@ -133,6 +177,16 @@ func (s *Service) existingSendResult(ctx context.Context, run Run) (SendResult, 
 	if len(preceding) == 1 && preceding[0].Role == chat.RoleUser {
 		userMessage = preceding[0]
 	}
+	messageIDs := []int64{assistant.ID}
+	if userMessage.ID > 0 {
+		messageIDs = append(messageIDs, userMessage.ID)
+	}
+	attachments, err := s.chat.AttachmentsByMessageIDs(ctx, messageIDs)
+	if err != nil {
+		return SendResult{}, mapError(err)
+	}
+	assistant.Attachments = attachments[assistant.ID]
+	userMessage.Attachments = attachments[userMessage.ID]
 	result := SendResult{RunID: run.ID, AssistantMessage: messageValue(assistant)}
 	if userMessage.ID > 0 {
 		result.UserMessage = messageValue(userMessage)
@@ -190,7 +244,22 @@ func (s *Service) RunDetail(ctx context.Context, identity auth.Identity, runID i
 			Seq: event.Seq, Type: event.Type, Message: event.Message, CreatedAt: event.CreatedAt,
 		})
 	}
-	return RunDetail{RunValue: runValue(run, username), Events: eventValues}, nil
+	detail := RunDetail{RunValue: runValue(run, username), Events: eventValues}
+	userMessage, assistantMessage, messageErr := s.repo.TurnMessages(ctx, runID)
+	if messageErr != nil && !errors.Is(messageErr, gorm.ErrRecordNotFound) {
+		return RunDetail{}, mapError(messageErr)
+	}
+	if messageErr == nil {
+		attachments, attachErr := s.chat.AttachmentsByMessageIDs(ctx, []int64{userMessage.ID, assistantMessage.ID})
+		if attachErr != nil {
+			return RunDetail{}, mapError(attachErr)
+		}
+		userMessage.Attachments = attachments[userMessage.ID]
+		assistantMessage.Attachments = attachments[assistantMessage.ID]
+		userValue, assistantValue := runMessageValue(userMessage), runMessageValue(assistantMessage)
+		detail.UserMessage, detail.AssistantMessage = &userValue, &assistantValue
+	}
+	return detail, nil
 }
 
 func (s *Service) StartRun(runID int64) {

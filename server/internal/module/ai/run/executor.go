@@ -11,6 +11,7 @@ import (
 
 	"admin/server/internal/module/ai/chat"
 	"admin/server/internal/module/ai/pricing"
+	auth "admin/server/internal/module/auth/login"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/shared/money"
 
@@ -62,22 +63,58 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 	if err != nil {
 		return s.failBeforeStream(parent, run, err)
 	}
+	messageIDs := make([]int64, 0, len(history))
+	for _, message := range history {
+		messageIDs = append(messageIDs, message.ID)
+	}
+	attachments, err := s.chat.AttachmentsByMessageIDs(parent, messageIDs)
+	if err != nil {
+		return s.failBeforeStream(parent, run, err)
+	}
 	messages := make([]ChatMessage, 0, len(history))
 	usedRunes := 0
 	for i := len(history) - 1; i >= 0; i-- {
 		message := history[i]
-		if message.Content == "" || message.Role == chat.RoleAssistant && message.Status == chat.MessageStreaming {
+		message.Attachments = attachments[message.ID]
+		if (message.Content == "" && len(message.Attachments) == 0) ||
+			message.Role == chat.RoleAssistant && message.Status == chat.MessageStreaming {
 			continue
-		}
-		usedRunes += len([]rune(message.Content))
-		if usedRunes > maxHistoryRunes {
-			break
 		}
 		role := "user"
 		if message.Role == chat.RoleAssistant {
 			role = "assistant"
 		}
-		messages = append(messages, ChatMessage{Role: role, Content: message.Content})
+		content := message.Content
+		providerAttachments := make([]ChatAttachment, 0, len(message.Attachments))
+		for _, attachment := range message.Attachments {
+			if s.attachmentURLs == nil {
+				return s.failBeforeStream(parent, run, errors.New("attachment URL resolver is not configured"))
+			}
+			disposition := "attachment"
+			if attachment.Kind == chat.AttachmentImage {
+				disposition = "inline"
+			}
+			resolved, resolveErr := s.attachmentURLs.ObjectURL(parent, auth.Identity{
+				UserID: run.UserID, PlatformID: run.PlatformID,
+			}, attachment.ObjectKey, disposition)
+			if resolveErr != nil {
+				return s.failBeforeStream(parent, run, resolveErr)
+			}
+			if attachment.Kind == chat.AttachmentImage {
+				providerAttachments = append(providerAttachments, ChatAttachment{
+					URL: resolved.URL, IsImage: true, FileName: attachment.FileName,
+				})
+				continue
+			}
+			content += "\n\n[附件: " + attachment.FileName + "](" + resolved.URL + ")"
+		}
+		usedRunes += len([]rune(content))
+		if usedRunes > maxHistoryRunes {
+			break
+		}
+		messages = append(messages, ChatMessage{
+			Role: role, Content: content, Attachments: providerAttachments,
+		})
 	}
 
 	timeout := time.Duration(run.TimeoutMS) * time.Millisecond

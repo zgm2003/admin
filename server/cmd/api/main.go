@@ -465,6 +465,7 @@ func run(logger *slog.Logger) error {
 	fileService := storagefile.NewService(storagefile.NewRepository(postgres.GORM, schedulerRepository), keys, cosClient, cosConfigService, uploadRuleService)
 	uploadRuleService.SetFileRegistrar(fileService)
 	profileService.SetAvatarCopier(fileService)
+	runService.SetAttachmentURLResolver(fileService)
 	notificationDefinition := scheduler.NotificationBatchDefinition(nil)
 	batchJobWriter, err := scheduler.NewBatchJobWriter(schedulerRepository, notificationDefinition)
 	if err != nil {

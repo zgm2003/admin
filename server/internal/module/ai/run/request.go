@@ -12,11 +12,19 @@ import (
 	"github.com/google/uuid"
 )
 
-const maxContentRunes = 20000
+const (
+	maxContentRunes = 20000
+	maxAttachments  = 6
+)
+
+type AttachmentInput struct {
+	ObjectKey string
+}
 
 type SendInput struct {
-	Content   string
-	RequestID string
+	Content     string
+	RequestID   string
+	Attachments []AttachmentInput
 }
 
 type RunListQuery struct {
@@ -30,24 +38,59 @@ type RunListQuery struct {
 	SelfUserID int64
 }
 
+type attachmentRequest struct {
+	ObjectKey *string `json:"objectKey"`
+}
+
 type sendMessageRequest struct {
-	Content   *string `json:"content"`
-	RequestID *string `json:"requestId"`
+	Content     *string             `json:"content"`
+	RequestID   *string             `json:"requestId"`
+	Attachments []attachmentRequest `json:"attachments"`
 }
 
 func (r sendMessageRequest) input() (SendInput, error) {
-	if r.Content == nil || r.RequestID == nil {
-		return SendInput{}, fmt.Errorf("content and requestId are required")
+	if r.RequestID == nil {
+		return SendInput{}, fmt.Errorf("requestId is required")
 	}
-	content := strings.TrimSpace(*r.Content)
-	if content == "" || utf8.RuneCountInString(content) > maxContentRunes {
-		return SendInput{}, fmt.Errorf("content must be between 1 and %d characters", maxContentRunes)
+	content := ""
+	if r.Content != nil {
+		content = strings.TrimSpace(*r.Content)
+	}
+	if utf8.RuneCountInString(content) > maxContentRunes {
+		return SendInput{}, fmt.Errorf("content must be at most %d characters", maxContentRunes)
+	}
+	if len(r.Attachments) > maxAttachments {
+		return SendInput{}, fmt.Errorf("attachments must be at most %d", maxAttachments)
+	}
+	attachments := make([]AttachmentInput, 0, len(r.Attachments))
+	seen := make(map[string]struct{}, len(r.Attachments))
+	for _, raw := range r.Attachments {
+		if raw.ObjectKey == nil {
+			return SendInput{}, fmt.Errorf("attachment objectKey is required")
+		}
+		objectKey := strings.TrimSpace(*raw.ObjectKey)
+		if objectKey == "" || utf8.RuneCountInString(objectKey) > 512 {
+			return SendInput{}, fmt.Errorf("attachment objectKey is invalid")
+		}
+		for _, character := range objectKey {
+			if character < 0x20 || character == 0x7f {
+				return SendInput{}, fmt.Errorf("attachment objectKey contains control characters")
+			}
+		}
+		if _, exists := seen[objectKey]; exists {
+			return SendInput{}, fmt.Errorf("attachment objectKey is duplicated")
+		}
+		seen[objectKey] = struct{}{}
+		attachments = append(attachments, AttachmentInput{ObjectKey: objectKey})
+	}
+	if content == "" && len(attachments) == 0 {
+		return SendInput{}, fmt.Errorf("content or attachments are required")
 	}
 	requestID := strings.TrimSpace(*r.RequestID)
 	if _, err := uuid.Parse(requestID); err != nil {
 		return SendInput{}, fmt.Errorf("requestId must be a UUID")
 	}
-	return SendInput{Content: content, RequestID: requestID}, nil
+	return SendInput{Content: content, RequestID: requestID, Attachments: attachments}, nil
 }
 
 func parseRunQuery(values url.Values, viewAll bool) (RunListQuery, error) {

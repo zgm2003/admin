@@ -17,6 +17,17 @@ type CreateConversationInput struct {
 	Title   string
 }
 
+type feedbackRequest struct {
+	Feedback *int16 `json:"feedback"`
+}
+
+func (r feedbackRequest) value() (int16, error) {
+	if r.Feedback == nil || (*r.Feedback != -1 && *r.Feedback != 0 && *r.Feedback != 1) {
+		return 0, fmt.Errorf("feedback must be -1, 0 or 1")
+	}
+	return *r.Feedback, nil
+}
+
 type RenameConversationInput struct {
 	Title string
 }

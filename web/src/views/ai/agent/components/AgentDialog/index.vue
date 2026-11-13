@@ -5,7 +5,10 @@ import { useI18n } from 'vue-i18n'
 import type { CascaderProps, FormInstance, FormRules } from 'element-plus'
 
 import type { AgentOptions, AgentProviderModelOption, AiAgent } from '@/api/ai/agent'
+import type { CompletedFile, StorageFile } from '@/api/storage/file'
 import AppDialog from '@/components/AppDialog/index.vue'
+import UpMedia from '@/components/UpMedia/index.vue'
+import { usePermissionStore } from '@/store/permission'
 import { emptyAgentForm, type AgentForm } from './types'
 
 defineOptions({ name: 'AIAgentDialog' })
@@ -20,6 +23,14 @@ const props = defineProps<{
 const emit = defineEmits<{ save: [payload: AgentForm] }>()
 const visible = defineModel<boolean>({ required: true })
 const { t } = useI18n()
+const access = usePermissionStore()
+const canSelectFile = computed(
+  () => access.hasPermission('storage:file:list') && access.hasPermission('storage:file:detail'),
+)
+const canUploadAvatar = computed(
+  () =>
+    access.hasPermission('storage:object:upload') && access.hasPermission('storage:file:detail'),
+)
 
 const formRef = ref<FormInstance>()
 const form = ref<AgentForm>(emptyAgentForm())
@@ -93,6 +104,7 @@ watch(
       form.value = {
         name: props.model.name,
         description: props.model.description,
+        avatar: props.model.avatar,
         systemPrompt: props.model.systemPrompt,
         scene: props.model.scene,
         type: props.model.type,
@@ -106,6 +118,17 @@ watch(
   { immediate: true },
 )
 
+function updateAvatar(value: string | string[]): void {
+  if (typeof value === 'string') form.value.avatar = value
+}
+function selectAvatar(file: StorageFile): void {
+  form.value.avatar = file.objectKey
+}
+function avatarUploaded(items: CompletedFile[]): void {
+  const file = items[0]
+  if (file) form.value.avatar = file.objectKey
+}
+
 async function submit(): Promise<void> {
   if (props.submitting || formRef.value === undefined) return
   try {
@@ -117,6 +140,7 @@ async function submit(): Promise<void> {
   emit('save', {
     name: form.value.name.trim(),
     description: form.value.description.trim(),
+    avatar: form.value.avatar.trim(),
     systemPrompt: form.value.systemPrompt.trim(),
     scene: form.value.scene,
     type: form.value.type,
@@ -145,6 +169,21 @@ async function submit(): Promise<void> {
       @submit.prevent
     >
       <el-alert v-if="error" :title="error" type="error" :closable="false" />
+
+      <el-form-item :label="t('ai.agent.avatar')">
+        <UpMedia
+          :model-value="form.avatar"
+          rule-code="avatar"
+          variant="image"
+          :upload-disabled="!canUploadAvatar"
+          :allow-file-library="canSelectFile"
+          :disabled="submitting"
+          file-library-purpose="avatar"
+          @selected="selectAvatar"
+          @uploaded="avatarUploaded"
+          @update:model-value="updateAvatar"
+        />
+      </el-form-item>
 
       <div class="ai-agent-dialog__grid">
         <el-form-item :label="t('ai.agent.name')" prop="name">

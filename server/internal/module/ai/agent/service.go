@@ -104,7 +104,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 	}
 	now := s.now().UTC()
 	id, err := s.repo.Create(ctx, Model{
-		Name: values.Name, Description: values.Description, SystemPrompt: values.SystemPrompt,
+		Name: values.Name, Description: values.Description, Avatar: input.Avatar, SystemPrompt: values.SystemPrompt,
 		Scene: values.Scene, AgentType: values.AgentType,
 		ProviderModelID: values.ProviderModelID, TimeoutMS: values.TimeoutMS,
 		Status: values.Status, Version: 1, CreatedAt: now, UpdatedAt: now,
@@ -122,7 +122,8 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if id < 1 {
 		return invalid(fmt.Errorf("id is invalid"))
 	}
-	if _, err := s.repo.FindByID(ctx, id); err != nil {
+	existing, err := s.repo.FindByID(ctx, id)
+	if err != nil {
 		return mapError(err)
 	}
 	values, err := validateInput(
@@ -138,9 +139,14 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 		}
 		return mapError(err)
 	}
+	avatar := existing.Avatar
+	if input.Avatar != nil {
+		avatar = *input.Avatar
+	}
 	if err := s.repo.Update(ctx, id, UpdateValues{
-		Name: values.Name, Description: values.Description, SystemPrompt: values.SystemPrompt,
-		Scene: values.Scene, AgentType: values.AgentType,
+		Name: values.Name, Description: values.Description, Avatar: avatar,
+		SystemPrompt: values.SystemPrompt,
+		Scene:        values.Scene, AgentType: values.AgentType,
 		ProviderModelID: values.ProviderModelID, TimeoutMS: values.TimeoutMS,
 		Status: values.Status, UpdatedAt: s.now().UTC(),
 	}); err != nil {

@@ -10,6 +10,7 @@ import type { ChatRun, ChatRunDetail, ChatRunQuery } from '@/api/ai/chat'
 import { usePermissionStore } from '@/store/permission'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
+import MarkdownContent from '@/views/ai/workbench/components/MarkdownContent/index.vue'
 
 defineOptions({ name: 'AIRunPage' })
 
@@ -365,6 +366,41 @@ onBeforeUnmount(() => {
             show-icon
           />
 
+          <h4>{{ t('ai.run.conversation') }}</h4>
+          <div
+            v-if="detail.userMessage || detail.assistantMessage"
+            class="ai-run-page__conversation"
+          >
+            <section v-if="detail.userMessage" class="ai-run-page__message is-user">
+              <header>{{ t('ai.run.userMessage') }}</header>
+              <p v-if="detail.userMessage.content" class="ai-run-page__message-content">
+                {{ detail.userMessage.content }}
+              </p>
+              <div
+                v-if="detail.userMessage.attachments.length > 0"
+                class="ai-run-page__attachments"
+              >
+                <el-tag
+                  v-for="attachment in detail.userMessage.attachments"
+                  :key="attachment.objectKey"
+                  size="small"
+                  effect="plain"
+                  type="info"
+                >
+                  {{ attachment.fileName }}
+                </el-tag>
+              </div>
+            </section>
+            <section v-if="detail.assistantMessage" class="ai-run-page__message is-assistant">
+              <header>{{ t('ai.run.assistantMessage') }}</header>
+              <MarkdownContent
+                v-if="detail.assistantMessage.content"
+                :content="detail.assistantMessage.content"
+              />
+            </section>
+          </div>
+          <el-empty v-else :description="t('ai.run.noMessages')" />
+
           <h4>{{ t('ai.run.timeline') }}</h4>
           <el-timeline v-if="detail.events.length > 0">
             <el-timeline-item
@@ -391,6 +427,45 @@ onBeforeUnmount(() => {
   &__hint {
     color: var(--admin-text-muted);
     font-size: 12px;
+  }
+
+  &__conversation {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  &__message {
+    padding: 12px 14px;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: var(--admin-surface-soft);
+
+    header {
+      margin-bottom: 6px;
+      color: var(--admin-text-muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    &.is-user {
+      border-left: 3px solid var(--el-color-primary);
+    }
+  }
+
+  &__message-content {
+    margin: 0;
+    color: var(--admin-text);
+    font-size: 13px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+  }
+
+  &__attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
   }
 
   &__stack {

@@ -11,6 +11,7 @@ import (
 var (
 	ErrConversationNotFound = errors.New("conversation not found")
 	ErrAgentNotFound        = errors.New("chat agent is unavailable")
+	ErrMessageNotFound      = errors.New("chat message not found")
 )
 
 type Repository struct{ db *gorm.DB }
@@ -28,7 +29,7 @@ func (r *Repository) ListAgents(ctx context.Context) ([]AgentRow, error) {
 	rows := make([]AgentRow, 0)
 	err := r.db.WithContext(ctx).
 		Table("ai_agent AS a").
-		Select(`a.id, a.name, a.description, a.scene, a.timeout_ms,
+		Select(`a.id, a.name, a.description, a.avatar, a.scene, a.timeout_ms,
 			p.name AS provider_name, pm.display_name AS model_name`).
 		Joins("JOIN ai_provider_model pm ON pm.id = a.provider_model_id AND pm.deleted_at IS NULL").
 		Joins("JOIN ai_provider p ON p.id = pm.provider_id AND p.deleted_at IS NULL").
@@ -43,7 +44,7 @@ func (r *Repository) FindAgent(ctx context.Context, id int64) (AgentRow, error) 
 	var row AgentRow
 	err := r.db.WithContext(ctx).
 		Table("ai_agent AS a").
-		Select(`a.id, a.name, a.description, a.scene, a.timeout_ms,
+		Select(`a.id, a.name, a.description, a.avatar, a.scene, a.timeout_ms,
 			p.name AS provider_name, pm.display_name AS model_name`).
 		Joins("JOIN ai_provider_model pm ON pm.id = a.provider_model_id AND pm.deleted_at IS NULL").
 		Joins("JOIN ai_provider p ON p.id = pm.provider_id AND p.deleted_at IS NULL").
@@ -116,6 +117,58 @@ func (r *Repository) DeleteConversation(ctx context.Context, platformID, userID,
 		return ErrConversationNotFound
 	}
 	return nil
+}
+
+func (r *Repository) SetMessageFeedback(ctx context.Context, platformID, userID, messageID int64, feedback int16, now time.Time) (bool, error) {
+	result := r.db.WithContext(ctx).Exec(`
+		UPDATE ai_chat_message AS m
+		SET feedback = ?, feedback_at = ?, updated_at = ?
+		FROM ai_chat_conversation AS c
+		WHERE m.id = ? AND m.conversation_id = c.id
+		  AND c.platform_id = ? AND c.user_id = ?
+		  AND m.role = ? AND m.status = ?
+	`, feedback, func() any {
+		if feedback == 0 {
+			return nil
+		}
+		return now
+	}(), now, messageID, platformID, userID, RoleAssistant, MessageCompleted)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected > 0, nil
+}
+
+func (r *Repository) FindReadyFilesByObjectKeys(ctx context.Context, platformID, userID int64, objectKeys []string) ([]StorageFileRef, error) {
+	if len(objectKeys) == 0 {
+		return []StorageFileRef{}, nil
+	}
+	rows := make([]StorageFileRef, 0, len(objectKeys))
+	err := r.db.WithContext(ctx).
+		Table("storage_file").
+		Select("id, object_key, original_name, mime_type, size_bytes, user_id, platform_id").
+		Where("platform_id = ? AND user_id = ? AND object_key IN ?", platformID, userID, objectKeys).
+		Where("status = ? AND kind = ? AND deleted_at IS NULL", 2, 1).
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *Repository) AttachmentsByMessageIDs(ctx context.Context, messageIDs []int64) (map[int64][]MessageAttachment, error) {
+	result := make(map[int64][]MessageAttachment, len(messageIDs))
+	if len(messageIDs) == 0 {
+		return result, nil
+	}
+	rows := make([]MessageAttachment, 0)
+	if err := r.db.WithContext(ctx).
+		Where("message_id IN ?", messageIDs).
+		Order("message_id ASC, id ASC").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.MessageID] = append(result[row.MessageID], row)
+	}
+	return result, nil
 }
 
 func (r *Repository) ListMessages(ctx context.Context, conversationID int64, beforeSeq int32, limit int) ([]Message, error) {

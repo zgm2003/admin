@@ -55,7 +55,7 @@ func (r *Repository) FindRunByRequest(ctx context.Context, platformID, userID in
 	return row, err == nil, err
 }
 
-func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation chat.Conversation, userContent, title string, run Run, now time.Time) (chat.Message, chat.Message, error) {
+func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation chat.Conversation, userContent, title string, attachments []chat.MessageAttachment, run Run, now time.Time) (chat.Message, chat.Message, error) {
 	var active int64
 	if err := tx.WithContext(ctx).Model(&Run{}).
 		Where("conversation_id = ? AND status IN (1, 2)", conversation.ID).Count(&active).Error; err != nil {
@@ -77,6 +77,14 @@ func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation
 	if err := tx.WithContext(ctx).Create(&userMessage).Error; err != nil {
 		return chat.Message{}, chat.Message{}, err
 	}
+	for index := range attachments {
+		attachments[index].MessageID = userMessage.ID
+		attachments[index].CreatedAt, attachments[index].UpdatedAt = now, now
+		if err := tx.WithContext(ctx).Create(&attachments[index]).Error; err != nil {
+			return chat.Message{}, chat.Message{}, err
+		}
+	}
+	userMessage.Attachments = attachments
 	assistant := chat.Message{
 		ConversationID: conversation.ID, Seq: maxSeq + 2, Role: chat.RoleAssistant,
 		Content: "", Status: chat.MessageStreaming, CreatedAt: now, UpdatedAt: now,
@@ -185,6 +193,22 @@ func (r *Repository) ListRuns(ctx context.Context, query RunListQuery) ([]Run, i
 	err := base.Order("created_at DESC, id DESC").
 		Offset((query.Page - 1) * query.PageSize).Limit(query.PageSize).Find(&rows).Error
 	return rows, total, err
+}
+
+func (r *Repository) TurnMessages(ctx context.Context, runID int64) (chat.Message, chat.Message, error) {
+	var assistant chat.Message
+	if err := r.db.WithContext(ctx).
+		Where("run_id = ? AND role = ?", runID, chat.RoleAssistant).
+		Take(&assistant).Error; err != nil {
+		return chat.Message{}, chat.Message{}, err
+	}
+	var user chat.Message
+	if err := r.db.WithContext(ctx).
+		Where("conversation_id = ? AND seq = ? AND role = ?", assistant.ConversationID, assistant.Seq-1, chat.RoleUser).
+		Take(&user).Error; err != nil {
+		return chat.Message{}, chat.Message{}, err
+	}
+	return user, assistant, nil
 }
 
 func (r *Repository) ListRunEvents(ctx context.Context, runID int64) ([]RunEvent, error) {

@@ -5,6 +5,7 @@ export interface ChatAgent {
   id: number
   name: string
   description: string
+  avatar: string
   scene: number
   providerName: string
   modelName: string
@@ -29,6 +30,14 @@ export interface ChatMessageUsage {
   amount: string
 }
 
+export interface ChatMessageAttachment {
+  kind: number
+  objectKey: string
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+}
+
 export interface ChatMessage {
   id: number
   seq: number
@@ -37,9 +46,13 @@ export interface ChatMessage {
   status: number
   runId: number | null
   deliverySeq: number
+  feedback: number
   createdAt: string
   usage?: ChatMessageUsage
+  attachments: ChatMessageAttachment[]
 }
+
+export type ChatMessageFeedback = -1 | 0 | 1
 
 export interface ChatActiveRun {
   id: number
@@ -65,6 +78,7 @@ export interface ChatBalance {
 export interface SendMessageInput {
   content: string
   requestId: string
+  attachments?: Array<{ objectKey: string }>
 }
 
 export interface SendMessageResult {
@@ -109,7 +123,27 @@ export interface ChatRunEvent {
   createdAt: string
 }
 
+export interface ChatRunAttachment {
+  kind: number
+  objectKey: string
+  fileName: string
+  mimeType: string
+  sizeBytes: number
+}
+
+export interface ChatRunMessage {
+  id: number
+  role: number
+  content: string
+  status: number
+  feedback: number
+  createdAt: string
+  attachments: ChatRunAttachment[]
+}
+
 export interface ChatRunDetail extends ChatRun {
+  userMessage?: ChatRunMessage
+  assistantMessage?: ChatRunMessage
   events: ChatRunEvent[]
 }
 
@@ -166,6 +200,16 @@ export function sendMessage(id: number, input: SendMessageInput): Promise<SendMe
   return request.post<SendMessageResult, SendMessageInput>(
     `${base}/conversations/${id}/messages`,
     input,
+  )
+}
+
+export function setMessageFeedback(
+  id: number,
+  feedback: ChatMessageFeedback,
+): Promise<{ feedback: number }> {
+  return request.put<{ feedback: number }, { feedback: ChatMessageFeedback }>(
+    `${base}/messages/${id}/feedback`,
+    { feedback },
   )
 }
 

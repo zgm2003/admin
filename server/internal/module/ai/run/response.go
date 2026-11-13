@@ -43,16 +43,59 @@ type RunEventValue struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type RunMessageValue struct {
+	ID          int64                `json:"id"`
+	Role        int16                `json:"role"`
+	Content     string               `json:"content"`
+	Status      int16                `json:"status"`
+	Feedback    int16                `json:"feedback"`
+	CreatedAt   time.Time            `json:"createdAt"`
+	Attachments []RunAttachmentValue `json:"attachments"`
+}
+
+type RunAttachmentValue struct {
+	Kind      int16  `json:"kind"`
+	ObjectKey string `json:"objectKey"`
+	FileName  string `json:"fileName"`
+	MimeType  string `json:"mimeType"`
+	SizeBytes int64  `json:"sizeBytes"`
+}
+
 type RunDetail struct {
 	RunValue
-	Events []RunEventValue `json:"events"`
+	UserMessage      *RunMessageValue `json:"userMessage,omitempty"`
+	AssistantMessage *RunMessageValue `json:"assistantMessage,omitempty"`
+	Events           []RunEventValue  `json:"events"`
+}
+
+func runMessageValue(row chat.Message) RunMessageValue {
+	value := RunMessageValue{
+		ID: row.ID, Role: int16(row.Role), Content: row.Content, Status: int16(row.Status),
+		Feedback: row.Feedback, CreatedAt: row.CreatedAt,
+		Attachments: make([]RunAttachmentValue, 0, len(row.Attachments)),
+	}
+	for _, attachment := range row.Attachments {
+		value.Attachments = append(value.Attachments, RunAttachmentValue{
+			Kind: int16(attachment.Kind), ObjectKey: attachment.ObjectKey, FileName: attachment.FileName,
+			MimeType: attachment.MimeType, SizeBytes: attachment.SizeBytes,
+		})
+	}
+	return value
 }
 
 func messageValue(row chat.Message) chat.MessageValue {
-	return chat.MessageValue{
+	value := chat.MessageValue{
 		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content, Status: row.Status,
-		RunID: row.RunID, DeliverySeq: row.DeliverySeq, CreatedAt: row.CreatedAt,
+		RunID: row.RunID, DeliverySeq: row.DeliverySeq, Feedback: row.Feedback,
+		CreatedAt: row.CreatedAt, Attachments: make([]chat.AttachmentValue, 0, len(row.Attachments)),
 	}
+	for _, attachment := range row.Attachments {
+		value.Attachments = append(value.Attachments, chat.AttachmentValue{
+			Kind: attachment.Kind, ObjectKey: attachment.ObjectKey, FileName: attachment.FileName,
+			MimeType: attachment.MimeType, SizeBytes: attachment.SizeBytes,
+		})
+	}
+	return value
 }
 
 func runValue(row Run, username string) RunValue {

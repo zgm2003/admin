@@ -9,6 +9,45 @@ import (
 	"testing"
 )
 
+func TestProviderStreamOpenAISendsImageContentParts(t *testing.T) {
+	var received map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatal(err)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	defer server.Close()
+
+	client := NewProviderClient(server.Client())
+	chunks, err := client.Stream(context.Background(), ProviderRequest{
+		Protocol: 1, BaseURL: server.URL, APIKey: "secret", Model: "demo",
+		Messages: []ChatMessage{{
+			Role: "user", Content: "看图",
+			Attachments: []ChatAttachment{{URL: "https://example.test/a.png", IsImage: true}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range chunks {
+	}
+	messages, ok := received["messages"].([]any)
+	if !ok || len(messages) != 1 {
+		t.Fatalf("messages = %#v", received["messages"])
+	}
+	message, _ := messages[0].(map[string]any)
+	parts, ok := message["content"].([]any)
+	if !ok || len(parts) != 2 {
+		t.Fatalf("content parts = %#v", message["content"])
+	}
+	imagePart, _ := parts[1].(map[string]any)
+	if imagePart["type"] != "image_url" {
+		t.Fatalf("image part = %#v", imagePart)
+	}
+}
+
 func TestProviderStreamOpenAIParsesDeltasAndUsage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/chat/completions" {

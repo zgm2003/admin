@@ -1852,3 +1852,12 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 管理端资金流水增加“全部流水 / 充值收入 / AI 支出”Tab，并补齐流水号、创建时间、用户 ID、平台 ID 筛选；AI 行仍直接从合并账本读取详情，不调用支付流水详情接口。
 - 后端 `payment/transaction` 与 `payment/order` 的列表查询支持 `flow`、`keyword`、`status`、`from`、`to`，日期使用 RFC3339；非法枚举、非法日期和未知参数返回 400。
 - 验证：真实接口 `flow=credit/debit`、`keyword`、日期区间、订单状态筛选均返回预期结果；非法参数返回 400；前端 typecheck、ESLint、架构检查和构建通过。
+
+### AI 头像、消息反馈、多模态附件与运行消息快照（2026-11-13）
+
+- 迁移 `docs/database/2026-11-13-ai-chat-multimodal-feedback-avatar.sql` 已在真实 PostgreSQL 执行：`ai_agent.avatar VARCHAR(512)`、`ai_chat_message.feedback SMALLINT`/`feedback_at`、`ai_chat_message_attachment` 附件表；`docs/database/current.sql` 已按 public schema 重新导出。
+- 智能体新增头像：管理端表单使用 `UpMedia` 上传或从文件管理选择 `avatar` 用途文件，保存 objectKey；列表和工作台智能体入口异步解析签名预览 URL。头像缺失时显示名称首字。`storage:object-url` 对 `access_mode=public` 的原始文件允许跨用户读取，私有文件仍严格按属主隔离，保证普通对话用户也能看到管理员配置的头像。
+- 消息反馈：助手消息新增互斥点赞/踩（`feedback = 1/-1/0`），`PUT /ai/chat/messages/:id/feedback` 仅允许当前用户对自己的已完成助手消息操作；消息列表返回反馈状态。工作台助手回复下方新增复制、点赞、踩按钮，并展示“缓存命中 N tokens”。
+- 多模态附件：用户消息支持最多 6 个 objectKey 附件；后端校验 `storage_file` 属主、ready 状态和 original kind，图片以 OpenAI `image_url` content part 发送，其他附件以文件名 + 签名链接随文本发送。多轮历史会重新解析附件 URL，图片和文件每轮都进入上下文。运行日志详情新增用户消息、AI 回复及附件名称快照。
+- 登录页移除“仅限已授权账号访问”多余脚注及对应无用文案。
+- 验证：真实接口运行日志返回 userMessage/assistantMessage，反馈 1/-1/0 写入并读取，非法附件 objectKey 返回 400；provider 单测校验图片 content parts；AI Go 包测试、`go vet`、前端 typecheck、ESLint 和 `pnpm build` 通过。

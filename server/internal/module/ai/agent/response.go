@@ -20,6 +20,7 @@ type SafeValue struct {
 	ID              int64             `json:"id"`
 	Name            string            `json:"name"`
 	Description     string            `json:"description"`
+	Avatar          string            `json:"avatar"`
 	SystemPrompt    string            `json:"systemPrompt"`
 	Scene           Scene             `json:"scene"`
 	SceneName       string            `json:"sceneName"`
@@ -75,8 +76,9 @@ func safeValue(ctx context.Context, row Model, ref *ModelRef) (SafeValue, error)
 		statusName = option.New(ctx, row.Status, "启用", "Enabled").Label
 	}
 	result := SafeValue{
-		ID: row.ID, Name: row.Name, Description: row.Description, SystemPrompt: row.SystemPrompt,
-		Scene: row.Scene, SceneName: sceneName(ctx, row.Scene),
+		ID: row.ID, Name: row.Name, Description: row.Description, Avatar: row.Avatar,
+		SystemPrompt: row.SystemPrompt,
+		Scene:        row.Scene, SceneName: sceneName(ctx, row.Scene),
 		Type: row.AgentType, TypeName: agentTypeName(ctx, row.AgentType),
 		ProviderModelID: row.ProviderModelID, TimeoutMS: row.TimeoutMS,
 		Status: row.Status, StatusName: statusName,

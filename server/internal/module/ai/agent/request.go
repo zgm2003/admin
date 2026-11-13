@@ -33,6 +33,7 @@ type ListQuery struct {
 type CreateInput struct {
 	Name            string
 	Description     string
+	Avatar          string
 	SystemPrompt    string
 	Scene           Scene
 	AgentType       pricing.ModelKind
@@ -44,6 +45,7 @@ type CreateInput struct {
 type UpdateInput struct {
 	Name            string
 	Description     string
+	Avatar          *string
 	SystemPrompt    string
 	Scene           Scene
 	AgentType       pricing.ModelKind
@@ -59,6 +61,7 @@ type StatusInput struct {
 type createRequest struct {
 	Name            *string      `json:"name"`
 	Description     *string      `json:"description"`
+	Avatar          *string      `json:"avatar"`
 	SystemPrompt    *string      `json:"systemPrompt"`
 	Scene           *int16       `json:"scene"`
 	Type            *int16       `json:"type"`
@@ -83,9 +86,16 @@ func (r createRequest) input() (CreateInput, error) {
 	if err != nil {
 		return CreateInput{}, err
 	}
+	avatar := ""
+	if r.Avatar != nil {
+		avatar, err = normalizeAvatar(*r.Avatar)
+		if err != nil {
+			return CreateInput{}, err
+		}
+	}
 	return CreateInput{
-		Name: value.Name, Description: value.Description, SystemPrompt: value.SystemPrompt,
-		Scene: value.Scene, AgentType: value.AgentType,
+		Name: value.Name, Description: value.Description, Avatar: avatar,
+		SystemPrompt: value.SystemPrompt, Scene: value.Scene, AgentType: value.AgentType,
 		ProviderModelID: value.ProviderModelID, TimeoutMS: value.TimeoutMS, Status: value.Status,
 	}, nil
 }
@@ -93,6 +103,7 @@ func (r createRequest) input() (CreateInput, error) {
 type updateRequest struct {
 	Name            *string      `json:"name"`
 	Description     *string      `json:"description"`
+	Avatar          *string      `json:"avatar"`
 	SystemPrompt    *string      `json:"systemPrompt"`
 	Scene           *int16       `json:"scene"`
 	Type            *int16       `json:"type"`
@@ -117,11 +128,32 @@ func (r updateRequest) input() (UpdateInput, error) {
 	if err != nil {
 		return UpdateInput{}, err
 	}
+	var avatar *string
+	if r.Avatar != nil {
+		normalized, normalizeErr := normalizeAvatar(*r.Avatar)
+		if normalizeErr != nil {
+			return UpdateInput{}, normalizeErr
+		}
+		avatar = &normalized
+	}
 	return UpdateInput{
-		Name: value.Name, Description: value.Description, SystemPrompt: value.SystemPrompt,
-		Scene: value.Scene, AgentType: value.AgentType,
+		Name: value.Name, Description: value.Description, Avatar: avatar,
+		SystemPrompt: value.SystemPrompt, Scene: value.Scene, AgentType: value.AgentType,
 		ProviderModelID: value.ProviderModelID, TimeoutMS: value.TimeoutMS, Status: value.Status,
 	}, nil
+}
+
+func normalizeAvatar(raw string) (string, error) {
+	avatar := strings.TrimSpace(raw)
+	if utf8.RuneCountInString(avatar) > 512 {
+		return "", fmt.Errorf("avatar is too long")
+	}
+	for _, character := range avatar {
+		if character < 0x20 || character == 0x7f {
+			return "", fmt.Errorf("avatar contains control characters")
+		}
+	}
+	return avatar, nil
 }
 
 type inputValues struct {

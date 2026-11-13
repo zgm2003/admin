@@ -92,9 +92,19 @@ func (s *Service) Messages(ctx context.Context, identity auth.Identity, conversa
 	if err != nil {
 		return MessagePage{}, mapError(err)
 	}
+	messageIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		messageIDs = append(messageIDs, row.ID)
+	}
+	attachments, err := s.repo.AttachmentsByMessageIDs(ctx, messageIDs)
+	if err != nil {
+		return MessagePage{}, mapError(err)
+	}
 	items := make([]MessageValue, 0, len(rows))
 	for i := len(rows) - 1; i >= 0; i-- {
-		items = append(items, messageValue(rows[i]))
+		row := rows[i]
+		row.Attachments = attachments[row.ID]
+		items = append(items, messageValue(row))
 	}
 	page := MessagePage{List: items, HasMore: len(rows) == limit}
 	active, exists, err := s.repo.ActiveRunSummary(ctx, conversation.ID)
@@ -109,6 +119,23 @@ func (s *Service) Messages(ctx context.Context, identity auth.Identity, conversa
 		}
 	}
 	return page, nil
+}
+
+func (s *Service) Feedback(ctx context.Context, identity auth.Identity, messageID int64, feedback int16) (int16, error) {
+	if s == nil || s.repo == nil {
+		return 0, dependency(errors.New("chat service is not configured"))
+	}
+	if messageID < 1 || (feedback != -1 && feedback != 0 && feedback != 1) {
+		return 0, invalid(errors.New("feedback input invalid"))
+	}
+	found, err := s.repo.SetMessageFeedback(ctx, identity.PlatformID, identity.UserID, messageID, feedback, s.now().UTC())
+	if err != nil {
+		return 0, mapError(err)
+	}
+	if !found {
+		return 0, mapError(ErrMessageNotFound)
+	}
+	return feedback, nil
 }
 
 func (s *Service) Balance(ctx context.Context, userID int64) (BalanceValue, error) {
