@@ -431,6 +431,7 @@ export const zhCN = {
   'payment.transaction.aiUsage': 'AI 消费',
   'payment.transaction.run': '运行 #{id}',
   'payment.transaction.tokens': '输入 {input} · 输出 {output} tokens',
+  'payment.transaction.tokenUsage': 'Token 消耗',
   'payment.redeemCode.title': '兑换码',
   'payment.redeemCode.batchId': '批次 ID',
   'payment.redeemCode.batchIdPlaceholder': '请输入批次 ID',

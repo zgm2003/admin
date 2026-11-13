@@ -53,20 +53,34 @@ const pagination = computed<TablePaginationState>(() => ({
   total: total.value,
 }))
 const columns = computed<TableColumn<Transaction>[]>(() => [
-  { prop: 'transactionNo', label: t('payment.transaction.transactionNo'), minWidth: 190 },
-  { prop: 'userId', label: t('payment.transaction.userId'), width: 100 },
-  { prop: 'username', label: t('payment.transaction.username'), minWidth: 140 },
-  { prop: 'platformCode', label: t('payment.transaction.platformCode'), width: 130 },
-  { key: 'sourceType', label: t('payment.transaction.sourceType'), width: 120 },
-  { prop: 'amount', label: t('payment.transaction.amount'), width: 130 },
-  { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 140 },
-  { key: 'createdAt', label: t('common.createdAt'), minWidth: 180 },
-  { key: 'actions', label: t('common.actions'), width: 90, fixed: 'right' },
+  { prop: 'transactionNo', label: t('payment.transaction.transactionNo'), minWidth: 170 },
+  { prop: 'userId', label: t('payment.transaction.userId'), width: 90 },
+  { prop: 'username', label: t('payment.transaction.username'), minWidth: 120 },
+  { prop: 'platformCode', label: t('payment.transaction.platformCode'), width: 110 },
+  { key: 'sourceType', label: t('payment.transaction.sourceType'), width: 110 },
+  { key: 'description', label: t('payment.transaction.description'), minWidth: 210 },
+  { key: 'amount', label: t('payment.transaction.amount'), width: 130 },
+  { prop: 'balanceAfter', label: t('payment.transaction.balanceAfter'), width: 130 },
+  { key: 'createdAt', label: t('common.createdAt'), minWidth: 170 },
+  { key: 'actions', label: t('common.actions'), width: 80, fixed: 'right' },
 ])
 function source(value: number): string {
   if (value === 1) return t('payment.transaction.payment')
   if (value === 2) return t('payment.transaction.redeemCode')
+  if (value === 3) return t('payment.transaction.aiUsage')
   return String(value)
+}
+function isDebit(row: Transaction): boolean {
+  return Number(row.amount) < 0
+}
+function amountText(row: Transaction): string {
+  return row.amount.startsWith('-') ? `-¥${row.amount.slice(1)}` : `+¥${row.amount}`
+}
+function tokenSummary(row: Transaction): string {
+  return t('payment.transaction.tokens', {
+    input: new Intl.NumberFormat(locale.value).format(row.inputTokens ?? 0),
+    output: new Intl.NumberFormat(locale.value).format(row.outputTokens ?? 0),
+  })
 }
 function state(): 'loading' | 'error' | 'empty' | 'success' {
   if (loading.value) return 'loading'
@@ -127,6 +141,10 @@ async function openDetail(row: Transaction): Promise<void> {
   if (!canDetail.value) return
   detailVisible.value = true
   detail.value = null
+  if (row.sourceType === 3) {
+    detail.value = row
+    return
+  }
   try {
     detail.value = await api.getTransaction(row.id)
   } catch {
@@ -164,18 +182,32 @@ onBeforeUnmount(() => {
       :data="rows"
       :loading="loading"
       :pagination="pagination"
-      :row-key="(row: Transaction) => String(row.id)"
+      :row-key="(row: Transaction) => `${row.sourceType}-${row.id}`"
       :result-state="state()"
       :status-message="loadError"
       :aria-label="t('payment.transaction.title')"
       @refresh="load"
       @update:pagination="updatePagination"
     >
-      <template #cell-sourceType="{ row }: { row: Transaction }"
-        ><el-tag size="small" effect="plain" type="info">{{
-          source(row.sourceType)
-        }}</el-tag></template
-      >
+      <template #cell-sourceType="{ row }: { row: Transaction }">
+        <el-tag size="small" effect="plain" :type="row.sourceType === 3 ? 'warning' : 'info'">
+          {{ source(row.sourceType) }}
+        </el-tag>
+      </template>
+      <template #cell-description="{ row }: { row: Transaction }">
+        <div v-if="row.sourceType === 3" class="payment-transaction-page__usage">
+          <strong>{{ row.agentName }} · {{ row.modelName }}</strong>
+          <span
+            >{{ tokenSummary(row) }} · {{ t('payment.transaction.run', { id: row.runId }) }}</span
+          >
+        </div>
+        <span v-else class="payment-transaction-page__muted">—</span>
+      </template>
+      <template #cell-amount="{ row }: { row: Transaction }">
+        <span :class="{ 'payment-transaction-page__debit': isDebit(row) }">{{
+          amountText(row)
+        }}</span>
+      </template>
       <template #cell-createdAt="{ row }: { row: Transaction }">{{
         formatTime(row.createdAt)
       }}</template>
@@ -187,7 +219,6 @@ onBeforeUnmount(() => {
       <template #empty><el-empty :description="t('payment.transaction.empty')" /></template>
     </AppTable>
     <AppDialog v-model="detailVisible" :title="t('payment.transaction.title')" width="620px">
-      
       <el-descriptions v-if="detail" :column="2" border>
         <el-descriptions-item :label="t('payment.transaction.transactionNo')">{{
           detail.transactionNo
@@ -213,7 +244,19 @@ onBeforeUnmount(() => {
         <el-descriptions-item :label="t('payment.transaction.balanceAfter')">{{
           detail.balanceAfter
         }}</el-descriptions-item>
-        <el-descriptions-item :label="t('payment.transaction.orderId')">{{
+        <el-descriptions-item
+          v-if="detail.sourceType === 3"
+          :label="t('payment.transaction.description')"
+        >
+          {{ detail.agentName }} · {{ detail.modelName }}
+        </el-descriptions-item>
+        <el-descriptions-item
+          v-if="detail.sourceType === 3"
+          :label="t('payment.transaction.tokenUsage')"
+        >
+          {{ tokenSummary(detail) }}
+        </el-descriptions-item>
+        <el-descriptions-item v-else :label="t('payment.transaction.orderId')">{{
           detail.orderId ?? '-'
         }}</el-descriptions-item>
         <el-descriptions-item :label="t('common.createdAt')">{{
@@ -227,5 +270,37 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .payment-transaction-page {
   min-width: 0;
+}
+
+.payment-transaction-page__usage {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.payment-transaction-page__usage strong,
+.payment-transaction-page__usage span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payment-transaction-page__usage strong {
+  color: var(--el-text-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payment-transaction-page__usage span,
+.payment-transaction-page__muted {
+  color: var(--el-text-color-secondary);
+  font-size: 10px;
+}
+
+.payment-transaction-page__debit {
+  color: var(--el-color-danger);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
 }
 </style>

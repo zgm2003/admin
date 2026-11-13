@@ -449,6 +449,7 @@ export const enUS = {
   'payment.transaction.aiUsage': 'AI usage',
   'payment.transaction.run': 'Run #{id}',
   'payment.transaction.tokens': 'Input {input} · output {output} tokens',
+  'payment.transaction.tokenUsage': 'Token usage',
   'payment.redeemCode.title': 'Redeem codes',
   'payment.redeemCode.batchId': 'Batch ID',
   'payment.redeemCode.batchIdPlaceholder': 'Enter a batch ID',
