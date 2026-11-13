@@ -56,18 +56,34 @@ const rendered = computed(() => {
   })
 })
 
+function lastMeaningfulChild(node: Node): Node | null {
+  for (let index = node.childNodes.length - 1; index >= 0; index -= 1) {
+    const child = node.childNodes[index]
+    if (child.nodeType === Node.TEXT_NODE && child.textContent?.trim() === '') continue
+    return child
+  }
+  return null
+}
+
 function placeCursor(): void {
   const host = root.value
   if (host === null) return
   host.querySelector('.markdown-cursor')?.remove()
   if (!props.streaming) return
 
-  let target: HTMLElement = host
-  while (target.lastChild !== null) {
-    const last = target.lastChild
-    if (last.nodeType !== Node.ELEMENT_NODE) break
+  let target: Node = host
+  while (true) {
+    const last = lastMeaningfulChild(target)
+    if (last === null) break
+    if (last.nodeType !== Node.ELEMENT_NODE) {
+      target = last.parentNode ?? target
+      break
+    }
     const element = last as HTMLElement
-    if (element.tagName === 'HR' || element.tagName === 'IMG' || element.tagName === 'BR') break
+    if (element.tagName === 'HR' || element.tagName === 'IMG' || element.tagName === 'BR') {
+      target = element.parentNode ?? target
+      break
+    }
     target = element
   }
   const cursor = document.createElement('span')
