@@ -1828,3 +1828,11 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 前端新增 `web/src/views/ai/workbench`（Markdown + DOMPurify + highlight.js、流式追加、停止、余额、会话切换恢复）和 `web/src/views/ai/run`（本人日志 + `ai:run:viewAll` 全员日志、详情时间线）。
 - 权限：`ai:workbench:view/list/detail/create/update/delete/send` 与 `ai:run:view/list/detail/viewAll`；普通角色获得工作台和个人运行日志，`ai:run:viewAll` 只授予超级管理员。
 - 验证通过：`go test ./internal/module/ai/chat ./internal/module/ai/run ./internal/module/ai/agent ./internal/module/realtime ./cmd/api -count=1`、`go vet`、真实 PostgreSQL 流式对话/金额换算/负数余额/超时/取消 smoke、前端 `typecheck`、ESLint、架构检查和 `pnpm build`。
+
+### AI 工作台视觉重构与滚动修复（2026-11-12）
+
+- 参考 `admin_front_ts` 的 AI 对话布局重构工作台：左侧改为智能体列表、搜索、按时间分组的会话列表；主区改为轻量消息流、固定输入框和统一余额显示。
+- 工作台根容器改为占满 `admin-layout__main` 的可用高度，外层不再出现页面级上下滚动；只有消息区和会话列表内部滚动。`admin-layout__main:has(.ai-workbench)` 同步去掉默认 padding。
+- 修复 Markdown 代码高亮在 Vite dev 下报 `highlight.js/lib/core` 无 default export 的问题：把 `highlight.js/lib/core`、`markdown-it`、`dompurify` 加入 `optimizeDeps.include`，避免 Vite 直接转换 highlight.js 的 CJS core。
+- 余额统一显示两位小数；输入框占位与快捷键提示去重；用户消息气泡宽度修正，避免短消息被挤成多行。
+- 验证通过：`pnpm typecheck`、工作台 ESLint、`pnpm check:architecture`、`pnpm build`；浏览器检查 `htmlScroll === htmlClient`，工作台外层无滚动，控制台无 Vite 运行错误。
