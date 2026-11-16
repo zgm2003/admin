@@ -26,6 +26,7 @@ type SendInput struct {
 	RequestID   string
 	Attachments []AttachmentInput
 	WebSearch   bool
+	AgentID     *int64
 }
 
 type RunListQuery struct {
@@ -48,6 +49,7 @@ type sendMessageRequest struct {
 	RequestID   *string             `json:"requestId"`
 	Attachments []attachmentRequest `json:"attachments"`
 	WebSearch   bool                `json:"webSearch"`
+	AgentID     *int64              `json:"agentId"`
 }
 
 func (r sendMessageRequest) input() (SendInput, error) {
@@ -63,6 +65,9 @@ func (r sendMessageRequest) input() (SendInput, error) {
 	}
 	if len(r.Attachments) > maxAttachments {
 		return SendInput{}, fmt.Errorf("attachments must be at most %d", maxAttachments)
+	}
+	if r.AgentID != nil && *r.AgentID < 1 {
+		return SendInput{}, fmt.Errorf("agentId is invalid")
 	}
 	attachments := make([]AttachmentInput, 0, len(r.Attachments))
 	seen := make(map[string]struct{}, len(r.Attachments))
@@ -93,7 +98,8 @@ func (r sendMessageRequest) input() (SendInput, error) {
 		return SendInput{}, fmt.Errorf("requestId must be a UUID")
 	}
 	return SendInput{
-		Content: content, RequestID: requestID, Attachments: attachments, WebSearch: r.WebSearch,
+		Content: content, RequestID: requestID, Attachments: attachments,
+		WebSearch: r.WebSearch, AgentID: r.AgentID,
 	}, nil
 }
 

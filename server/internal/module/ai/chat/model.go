@@ -54,11 +54,14 @@ type Message struct {
 	CreatedAt        time.Time     `gorm:"column:created_at;type:timestamptz;not null"`
 	UpdatedAt        time.Time     `gorm:"column:updated_at;type:timestamptz;not null"`
 
-	// Read-only settlement projection joined from ai_usage_charge.
+	// Read-only settlement and run projections.
 	UsageAmountUnits       *int64 `gorm:"->;column:usage_amount_units"`
 	UsageInputTokens       *int64 `gorm:"->;column:usage_input_tokens"`
 	UsageCachedInputTokens *int64 `gorm:"->;column:usage_cached_input_tokens"`
 	UsageOutputTokens      *int64 `gorm:"->;column:usage_output_tokens"`
+	AgentID                int64  `gorm:"->;column:agent_id"`
+	AgentName              string `gorm:"->;column:agent_name"`
+	ModelName              string `gorm:"->;column:model_name"`
 
 	Attachments []MessageAttachment `gorm:"-"`
 }

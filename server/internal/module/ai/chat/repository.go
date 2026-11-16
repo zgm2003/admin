@@ -172,16 +172,21 @@ func (r *Repository) AttachmentsByMessageIDs(ctx context.Context, messageIDs []i
 	return result, nil
 }
 
-func (r *Repository) ListMessages(ctx context.Context, conversationID int64, beforeSeq int32, limit int) ([]Message, error) {
-	rows := make([]Message, 0)
-	db := r.db.WithContext(ctx).
+func (r *Repository) messageQuery(ctx context.Context) *gorm.DB {
+	return r.db.WithContext(ctx).
 		Table("ai_chat_message AS m").
 		Select(`m.*, c.amount_units AS usage_amount_units,
 			c.input_tokens AS usage_input_tokens,
 			c.cached_input_tokens AS usage_cached_input_tokens,
-			c.output_tokens AS usage_output_tokens`).
+			c.output_tokens AS usage_output_tokens,
+			run.agent_id AS agent_id, run.agent_name AS agent_name, run.model_name AS model_name`).
 		Joins("LEFT JOIN ai_usage_charge c ON c.run_id = m.run_id AND c.status = 1").
-		Where("m.conversation_id = ?", conversationID)
+		Joins("LEFT JOIN ai_chat_run run ON run.id = m.run_id")
+}
+
+func (r *Repository) ListMessages(ctx context.Context, conversationID int64, beforeSeq int32, limit int) ([]Message, error) {
+	rows := make([]Message, 0)
+	db := r.messageQuery(ctx).Where("m.conversation_id = ?", conversationID)
 	if beforeSeq > 0 {
 		db = db.Where("m.seq < ?", beforeSeq)
 	}
@@ -191,13 +196,13 @@ func (r *Repository) ListMessages(ctx context.Context, conversationID int64, bef
 
 func (r *Repository) FindMessage(ctx context.Context, id int64) (Message, error) {
 	var row Message
-	err := r.db.WithContext(ctx).First(&row, "id = ?", id).Error
+	err := r.messageQuery(ctx).Where("m.id = ?", id).Take(&row).Error
 	return row, err
 }
 
 func (r *Repository) MessageByRunID(ctx context.Context, runID int64) (Message, error) {
 	var row Message
-	err := r.db.WithContext(ctx).Where("run_id = ? AND role = ?", runID, RoleAssistant).Take(&row).Error
+	err := r.messageQuery(ctx).Where("m.run_id = ? AND m.role = ?", runID, RoleAssistant).Take(&row).Error
 	return row, err
 }
 

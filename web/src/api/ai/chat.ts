@@ -53,6 +53,9 @@ export interface ChatMessage {
   reasoningContent: string
   status: number
   runId: number | null
+  agentId: number
+  agentName: string
+  modelName: string
   deliverySeq: number
   feedback: number
   createdAt: string
@@ -89,6 +92,7 @@ export interface SendMessageInput {
   requestId: string
   attachments?: Array<{ objectKey: string }>
   webSearch?: boolean
+  agentId?: number
 }
 
 export interface SendMessageResult {

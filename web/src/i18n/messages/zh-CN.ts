@@ -295,6 +295,8 @@ export const zhCN = {
   'ai.workbench.newConversation': '新建对话',
   'ai.workbench.agent': '智能体',
   'ai.workbench.agentPlaceholder': '选择对话智能体',
+  'ai.workbench.nextReplyAgent': '下一条回复',
+  'ai.workbench.contextSwitchHint': '上下文连续，切换智能体不会丢失历史',
   'ai.workbench.empty': '还没有对话',
   'ai.workbench.welcome': '开始一段对话',
   'ai.workbench.balance': '可用余额',

@@ -111,11 +111,17 @@ func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation
 	if conversation.MessageCount == 0 && strings.TrimSpace(title) != "" {
 		updates["title"] = title
 	}
+	if run.AgentID != conversation.AgentID {
+		updates["agent_id"] = run.AgentID
+	}
 	if err := tx.WithContext(ctx).Model(&chat.Conversation{}).Where("id = ?", conversation.ID).
 		Updates(updates).Error; err != nil {
 		return chat.Message{}, chat.Message{}, err
 	}
 	assistant.RunID = &runID
+	assistant.AgentID = run.AgentID
+	assistant.AgentName = run.AgentName
+	assistant.ModelName = run.ModelName
 	return userMessage, assistant, nil
 }
 

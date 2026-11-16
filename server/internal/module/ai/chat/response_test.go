@@ -20,6 +20,18 @@ func TestMessageValueProjectsSettledUsage(t *testing.T) {
 	}
 }
 
+func TestMessageValueProjectsReplyAgent(t *testing.T) {
+	runID := int64(9)
+	message := Message{
+		ID: 18, Seq: 4, Role: RoleAssistant, Content: "answer", Status: MessageCompleted,
+		RunID: &runID, AgentID: 5, AgentName: "猫咪智能体", ModelName: "GPT-5.6 Sol",
+	}
+	value := messageValue(message)
+	if value.AgentID != 5 || value.AgentName != "猫咪智能体" || value.ModelName != "GPT-5.6 Sol" {
+		t.Fatalf("agent = %d/%s/%s", value.AgentID, value.AgentName, value.ModelName)
+	}
+}
+
 func TestMessageValueOmitsUsageForUserAndUnsettledMessages(t *testing.T) {
 	runID := int64(9)
 	for _, message := range []Message{

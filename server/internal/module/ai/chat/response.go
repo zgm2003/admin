@@ -36,6 +36,9 @@ type MessageValue struct {
 	ReasoningContent string            `json:"reasoningContent"`
 	Status           MessageStatus     `json:"status"`
 	RunID            *int64            `json:"runId"`
+	AgentID          int64             `json:"agentId"`
+	AgentName        string            `json:"agentName"`
+	ModelName        string            `json:"modelName"`
 	DeliverySeq      int64             `json:"deliverySeq"`
 	Feedback         int16             `json:"feedback"`
 	CreatedAt        time.Time         `json:"createdAt"`
@@ -92,7 +95,8 @@ func messageValue(row Message) MessageValue {
 	value := MessageValue{
 		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content,
 		ReasoningContent: row.ReasoningContent, Status: row.Status,
-		RunID: row.RunID, DeliverySeq: row.DeliverySeq, Feedback: row.Feedback,
+		RunID: row.RunID, AgentID: row.AgentID, AgentName: row.AgentName, ModelName: row.ModelName,
+		DeliverySeq: row.DeliverySeq, Feedback: row.Feedback,
 		CreatedAt: row.CreatedAt, Attachments: make([]AttachmentValue, 0, len(row.Attachments)),
 		Citations: make([]Citation, 0, len(row.Citations)),
 	}

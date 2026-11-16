@@ -313,6 +313,8 @@ export const enUS = {
   'ai.workbench.newConversation': 'New conversation',
   'ai.workbench.agent': 'Agent',
   'ai.workbench.agentPlaceholder': 'Select a conversation agent',
+  'ai.workbench.nextReplyAgent': 'Next reply',
+  'ai.workbench.contextSwitchHint': 'Context is continuous when switching agents',
   'ai.workbench.empty': 'No conversations yet',
   'ai.workbench.welcome': 'Start a conversation',
   'ai.workbench.balance': 'Available balance',

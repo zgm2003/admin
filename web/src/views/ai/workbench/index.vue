@@ -34,6 +34,7 @@ import { requestObjectURL } from '@/api/storage/upload'
 import FileSelectDialog from '@/components/FileSelectDialog/index.vue'
 import { subscribeChatRealtime, subscribeChatReconnect } from '@/realtime'
 import { usePermissionStore } from '@/store/permission'
+import AgentPicker from './components/AgentPicker/index.vue'
 import MarkdownContent from './components/MarkdownContent/index.vue'
 import { uploadAttachmentFiles } from './attachmentUpload'
 
@@ -42,6 +43,7 @@ defineOptions({ name: 'AIWorkbenchPage' })
 interface SessionState {
   messages: ChatMessage[]
   activeRun: ChatActiveRun | null
+  agentId: number | null
   loaded: boolean
   loading: boolean
   hasMore: boolean
@@ -110,6 +112,13 @@ const session = computed(() =>
 )
 const activeRun = computed(() => session.value?.activeRun ?? null)
 const streaming = computed(() => activeRun.value !== null)
+const selectedAgentId = computed<number | null>(() => {
+  if (activeId.value === null) return newAgentId.value
+  return session.value?.agentId ?? activeConversation.value?.agentId ?? newAgentId.value
+})
+const selectedAgent = computed(
+  () => agents.value.find((agent) => agent.id === selectedAgentId.value) ?? null,
+)
 const canSend = computed(
   () =>
     canSendPermission.value &&
@@ -234,6 +243,7 @@ function ensureSession(id: number): SessionState {
     state = reactive({
       messages: [],
       activeRun: null,
+      agentId: null,
       loaded: false,
       loading: false,
       hasMore: false,
@@ -332,6 +342,9 @@ async function selectConversation(id: number): Promise<void> {
   activeId.value = id
   chatError.value = ''
   const state = ensureSession(id)
+  const conversation = conversations.value.find((item) => item.id === id)
+  if (state.agentId === null) state.agentId = conversation?.agentId ?? newAgentId.value
+  if (state.agentId !== null) newAgentId.value = state.agentId
   if (!state.loaded) await loadSession(id)
   else await nextTick(() => scrollToBottom())
 }
@@ -353,6 +366,7 @@ async function createConversation(): Promise<void> {
 
 function selectAgent(id: number): void {
   newAgentId.value = id
+  if (activeId.value !== null) ensureSession(activeId.value).agentId = id
 }
 
 function useStarter(prompt: string): void {
@@ -400,6 +414,11 @@ async function removeConversation(item: ChatConversation): Promise<void> {
 
 async function send(): Promise<void> {
   if (!canSend.value || activeId.value === null) return
+  const agent = selectedAgent.value
+  if (agent === null) {
+    ElMessage.warning(t('ai.workbench.needAgent'))
+    return
+  }
   const content = input.value.trim()
   const conversationID = activeId.value
   sending.value = true
@@ -410,6 +429,7 @@ async function send(): Promise<void> {
       requestId: crypto.randomUUID(),
       attachments: attachments.value.map((attachment) => ({ objectKey: attachment.objectKey })),
       webSearch: webSearchEnabled.value,
+      agentId: agent.id,
     })
     input.value = ''
     attachments.value = []
@@ -428,6 +448,12 @@ async function send(): Promise<void> {
       deliverySeq: result.assistantMessage.deliverySeq,
     }
     followBottom.value = true
+    const conversation = conversations.value.find((item) => item.id === conversationID)
+    if (conversation) {
+      conversation.agentId = agent.id
+      conversation.agentName = agent.name
+      conversation.modelName = agent.modelName
+    }
     void loadConversations(false)
     await nextTick(() => scrollToBottom())
     await loadSession(conversationID)
@@ -757,34 +783,6 @@ onBeforeUnmount(() => {
 <template>
   <div class="ai-workbench">
     <aside class="ai-workbench__aside">
-      <section class="ai-workbench__agents" :aria-label="t('ai.workbench.agent')">
-        <div class="ai-workbench__section-label">{{ t('ai.workbench.agent') }}</div>
-        <button
-          v-for="agent in agents"
-          :key="agent.id"
-          type="button"
-          class="ai-workbench__agent-item"
-          :class="{ 'is-active': agent.id === newAgentId }"
-          @click="selectAgent(agent.id)"
-        >
-          <el-avatar
-            class="ai-workbench__agent-avatar"
-            :size="30"
-            :src="agentAvatarUrls[agent.avatar]"
-          >
-            {{ agent.name.slice(0, 1) }}
-          </el-avatar>
-          <span class="ai-workbench__agent-copy">
-            <strong>{{ agent.name }}</strong>
-            <small>{{ agent.modelName }}</small>
-          </span>
-          <span v-if="agent.id === newAgentId" class="ai-workbench__agent-indicator" />
-        </button>
-        <p v-if="agents.length === 0" class="ai-workbench__sidebar-tip">
-          {{ t('ai.workbench.noAgent') }}
-        </p>
-      </section>
-
       <div class="ai-workbench__actions">
         <el-button
           v-if="canCreate"
@@ -892,9 +890,7 @@ onBeforeUnmount(() => {
       <header class="ai-workbench__head">
         <div class="ai-workbench__head-copy">
           <strong>{{ activeConversation?.title || t('ai.workbench.welcome') }}</strong>
-          <span v-if="activeConversation">
-            {{ activeConversation.agentName }} · {{ activeConversation.modelName }}
-          </span>
+          <span v-if="activeConversation">{{ t('ai.workbench.contextSwitchHint') }}</span>
           <span v-else>{{ t('ai.workbench.subtitle') }}</span>
         </div>
         <div
@@ -936,16 +932,24 @@ onBeforeUnmount(() => {
           </span>
           <h1>{{ welcomeTitle }}</h1>
           <p>{{ welcomeTip }}</p>
-          <el-button
-            v-if="showEmpty && canCreate"
-            type="primary"
-            class="ai-workbench__welcome-action"
-            :disabled="newAgentId === null"
-            @click="createConversation"
-          >
-            <el-icon :size="16"><Plus /></el-icon>
-            <span>{{ t('ai.workbench.newConversation') }}</span>
-          </el-button>
+          <div v-if="showEmpty && canCreate" class="ai-workbench__welcome-actions">
+            <AgentPicker
+              :model-value="newAgentId"
+              :agents="agents"
+              :avatar-urls="agentAvatarUrls"
+              :placeholder="t('ai.workbench.agentPlaceholder')"
+              @select="selectAgent"
+            />
+            <el-button
+              type="primary"
+              class="ai-workbench__welcome-action"
+              :disabled="newAgentId === null"
+              @click="createConversation"
+            >
+              <el-icon :size="16"><Plus /></el-icon>
+              <span>{{ t('ai.workbench.newConversation') }}</span>
+            </el-button>
+          </div>
           <div v-else-if="!showEmpty" class="ai-workbench__starters">
             <button
               v-for="starter in starterPrompts"
@@ -976,6 +980,13 @@ onBeforeUnmount(() => {
               <el-icon :size="15"><ChatDotRound /></el-icon>
             </span>
             <div class="ai-workbench__message-body">
+              <div
+                v-if="message.role === 2 && message.agentName"
+                class="ai-workbench__message-agent"
+              >
+                <span>{{ message.agentName }}</span>
+                <span v-if="message.modelName">{{ message.modelName }}</span>
+              </div>
               <div v-if="message.attachments.length > 0" class="ai-workbench__message-files">
                 <template v-for="attachment in message.attachments" :key="attachment.objectKey">
                   <el-image
@@ -1217,9 +1228,31 @@ onBeforeUnmount(() => {
             @keydown="onKeydown"
           />
           <div class="ai-workbench__composer-bar">
-            <span class="ai-workbench__composer-hint">
-              {{ t('ai.workbench.inputHint') }}
-            </span>
+            <div class="ai-workbench__composer-left">
+              <AgentPicker
+                :model-value="selectedAgentId"
+                :agents="agents"
+                :avatar-urls="agentAvatarUrls"
+                :placeholder="t('ai.workbench.agentPlaceholder')"
+                @select="selectAgent"
+              />
+              <el-tag
+                v-if="
+                  activeConversation &&
+                  selectedAgent &&
+                  selectedAgent.id !== activeConversation.agentId
+                "
+                class="ai-workbench__next-tag"
+                size="small"
+                type="info"
+                effect="plain"
+              >
+                {{ t('ai.workbench.nextReplyAgent') }}
+              </el-tag>
+              <span class="ai-workbench__composer-hint">
+                {{ t('ai.workbench.inputHint') }}
+              </span>
+            </div>
             <div class="ai-workbench__composer-actions">
               <el-button
                 v-if="streaming"
@@ -1596,116 +1629,11 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
-.ai-workbench__agents {
-  max-height: 224px;
-  padding: 14px 10px 8px;
-  overflow-y: auto;
-}
-
-.ai-workbench__section-label {
-  padding: 4px 7px 6px;
-  color: #98a2b3;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.ai-workbench__agent-item {
-  position: relative;
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 3px;
-  padding: 7px 9px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: #263044;
-  background: transparent;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 150ms ease,
-    border-color 150ms ease,
-    box-shadow 150ms ease;
-}
-
-.ai-workbench__agent-item:hover {
-  background: rgb(255 255 255 / 70%);
-}
-
-.ai-workbench__agent-item.is-active {
-  border-color: #dce6f5;
-  background: #fff;
-  box-shadow: 0 2px 8px rgb(15 23 42 / 5%);
-}
-
-.ai-workbench__agent-avatar {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  place-items: center;
-  border-radius: 9px;
-  color: #315a9d;
-  background: linear-gradient(135deg, #e8f0ff, #f2edff);
-  font-size: 12px;
-  font-weight: 750;
-}
-
-.ai-workbench__agent-item.is-active .ai-workbench__agent-avatar {
-  color: #fff;
-  background: linear-gradient(135deg, #2563eb, #6d5dfc);
-}
-
-.ai-workbench__agent-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.ai-workbench__agent-copy strong,
-.ai-workbench__agent-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ai-workbench__agent-copy strong {
-  color: #263044;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.ai-workbench__agent-copy small {
-  color: #919bad;
-  font-size: 10px;
-}
-
-.ai-workbench__agent-indicator {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 6px;
-  border-radius: 50%;
-  background: #2563eb;
-  box-shadow: 0 0 0 3px rgb(37 99 235 / 10%);
-}
-
-.ai-workbench__sidebar-tip {
-  margin: 6px 8px;
-  color: #98a2b3;
-  font-size: 12px;
-}
-
 .ai-workbench__actions {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 2px 12px 10px;
+  padding: 14px 12px 10px;
 }
 
 .ai-workbench__new-chat {
@@ -2059,8 +1987,17 @@ onBeforeUnmount(() => {
   line-height: 1.7;
 }
 
-.ai-workbench__welcome-action {
+.ai-workbench__welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   margin-top: 22px;
+}
+
+.ai-workbench__welcome-action {
+  margin-top: 0;
   padding: 0 18px;
   height: 38px;
   border-radius: 10px;
@@ -2159,6 +2096,28 @@ onBeforeUnmount(() => {
   color: #344054;
   font-size: 14px;
   line-height: 1.75;
+}
+
+.ai-workbench__message-agent {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 5px;
+  color: #8a94a6;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ai-workbench__message-agent span:first-child {
+  color: #536078;
+  font-weight: 650;
+}
+
+.ai-workbench__message-agent span + span::before {
+  content: '·';
+  margin-right: 6px;
+  color: #b7c0ce;
 }
 
 .ai-workbench__thinking {
@@ -2561,9 +2520,23 @@ onBeforeUnmount(() => {
   padding: 2px 2px 0 6px;
 }
 
+.ai-workbench__composer-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-workbench__next-tag {
+  flex: 0 0 auto;
+}
+
 .ai-workbench__composer-hint {
+  overflow: hidden;
   color: #a0aaba;
   font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ai-workbench__composer-actions {
@@ -2651,10 +2624,6 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid #e8edf3;
   }
 
-  .ai-workbench__agents {
-    max-height: 104px;
-  }
-
   .ai-workbench__conversations {
     min-height: 0;
   }
@@ -2700,7 +2669,6 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .ai-workbench__conversation,
-  .ai-workbench__agent-item,
   .ai-workbench__starter,
   .ai-workbench__composer-shell,
   .ai-workbench__message {

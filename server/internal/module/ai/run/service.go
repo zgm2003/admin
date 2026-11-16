@@ -87,12 +87,16 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 	if err != nil {
 		return SendResult{}, mapError(err)
 	}
-	agent, err := s.repo.FindAgent(ctx, conversation.AgentID)
+	agentID := conversation.AgentID
+	if input.AgentID != nil {
+		agentID = *input.AgentID
+	}
+	agent, err := s.repo.FindAgent(ctx, agentID)
 	if err != nil {
 		return SendResult{}, mapError(err)
 	}
 	if agent.AgentType != int16(pricing.KindChat) || agent.Scene != 1 {
-		return SendResult{}, invalid(errors.New("conversation agent is not a conversation chat agent"))
+		return SendResult{}, invalid(errors.New("selected agent is not a conversation chat agent"))
 	}
 	walletRow, exists, err := s.wallet.Find(ctx, identity.UserID)
 	if err != nil {
@@ -161,6 +165,9 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 	if err != nil {
 		return SendResult{}, mapError(err)
 	}
+	assistant.AgentID = agent.ID
+	assistant.AgentName = agent.Name
+	assistant.ModelName = agent.ModelName
 	s.StartRun(assistant.RunIDValue())
 	return SendResult{
 		RunID: *assistant.RunID, UserMessage: messageValue(userMessage),
