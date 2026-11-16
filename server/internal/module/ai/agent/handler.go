@@ -17,7 +17,7 @@ type handlerService interface {
 	Update(context.Context, int64, UpdateInput) error
 	UpdateStatus(context.Context, int64, StatusInput) error
 	Delete(context.Context, int64) error
-	Options(context.Context) Options
+	Options(context.Context) (Options, error)
 	ModelOptions(context.Context) (ModelOptions, error)
 }
 
@@ -138,7 +138,11 @@ func (h *Handler) Delete(c *gin.Context) {
 }
 
 func (h *Handler) Options(c *gin.Context) {
-	result := h.service.Options(c.Request.Context())
+	result, err := h.service.Options(c.Request.Context())
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
 	response.OK(c, http.StatusOK, result)
 }
 

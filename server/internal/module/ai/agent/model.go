@@ -27,6 +27,24 @@ type Model struct {
 
 func (Model) TableName() string { return "ai_agent" }
 
+type AgentTool struct {
+	AgentID   int64     `gorm:"column:agent_id;primaryKey"`
+	ToolID    int64     `gorm:"column:tool_id;primaryKey"`
+	CreatedAt time.Time `gorm:"column:created_at;type:timestamptz;not null"`
+	UpdatedAt time.Time `gorm:"column:updated_at;type:timestamptz;not null"`
+}
+
+func (AgentTool) TableName() string { return "ai_agent_tool" }
+
+type ToolRef struct {
+	ID          int64  `gorm:"column:id"`
+	Code        string `gorm:"column:code"`
+	Name        string `gorm:"column:name"`
+	Description string `gorm:"column:description"`
+	Category    string `gorm:"column:category"`
+	Status      int16  `gorm:"column:status"`
+}
+
 type ModelRef struct {
 	ID              int64               `gorm:"column:id"`
 	ProviderID      int64               `gorm:"column:provider_id"`

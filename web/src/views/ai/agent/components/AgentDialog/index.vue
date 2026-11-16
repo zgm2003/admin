@@ -60,6 +60,22 @@ const filteredModelOptions = computed(() =>
     .filter((provider) => provider.children.length > 0),
 )
 const availableModelIDs = computed(() => availableIDsFor(form.value.type))
+const toolOptions = computed(() =>
+  props.options.tools
+    .filter((tool) => tool.status === 1)
+    .map((tool) => ({ value: tool.value, label: tool.label })),
+)
+const allToolsSelected = computed({
+  get: () =>
+    toolOptions.value.length > 0 &&
+    toolOptions.value.every((tool) => form.value.toolIds.includes(tool.value)),
+  set: (selected: boolean) => {
+    form.value.toolIds = selected ? toolOptions.value.map((tool) => tool.value) : []
+  },
+})
+const toolSelectionIndeterminate = computed(
+  () => form.value.toolIds.length > 0 && !allToolsSelected.value,
+)
 const currentModelUnavailable = computed(
   () =>
     props.model !== null &&
@@ -111,6 +127,9 @@ watch(
         providerModelId: boundModelAvailable ? props.model.providerModelId : null,
         timeoutMs: props.model.timeoutMs,
         status: props.model.status,
+        toolIds: (props.model.toolIds ?? []).filter((id) =>
+          props.options.tools.some((tool) => tool.value === id && tool.status === 1),
+        ),
       }
     }
     void nextTick(() => formRef.value?.clearValidate())
@@ -147,6 +166,7 @@ async function submit(): Promise<void> {
     providerModelId: form.value.providerModelId,
     timeoutMs: form.value.timeoutMs,
     status: form.value.status,
+    toolIds: [...form.value.toolIds],
   })
 }
 </script>
@@ -250,6 +270,30 @@ async function submit(): Promise<void> {
         show-icon
       />
 
+      <el-form-item :label="t('ai.agent.tools')" prop="toolIds">
+        <div class="ai-agent-dialog__tools">
+          <el-select-v2
+            v-model="form.toolIds"
+            :options="toolOptions"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            :placeholder="t('ai.agent.toolsPlaceholder')"
+            :no-data-text="t('ai.agent.noTools')"
+          />
+          <el-checkbox
+            :model-value="allToolsSelected"
+            :indeterminate="toolSelectionIndeterminate"
+            :disabled="toolOptions.length === 0"
+            @update:model-value="allToolsSelected = Boolean($event)"
+          >
+            {{ t('ai.agent.selectAllTools') }}
+          </el-checkbox>
+        </div>
+        <span class="ai-agent-dialog__hint">{{ t('ai.agent.toolsHint') }}</span>
+      </el-form-item>
+
       <el-form-item :label="t('ai.agent.description')" prop="description">
         <el-input
           v-model="form.description"
@@ -300,6 +344,27 @@ async function submit(): Promise<void> {
     margin-left: 8px;
     color: var(--admin-text-muted);
     font-size: 12px;
+  }
+
+  &__tools {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+
+    :deep(.el-select) {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  &__hint {
+    display: block;
+    margin-top: 6px;
+    color: var(--admin-text-muted);
+    font-size: 12px;
+    line-height: 1.5;
   }
 
   &__model {

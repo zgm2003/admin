@@ -26,6 +26,7 @@ export interface AiAgent {
   status: number
   statusName: string
   version: number
+  toolIds: number[]
   actions: AgentActions
   createdAt: string
   updatedAt: string
@@ -43,10 +44,20 @@ export interface AgentOption {
   label: string
 }
 
+export interface AgentToolOption {
+  value: number
+  label: string
+  code: string
+  description: string
+  category: string
+  status: number
+}
+
 export interface AgentOptions {
   types: AgentOption[]
   scenes: AgentOption[]
   statuses: AgentOption[]
+  tools: AgentToolOption[]
 }
 
 export interface AgentModelOption {
@@ -76,6 +87,7 @@ export interface CreateAgentInput {
   providerModelId: number
   timeoutMs: number
   status: number
+  toolIds: number[]
 }
 
 export type UpdateAgentInput = CreateAgentInput

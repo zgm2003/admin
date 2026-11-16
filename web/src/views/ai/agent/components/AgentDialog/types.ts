@@ -8,6 +8,7 @@ export interface AgentForm {
   providerModelId: number | null
   timeoutMs: number
   status: number
+  toolIds: number[]
 }
 
 export function emptyAgentForm(): AgentForm {
@@ -21,5 +22,6 @@ export function emptyAgentForm(): AgentForm {
     providerModelId: null,
     timeoutMs: 60000,
     status: 0,
+    toolIds: [],
   }
 }

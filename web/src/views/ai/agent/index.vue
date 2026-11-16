@@ -26,6 +26,7 @@ const {
   types: [],
   scenes: [],
   statuses: [],
+  tools: [],
 }))
 const {
   options: modelOptions,
@@ -112,6 +113,7 @@ const columns = computed<TableColumn<AiAgent>[]>(() => [
   { key: 'type', label: t('ai.agent.type'), width: 90 },
   { key: 'scene', label: t('ai.agent.scene'), minWidth: 150 },
   { key: 'model', label: t('ai.agent.model'), minWidth: 240 },
+  { key: 'tools', label: t('ai.agent.tools'), width: 110 },
   { key: 'status', label: t('ai.agent.status'), width: 90 },
   { key: 'updatedAt', label: t('ai.agent.updatedAt'), width: 170 },
   { key: 'actions', label: t('common.actions'), width: 260, fixed: 'right' },
@@ -396,6 +398,12 @@ onBeforeUnmount(() => {
             {{ t('ai.agent.modelUnavailableShort') }}
           </el-tag>
         </div>
+      </template>
+      <template #cell-tools="{ row }: { row: AiAgent }">
+        <el-tag v-if="row.toolIds.length > 0" type="info" effect="plain">
+          {{ t('ai.agent.toolCount', { count: row.toolIds.length }) }}
+        </el-tag>
+        <span v-else class="ai-agent-page__muted">{{ t('ai.agent.noTool') }}</span>
       </template>
       <template #cell-status="{ row }: { row: AiAgent }">
         <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="plain">

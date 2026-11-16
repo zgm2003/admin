@@ -228,9 +228,9 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 
 	toolDefs := make([]ToolDefinition, 0, 2)
 	if s.tools != nil {
-		enabled, toolErr := s.tools.Enabled(execCtx)
+		enabled, toolErr := s.tools.EnabledForAgent(execCtx, agent.ID)
 		if toolErr != nil {
-			s.logger.Warn("load enabled tools", "runId", run.ID, "error", toolErr)
+			s.logger.Warn("load agent tools", "runId", run.ID, "agentId", agent.ID, "error", toolErr)
 		} else {
 			for _, definition := range enabled {
 				toolDefs = append(toolDefs, ToolDefinition{

@@ -14,15 +14,18 @@ import (
 )
 
 type repository interface {
-	Create(context.Context, Model) (int64, error)
+	Create(context.Context, Model, []int64) (int64, error)
 	FindByID(context.Context, int64) (Model, error)
 	List(context.Context, ListQuery) ([]Model, int64, error)
-	Update(context.Context, int64, UpdateValues) error
+	Update(context.Context, int64, UpdateValues, []int64, bool) error
 	UpdateStatus(context.Context, int64, yesno.Value, time.Time) error
 	Delete(context.Context, int64) error
 	ModelRefsByIDs(context.Context, []int64) (map[int64]ModelRef, error)
 	ListUsableModelOptions(context.Context) ([]ModelRef, error)
 	FindUsableModel(context.Context, int64, pricing.ModelKind) (ModelRef, error)
+	ToolIDsByAgentIDs(context.Context, []int64) (map[int64][]int64, error)
+	ToolRefs(context.Context) ([]ToolRef, error)
+	ExistingToolIDs(context.Context, []int64) (map[int64]struct{}, error)
 }
 
 type Service struct {
@@ -50,6 +53,14 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 	if err != nil {
 		return pagination.Result[SafeValue]{}, mapError(err)
 	}
+	agentIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		agentIDs = append(agentIDs, row.ID)
+	}
+	toolIDs, err := s.repo.ToolIDsByAgentIDs(ctx, agentIDs)
+	if err != nil {
+		return pagination.Result[SafeValue]{}, mapError(err)
+	}
 	items := make([]SafeValue, 0, len(rows))
 	for _, row := range rows {
 		ref, ok := refs[row.ProviderModelID]
@@ -61,6 +72,7 @@ func (s *Service) List(ctx context.Context, query ListQuery) (pagination.Result[
 		if err != nil {
 			return pagination.Result[SafeValue]{}, err
 		}
+		item.ToolIDs = append([]int64{}, toolIDs[row.ID]...)
 		items = append(items, item)
 	}
 	return pagination.Result[SafeValue]{List: items, Total: total, Page: query.Page, PageSize: query.PageSize}, nil
@@ -78,11 +90,22 @@ func (s *Service) Get(ctx context.Context, id int64) (SafeValue, error) {
 	if err != nil {
 		return SafeValue{}, mapError(err)
 	}
+	toolIDs, err := s.repo.ToolIDsByAgentIDs(ctx, []int64{row.ID})
+	if err != nil {
+		return SafeValue{}, mapError(err)
+	}
+	var result SafeValue
 	ref, ok := refs[row.ProviderModelID]
 	if !ok {
-		return safeValue(ctx, row, nil)
+		result, err = safeValue(ctx, row, nil)
+	} else {
+		result, err = safeValue(ctx, row, &ref)
 	}
-	return safeValue(ctx, row, &ref)
+	if err != nil {
+		return SafeValue{}, err
+	}
+	result.ToolIDs = append([]int64{}, toolIDs[row.ID]...)
+	return result, nil
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) {
@@ -102,13 +125,17 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (int64, error) 
 		}
 		return 0, mapError(err)
 	}
+	toolIDs, err := s.validateToolIDs(ctx, input.ToolIDs)
+	if err != nil {
+		return 0, err
+	}
 	now := s.now().UTC()
 	id, err := s.repo.Create(ctx, Model{
 		Name: values.Name, Description: values.Description, Avatar: input.Avatar, SystemPrompt: values.SystemPrompt,
 		Scene: values.Scene, AgentType: values.AgentType,
 		ProviderModelID: values.ProviderModelID, TimeoutMS: values.TimeoutMS,
 		Status: values.Status, Version: 1, CreatedAt: now, UpdatedAt: now,
-	})
+	}, toolIDs)
 	if err != nil {
 		return 0, mapError(err)
 	}
@@ -143,13 +170,20 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) error
 	if input.Avatar != nil {
 		avatar = *input.Avatar
 	}
+	var toolIDs []int64
+	if input.ToolIDsSet {
+		toolIDs, err = s.validateToolIDs(ctx, input.ToolIDs)
+		if err != nil {
+			return err
+		}
+	}
 	if err := s.repo.Update(ctx, id, UpdateValues{
 		Name: values.Name, Description: values.Description, Avatar: avatar,
 		SystemPrompt: values.SystemPrompt,
 		Scene:        values.Scene, AgentType: values.AgentType,
 		ProviderModelID: values.ProviderModelID, TimeoutMS: values.TimeoutMS,
 		Status: values.Status, UpdatedAt: s.now().UTC(),
-	}); err != nil {
+	}, toolIDs, input.ToolIDsSet); err != nil {
 		return mapError(err)
 	}
 	return nil
@@ -196,7 +230,25 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *Service) Options(ctx context.Context) Options {
+func (s *Service) Options(ctx context.Context) (Options, error) {
+	if s == nil || s.repo == nil {
+		return Options{}, dependency(fmt.Errorf("agent repository missing"))
+	}
+	refs, err := s.repo.ToolRefs(ctx)
+	if err != nil {
+		return Options{}, mapError(err)
+	}
+	tools := make([]ToolOption, 0, len(refs))
+	for _, ref := range refs {
+		label := ref.Name
+		if ref.Code != "" {
+			label += " · " + ref.Code
+		}
+		tools = append(tools, ToolOption{
+			Value: ref.ID, Label: label, Code: ref.Code, Description: ref.Description,
+			Category: ref.Category, Status: ref.Status,
+		})
+	}
 	return Options{
 		Types: []option.Option[pricing.ModelKind]{
 			option.New(ctx, pricing.KindChat, "对话", "Chat"),
@@ -215,7 +267,34 @@ func (s *Service) Options(ctx context.Context) Options {
 			option.New(ctx, yesno.No, "停用", "Disabled"),
 			option.New(ctx, yesno.Yes, "启用", "Enabled"),
 		},
+		Tools: tools,
+	}, nil
+}
+
+func (s *Service) validateToolIDs(ctx context.Context, input []int64) ([]int64, error) {
+	seen := make(map[int64]struct{}, len(input))
+	ids := make([]int64, 0, len(input))
+	for _, id := range input {
+		if id < 1 {
+			return nil, invalid(fmt.Errorf("toolIds contains an invalid id"))
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
 	}
+	if len(ids) == 0 {
+		return ids, nil
+	}
+	existing, err := s.repo.ExistingToolIDs(ctx, ids)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	if len(existing) != len(ids) {
+		return nil, invalid(fmt.Errorf("toolIds contains a tool that does not exist"))
+	}
+	return ids, nil
 }
 
 func (s *Service) ModelOptions(ctx context.Context) (ModelOptions, error) {

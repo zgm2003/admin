@@ -26,8 +26,14 @@ type UpdateValues struct {
 	UpdatedAt       time.Time
 }
 
-func (r *Repository) Create(ctx context.Context, row Model) (int64, error) {
-	if err := r.db.WithContext(ctx).Create(&row).Error; err != nil {
+func (r *Repository) Create(ctx context.Context, row Model, toolIDs []int64) (int64, error) {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&row).Error; err != nil {
+			return err
+		}
+		return insertAgentTools(tx, row.ID, toolIDs, row.CreatedAt)
+	})
+	if err != nil {
 		return 0, err
 	}
 	return row.ID, nil
@@ -74,20 +80,28 @@ func agentFilter(db *gorm.DB, query ListQuery) *gorm.DB {
 	return db
 }
 
-func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues) error {
-	result := r.db.WithContext(ctx).Model(&Model{}).Where("id = ?", id).Updates(map[string]any{
-		"name": values.Name, "description": values.Description, "avatar": values.Avatar,
-		"system_prompt": values.SystemPrompt, "scene": values.Scene, "agent_type": values.AgentType,
-		"provider_model_id": values.ProviderModelID, "timeout_ms": values.TimeoutMS, "status": values.Status,
-		"updated_at": values.UpdatedAt, "version": gorm.Expr("version + 1"),
+func (r *Repository) Update(ctx context.Context, id int64, values UpdateValues, toolIDs []int64, replaceTools bool) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&Model{}).Where("id = ?", id).Updates(map[string]any{
+			"name": values.Name, "description": values.Description, "avatar": values.Avatar,
+			"system_prompt": values.SystemPrompt, "scene": values.Scene, "agent_type": values.AgentType,
+			"provider_model_id": values.ProviderModelID, "timeout_ms": values.TimeoutMS, "status": values.Status,
+			"updated_at": values.UpdatedAt, "version": gorm.Expr("version + 1"),
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		if !replaceTools {
+			return nil
+		}
+		if err := tx.Where("agent_id = ?", id).Delete(&AgentTool{}).Error; err != nil {
+			return err
+		}
+		return insertAgentTools(tx, id, toolIDs, values.UpdatedAt)
 	})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
 }
 
 func (r *Repository) UpdateStatus(ctx context.Context, id int64, status yesno.Value, now time.Time) error {
@@ -112,6 +126,72 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 		return gorm.ErrRecordNotFound
 	}
 	return nil
+}
+
+func insertAgentTools(tx *gorm.DB, agentID int64, toolIDs []int64, now time.Time) error {
+	if len(toolIDs) == 0 {
+		return nil
+	}
+	rows := make([]AgentTool, 0, len(toolIDs))
+	for _, toolID := range toolIDs {
+		rows = append(rows, AgentTool{
+			AgentID: agentID, ToolID: toolID, CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	return tx.Create(&rows).Error
+}
+
+func (r *Repository) ToolIDsByAgentIDs(ctx context.Context, agentIDs []int64) (map[int64][]int64, error) {
+	result := make(map[int64][]int64, len(agentIDs))
+	if len(agentIDs) == 0 {
+		return result, nil
+	}
+	var rows []AgentTool
+	if err := r.db.WithContext(ctx).
+		Table("ai_agent_tool AS agent_tool").
+		Select("agent_tool.agent_id, agent_tool.tool_id").
+		Joins("JOIN ai_tool AS tool ON tool.id = agent_tool.tool_id").
+		Where("agent_tool.agent_id IN ? AND tool.deleted_at IS NULL", agentIDs).
+		Order("agent_tool.agent_id, agent_tool.tool_id").
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.AgentID] = append(result[row.AgentID], row.ToolID)
+	}
+	return result, nil
+}
+
+func (r *Repository) ToolRefs(ctx context.Context) ([]ToolRef, error) {
+	var rows []ToolRef
+	err := r.db.WithContext(ctx).
+		Table("ai_tool").
+		Select("id, code, name, description, category, status").
+		Where("deleted_at IS NULL").
+		Order("sort_order, id").
+		Find(&rows).Error
+	return rows, err
+}
+
+func (r *Repository) ExistingToolIDs(ctx context.Context, ids []int64) (map[int64]struct{}, error) {
+	result := make(map[int64]struct{}, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	var rows []struct {
+		ID int64 `gorm:"column:id"`
+	}
+	if err := r.db.WithContext(ctx).
+		Table("ai_tool").
+		Select("id").
+		Where("id IN ? AND deleted_at IS NULL", ids).
+		Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		result[row.ID] = struct{}{}
+	}
+	return result, nil
 }
 
 func (r *Repository) ModelRefsByIDs(ctx context.Context, ids []int64) (map[int64]ModelRef, error) {

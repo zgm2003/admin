@@ -40,6 +40,7 @@ type CreateInput struct {
 	ProviderModelID int64
 	TimeoutMS       int32
 	Status          yesno.Value
+	ToolIDs         []int64
 }
 
 type UpdateInput struct {
@@ -52,6 +53,8 @@ type UpdateInput struct {
 	ProviderModelID int64
 	TimeoutMS       int32
 	Status          yesno.Value
+	ToolIDs         []int64
+	ToolIDsSet      bool
 }
 
 type StatusInput struct {
@@ -68,6 +71,7 @@ type createRequest struct {
 	ProviderModelID *int64       `json:"providerModelId"`
 	TimeoutMS       *int32       `json:"timeoutMs"`
 	Status          *yesno.Value `json:"status"`
+	ToolIDs         []int64      `json:"toolIds"`
 }
 
 func (r createRequest) input() (CreateInput, error) {
@@ -97,6 +101,7 @@ func (r createRequest) input() (CreateInput, error) {
 		Name: value.Name, Description: value.Description, Avatar: avatar,
 		SystemPrompt: value.SystemPrompt, Scene: value.Scene, AgentType: value.AgentType,
 		ProviderModelID: value.ProviderModelID, TimeoutMS: value.TimeoutMS, Status: value.Status,
+		ToolIDs: r.ToolIDs,
 	}, nil
 }
 
@@ -110,6 +115,7 @@ type updateRequest struct {
 	ProviderModelID *int64       `json:"providerModelId"`
 	TimeoutMS       *int32       `json:"timeoutMs"`
 	Status          *yesno.Value `json:"status"`
+	ToolIDs         *[]int64     `json:"toolIds"`
 }
 
 func (r updateRequest) input() (UpdateInput, error) {
@@ -136,11 +142,16 @@ func (r updateRequest) input() (UpdateInput, error) {
 		}
 		avatar = &normalized
 	}
-	return UpdateInput{
+	input := UpdateInput{
 		Name: value.Name, Description: value.Description, Avatar: avatar,
 		SystemPrompt: value.SystemPrompt, Scene: value.Scene, AgentType: value.AgentType,
 		ProviderModelID: value.ProviderModelID, TimeoutMS: value.TimeoutMS, Status: value.Status,
-	}, nil
+	}
+	if r.ToolIDs != nil {
+		input.ToolIDs = *r.ToolIDs
+		input.ToolIDsSet = true
+	}
+	return input, nil
 }
 
 func normalizeAvatar(raw string) (string, error) {

@@ -35,15 +35,26 @@ type SafeValue struct {
 	Status          yesno.Value       `json:"status"`
 	StatusName      string            `json:"statusName"`
 	Version         int64             `json:"version"`
+	ToolIDs         []int64           `json:"toolIds"`
 	Actions         Actions           `json:"actions"`
 	CreatedAt       time.Time         `json:"createdAt"`
 	UpdatedAt       time.Time         `json:"updatedAt"`
+}
+
+type ToolOption struct {
+	Value       int64  `json:"value"`
+	Label       string `json:"label"`
+	Code        string `json:"code"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	Status      int16  `json:"status"`
 }
 
 type Options struct {
 	Types    []option.Option[pricing.ModelKind] `json:"types"`
 	Scenes   []option.Option[Scene]             `json:"scenes"`
 	Statuses []option.Option[yesno.Value]       `json:"statuses"`
+	Tools    []ToolOption                       `json:"tools"`
 }
 
 type ModelOption struct {
@@ -81,7 +92,7 @@ func safeValue(ctx context.Context, row Model, ref *ModelRef) (SafeValue, error)
 		Scene:        row.Scene, SceneName: sceneName(ctx, row.Scene),
 		Type: row.AgentType, TypeName: agentTypeName(ctx, row.AgentType),
 		ProviderModelID: row.ProviderModelID, TimeoutMS: row.TimeoutMS,
-		Status: row.Status, StatusName: statusName,
+		Status: row.Status, StatusName: statusName, ToolIDs: []int64{},
 		Version: row.Version, Actions: Actions{Update: true, Status: true, Delete: true},
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 	}
