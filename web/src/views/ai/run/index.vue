@@ -6,7 +6,8 @@ import { View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus/es/components/message/index'
 
 import * as api from '@/api/ai/chat'
-import type { ChatRun, ChatRunDetail, ChatRunQuery } from '@/api/ai/chat'
+import type { ChatRun, ChatRunAttachment, ChatRunDetail, ChatRunQuery } from '@/api/ai/chat'
+import { requestObjectURL } from '@/api/storage/upload'
 import { usePermissionStore } from '@/store/permission'
 import type { TableColumn, TablePaginationState } from '@/components/AppTable'
 import type { SearchField, SearchFormModel } from '@/components/AppSearch'
@@ -29,6 +30,7 @@ const loadError = ref('')
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detail = ref<ChatRunDetail | null>(null)
+const attachmentUrls = ref<Record<string, string>>({})
 let sequence = 0
 let alive = true
 
@@ -152,12 +154,40 @@ function updatePagination(value: TablePaginationState): void {
   void load()
 }
 
+function isImageAttachment(attachment: ChatRunAttachment): boolean {
+  return attachment.kind === 1 || attachment.mimeType.startsWith('image/')
+}
+
+async function loadAttachmentURLs(value: ChatRunDetail): Promise<void> {
+  const images = [value.userMessage, value.assistantMessage]
+    .flatMap((message) => message?.attachments ?? [])
+    .filter(isImageAttachment)
+  const urls: Record<string, string> = {}
+  const seen = new Set<string>()
+  await Promise.all(
+    images.map(async (attachment) => {
+      if (seen.has(attachment.objectKey)) return
+      seen.add(attachment.objectKey)
+      try {
+        const result = await requestObjectURL(attachment.objectKey)
+        urls[attachment.objectKey] = result.url
+      } catch {
+        // Fall back to the filename when a preview cannot be resolved.
+      }
+    }),
+  )
+  if (detail.value?.id === value.id) attachmentUrls.value = urls
+}
+
 async function openDetail(row: ChatRun): Promise<void> {
   detailVisible.value = true
   detailLoading.value = true
   detail.value = null
+  attachmentUrls.value = {}
   try {
-    detail.value = await api.getRunDetail(row.id, canViewAll.value)
+    const value = await api.getRunDetail(row.id, canViewAll.value)
+    detail.value = value
+    void loadAttachmentURLs(value)
   } catch {
     detailVisible.value = false
   } finally {
@@ -380,15 +410,25 @@ onBeforeUnmount(() => {
                 v-if="detail.userMessage.attachments.length > 0"
                 class="ai-run-page__attachments"
               >
-                <el-tag
+                <template
                   v-for="attachment in detail.userMessage.attachments"
                   :key="attachment.objectKey"
-                  size="small"
-                  effect="plain"
-                  type="info"
                 >
-                  {{ attachment.fileName }}
-                </el-tag>
+                  <el-image
+                    v-if="isImageAttachment(attachment) && attachmentUrls[attachment.objectKey]"
+                    class="ai-run-page__attachment-image"
+                    :src="attachmentUrls[attachment.objectKey]"
+                    :preview-src-list="[attachmentUrls[attachment.objectKey]]"
+                    :alt="attachment.fileName"
+                    :title="attachment.fileName"
+                    fit="cover"
+                    preview-teleported
+                    @error="delete attachmentUrls[attachment.objectKey]"
+                  />
+                  <el-tag v-else size="small" effect="plain" type="info">
+                    {{ attachment.fileName }}
+                  </el-tag>
+                </template>
               </div>
             </section>
             <section v-if="detail.assistantMessage" class="ai-run-page__message is-assistant">
@@ -464,8 +504,18 @@ onBeforeUnmount(() => {
   &__attachments {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    align-items: flex-start;
+    gap: 8px;
     margin-top: 8px;
+  }
+
+  &__attachment-image {
+    width: 112px;
+    height: 112px;
+    border: 1px solid var(--admin-border);
+    border-radius: 8px;
+    background: var(--admin-surface);
+    cursor: zoom-in;
   }
 
   &__stack {
