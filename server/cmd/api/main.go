@@ -20,6 +20,7 @@ import (
 	aiprovider "admin/server/internal/module/ai/provider"
 	providermodel "admin/server/internal/module/ai/providerModel"
 	airun "admin/server/internal/module/ai/run"
+	aitool "admin/server/internal/module/ai/tool"
 	authcaptcha "admin/server/internal/module/auth/captcha"
 	"admin/server/internal/module/auth/client"
 	"admin/server/internal/module/auth/login"
@@ -87,6 +88,7 @@ import (
 type routerDependencies struct {
 	AIAgent            *aiagent.Handler
 	AIChat             *aichat.Handler
+	AITool             *aitool.Handler
 	AIRun              *airun.Handler
 	AIOfficialModel    *officialmodel.Handler
 	AIProvider         *aiprovider.Handler
@@ -260,10 +262,12 @@ func run(logger *slog.Logger) error {
 	paymentWalletService := paymentwallet.NewService(paymentWalletRepository)
 	chatRepository := aichat.NewRepository(postgres.GORM)
 	chatService := aichat.NewService(chatRepository, paymentWalletRepository)
+	toolRepository := aitool.NewRepository(postgres.GORM)
+	toolService := aitool.NewService(toolRepository, postgres.GORM, serverService, logger)
 	runRepository := airun.NewRepository(postgres.GORM)
 	runService := airun.NewService(
 		runRepository, chatRepository, postgres.GORM, paymentWalletRepository, keys,
-		redisClient, airun.NewProviderClient(nil), logger,
+		redisClient, airun.NewProviderClient(nil), toolService, logger,
 	)
 	if recovered, recoverErr := runService.RecoverInterrupted(processContext); recoverErr != nil {
 		logger.Error("recover interrupted chat runs", "error", recoverErr)
@@ -546,6 +550,7 @@ func run(logger *slog.Logger) error {
 		COSConfig:          cosconfig.NewHandler(cosConfigService),
 		AIAgent:            aiagent.NewHandler(agentService),
 		AIChat:             aichat.NewHandler(chatService),
+		AITool:             aitool.NewHandler(toolService),
 		AIRun:              airun.NewHandler(runService),
 		AIOfficialModel:    officialmodel.NewHandler(officialModelService),
 		AIProvider:         aiprovider.NewHandler(providerService),
@@ -718,6 +723,9 @@ func buildRouter(dependencies routerDependencies) *gin.Engine {
 	}
 	if dependencies.AIChat != nil {
 		aichat.RegisterAdminRoutes(adminRoutes, dependencies.AIChat, dependencies.Authenticate, dependencies.RequirePermission)
+	}
+	if dependencies.AITool != nil {
+		aitool.RegisterAdminRoutes(adminRoutes, dependencies.AITool, dependencies.Authenticate, dependencies.RequirePermission)
 	}
 	if dependencies.AIRun != nil {
 		airun.RegisterAdminRoutes(adminRoutes, dependencies.AIRun, dependencies.Authenticate, dependencies.RequirePermission)

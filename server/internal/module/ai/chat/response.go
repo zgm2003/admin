@@ -29,17 +29,19 @@ type ConversationValue struct {
 }
 
 type MessageValue struct {
-	ID          int64             `json:"id"`
-	Seq         int32             `json:"seq"`
-	Role        MessageRole       `json:"role"`
-	Content     string            `json:"content"`
-	Status      MessageStatus     `json:"status"`
-	RunID       *int64            `json:"runId"`
-	DeliverySeq int64             `json:"deliverySeq"`
-	Feedback    int16             `json:"feedback"`
-	CreatedAt   time.Time         `json:"createdAt"`
-	Usage       *MessageUsage     `json:"usage,omitempty"`
-	Attachments []AttachmentValue `json:"attachments"`
+	ID               int64             `json:"id"`
+	Seq              int32             `json:"seq"`
+	Role             MessageRole       `json:"role"`
+	Content          string            `json:"content"`
+	ReasoningContent string            `json:"reasoningContent"`
+	Status           MessageStatus     `json:"status"`
+	RunID            *int64            `json:"runId"`
+	DeliverySeq      int64             `json:"deliverySeq"`
+	Feedback         int16             `json:"feedback"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	Usage            *MessageUsage     `json:"usage,omitempty"`
+	Attachments      []AttachmentValue `json:"attachments"`
+	Citations        []Citation        `json:"citations"`
 }
 
 type AttachmentValue struct {
@@ -88,9 +90,11 @@ func conversationValue(row ConversationView) ConversationValue {
 
 func messageValue(row Message) MessageValue {
 	value := MessageValue{
-		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content, Status: row.Status,
+		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content,
+		ReasoningContent: row.ReasoningContent, Status: row.Status,
 		RunID: row.RunID, DeliverySeq: row.DeliverySeq, Feedback: row.Feedback,
 		CreatedAt: row.CreatedAt, Attachments: make([]AttachmentValue, 0, len(row.Attachments)),
+		Citations: make([]Citation, 0, len(row.Citations)),
 	}
 	for _, attachment := range row.Attachments {
 		value.Attachments = append(value.Attachments, AttachmentValue{
@@ -98,6 +102,7 @@ func messageValue(row Message) MessageValue {
 			MimeType: attachment.MimeType, SizeBytes: attachment.SizeBytes,
 		})
 	}
+	value.Citations = append(value.Citations, row.Citations...)
 	if row.Role == RoleAssistant && row.RunID != nil && row.UsageAmountUnits != nil {
 		amount, err := money.FormatRMBUnits(*row.UsageAmountUnits)
 		if err == nil {

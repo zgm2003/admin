@@ -6,6 +6,7 @@ export type ChatRealtimeEvent = Extract<
     type:
       | 'ai.chat.started.v1'
       | 'ai.chat.delta.v1'
+      | 'ai.chat.reasoning.v1'
       | 'ai.chat.completed.v1'
       | 'ai.chat.failed.v1'
       | 'ai.chat.canceled.v1'
@@ -22,6 +23,7 @@ export function isChatRealtimeEvent(event: RealtimeEnvelope): event is ChatRealt
   return (
     event.type === 'ai.chat.started.v1' ||
     event.type === 'ai.chat.delta.v1' ||
+    event.type === 'ai.chat.reasoning.v1' ||
     event.type === 'ai.chat.completed.v1' ||
     event.type === 'ai.chat.failed.v1' ||
     event.type === 'ai.chat.canceled.v1'

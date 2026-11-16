@@ -64,6 +64,7 @@ func TestProviderStreamOpenAIParsesDeltasAndUsage(t *testing.T) {
 			t.Fatalf("body = %#v", body)
 		}
 		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"先分析\"}}]}\n\n"))
 		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}\n\n"))
 		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"好\"}}],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":8,\"prompt_tokens_details\":{\"cached_tokens\":30}}}\n\n"))
 		_, _ = w.Write([]byte("data: [DONE]\n\n"))
@@ -78,7 +79,7 @@ func TestProviderStreamOpenAIParsesDeltasAndUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var content strings.Builder
+	var content, reasoning strings.Builder
 	var usage *ChatUsage
 	done := false
 	for chunk := range chunks {
@@ -86,13 +87,14 @@ func TestProviderStreamOpenAIParsesDeltasAndUsage(t *testing.T) {
 			t.Fatal(chunk.Err)
 		}
 		content.WriteString(chunk.Delta)
+		reasoning.WriteString(chunk.Reasoning)
 		if chunk.Usage != nil {
 			usage = chunk.Usage
 		}
 		done = done || chunk.Done
 	}
-	if content.String() != "你好" || !done {
-		t.Fatalf("content=%q done=%v", content.String(), done)
+	if content.String() != "你好" || reasoning.String() != "先分析" || !done {
+		t.Fatalf("content=%q reasoning=%q done=%v", content.String(), reasoning.String(), done)
 	}
 	if usage == nil || usage.UncachedInput != 70 || usage.CacheRead != 30 || usage.Output != 8 {
 		t.Fatalf("usage = %#v", usage)

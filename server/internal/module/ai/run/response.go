@@ -44,13 +44,15 @@ type RunEventValue struct {
 }
 
 type RunMessageValue struct {
-	ID          int64                `json:"id"`
-	Role        int16                `json:"role"`
-	Content     string               `json:"content"`
-	Status      int16                `json:"status"`
-	Feedback    int16                `json:"feedback"`
-	CreatedAt   time.Time            `json:"createdAt"`
-	Attachments []RunAttachmentValue `json:"attachments"`
+	ID               int64                `json:"id"`
+	Role             int16                `json:"role"`
+	Content          string               `json:"content"`
+	ReasoningContent string               `json:"reasoningContent"`
+	Status           int16                `json:"status"`
+	Feedback         int16                `json:"feedback"`
+	CreatedAt        time.Time            `json:"createdAt"`
+	Attachments      []RunAttachmentValue `json:"attachments"`
+	Citations        []chat.Citation      `json:"citations"`
 }
 
 type RunAttachmentValue struct {
@@ -70,10 +72,13 @@ type RunDetail struct {
 
 func runMessageValue(row chat.Message) RunMessageValue {
 	value := RunMessageValue{
-		ID: row.ID, Role: int16(row.Role), Content: row.Content, Status: int16(row.Status),
+		ID: row.ID, Role: int16(row.Role), Content: row.Content,
+		ReasoningContent: row.ReasoningContent, Status: int16(row.Status),
 		Feedback: row.Feedback, CreatedAt: row.CreatedAt,
 		Attachments: make([]RunAttachmentValue, 0, len(row.Attachments)),
+		Citations:   make([]chat.Citation, 0, len(row.Citations)),
 	}
+	value.Citations = append(value.Citations, row.Citations...)
 	for _, attachment := range row.Attachments {
 		value.Attachments = append(value.Attachments, RunAttachmentValue{
 			Kind: int16(attachment.Kind), ObjectKey: attachment.ObjectKey, FileName: attachment.FileName,
@@ -85,10 +90,13 @@ func runMessageValue(row chat.Message) RunMessageValue {
 
 func messageValue(row chat.Message) chat.MessageValue {
 	value := chat.MessageValue{
-		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content, Status: row.Status,
+		ID: row.ID, Seq: row.Seq, Role: row.Role, Content: row.Content,
+		ReasoningContent: row.ReasoningContent, Status: row.Status,
 		RunID: row.RunID, DeliverySeq: row.DeliverySeq, Feedback: row.Feedback,
 		CreatedAt: row.CreatedAt, Attachments: make([]chat.AttachmentValue, 0, len(row.Attachments)),
+		Citations: make([]chat.Citation, 0, len(row.Citations)),
 	}
+	value.Citations = append(value.Citations, row.Citations...)
 	for _, attachment := range row.Attachments {
 		value.Attachments = append(value.Attachments, chat.AttachmentValue{
 			Kind: attachment.Kind, ObjectKey: attachment.ObjectKey, FileName: attachment.FileName,

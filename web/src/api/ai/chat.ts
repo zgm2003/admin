@@ -38,11 +38,19 @@ export interface ChatMessageAttachment {
   sizeBytes: number
 }
 
+export interface ChatCitation {
+  index: number
+  title: string
+  url: string
+  snippet: string
+}
+
 export interface ChatMessage {
   id: number
   seq: number
   role: number
   content: string
+  reasoningContent: string
   status: number
   runId: number | null
   deliverySeq: number
@@ -50,6 +58,7 @@ export interface ChatMessage {
   createdAt: string
   usage?: ChatMessageUsage
   attachments: ChatMessageAttachment[]
+  citations: ChatCitation[]
 }
 
 export type ChatMessageFeedback = -1 | 0 | 1
@@ -79,6 +88,7 @@ export interface SendMessageInput {
   content: string
   requestId: string
   attachments?: Array<{ objectKey: string }>
+  webSearch?: boolean
 }
 
 export interface SendMessageResult {
@@ -135,10 +145,12 @@ export interface ChatRunMessage {
   id: number
   role: number
   content: string
+  reasoningContent: string
   status: number
   feedback: number
   createdAt: string
   attachments: ChatRunAttachment[]
+  citations: ChatCitation[]
 }
 
 export interface ChatRunDetail extends ChatRun {

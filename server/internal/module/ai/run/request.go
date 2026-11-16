@@ -25,6 +25,7 @@ type SendInput struct {
 	Content     string
 	RequestID   string
 	Attachments []AttachmentInput
+	WebSearch   bool
 }
 
 type RunListQuery struct {
@@ -46,6 +47,7 @@ type sendMessageRequest struct {
 	Content     *string             `json:"content"`
 	RequestID   *string             `json:"requestId"`
 	Attachments []attachmentRequest `json:"attachments"`
+	WebSearch   bool                `json:"webSearch"`
 }
 
 func (r sendMessageRequest) input() (SendInput, error) {
@@ -90,7 +92,9 @@ func (r sendMessageRequest) input() (SendInput, error) {
 	if _, err := uuid.Parse(requestID); err != nil {
 		return SendInput{}, fmt.Errorf("requestId must be a UUID")
 	}
-	return SendInput{Content: content, RequestID: requestID, Attachments: attachments}, nil
+	return SendInput{
+		Content: content, RequestID: requestID, Attachments: attachments, WebSearch: r.WebSearch,
+	}, nil
 }
 
 func parseRunQuery(values url.Values, viewAll bool) (RunListQuery, error) {

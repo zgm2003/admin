@@ -39,18 +39,20 @@ type Conversation struct {
 func (Conversation) TableName() string { return "ai_chat_conversation" }
 
 type Message struct {
-	ID             int64         `gorm:"column:id;primaryKey;autoIncrement"`
-	ConversationID int64         `gorm:"column:conversation_id;not null"`
-	Seq            int32         `gorm:"column:seq;not null"`
-	Role           MessageRole   `gorm:"column:role;type:smallint;not null"`
-	Content        string        `gorm:"column:content;type:text;not null"`
-	Status         MessageStatus `gorm:"column:status;type:smallint;not null"`
-	RunID          *int64        `gorm:"column:run_id"`
-	DeliverySeq    int64         `gorm:"column:delivery_seq;not null"`
-	Feedback       int16         `gorm:"column:feedback;type:smallint;not null"`
-	FeedbackAt     *time.Time    `gorm:"column:feedback_at;type:timestamptz"`
-	CreatedAt      time.Time     `gorm:"column:created_at;type:timestamptz;not null"`
-	UpdatedAt      time.Time     `gorm:"column:updated_at;type:timestamptz;not null"`
+	ID               int64         `gorm:"column:id;primaryKey;autoIncrement"`
+	ConversationID   int64         `gorm:"column:conversation_id;not null"`
+	Seq              int32         `gorm:"column:seq;not null"`
+	Role             MessageRole   `gorm:"column:role;type:smallint;not null"`
+	Content          string        `gorm:"column:content;type:text;not null"`
+	ReasoningContent string        `gorm:"column:reasoning_content;type:text;not null"`
+	Citations        []Citation    `gorm:"column:citations;type:jsonb;serializer:json;not null"`
+	Status           MessageStatus `gorm:"column:status;type:smallint;not null"`
+	RunID            *int64        `gorm:"column:run_id"`
+	DeliverySeq      int64         `gorm:"column:delivery_seq;not null"`
+	Feedback         int16         `gorm:"column:feedback;type:smallint;not null"`
+	FeedbackAt       *time.Time    `gorm:"column:feedback_at;type:timestamptz"`
+	CreatedAt        time.Time     `gorm:"column:created_at;type:timestamptz;not null"`
+	UpdatedAt        time.Time     `gorm:"column:updated_at;type:timestamptz;not null"`
 
 	// Read-only settlement projection joined from ai_usage_charge.
 	UsageAmountUnits       *int64 `gorm:"->;column:usage_amount_units"`
@@ -59,6 +61,13 @@ type Message struct {
 	UsageOutputTokens      *int64 `gorm:"->;column:usage_output_tokens"`
 
 	Attachments []MessageAttachment `gorm:"-"`
+}
+
+type Citation struct {
+	Index   int    `json:"index"`
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet"`
 }
 
 type AttachmentKind int16

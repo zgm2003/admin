@@ -15,6 +15,7 @@ import (
 
 	"admin/server/internal/module/ai/chat"
 	"admin/server/internal/module/ai/pricing"
+	aitool "admin/server/internal/module/ai/tool"
 	auth "admin/server/internal/module/auth/login"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/shared/money"
@@ -30,6 +31,8 @@ const (
 	maxAttachmentTextBytes = 256 * 1024
 	maxAttachmentTextRunes = 20000
 	attachmentReadTimeout  = 10 * time.Second
+	maxToolRounds          = 4
+	maxToolResultRunes     = 12000
 )
 
 func isTextAttachment(mimeType, fileName string) bool {
@@ -142,6 +145,7 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 	}
 	messages := make([]ChatMessage, 0, len(history))
 	usedRunes := 0
+	lastUserQuery := ""
 	for i := len(history) - 1; i >= 0; i-- {
 		message := history[i]
 		message.Attachments = attachments[message.ID]
@@ -152,6 +156,8 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 		role := "user"
 		if message.Role == chat.RoleAssistant {
 			role = "assistant"
+		} else if query := strings.TrimSpace(message.Content); query != "" {
+			lastUserQuery = query
 		}
 		content := message.Content
 		providerAttachments := make([]ChatAttachment, 0, len(message.Attachments))
@@ -204,45 +210,86 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 	cancelHit := make(chan struct{})
 	go s.watchCancel(execCtx, runID, cancel, &cancelOnce, cancelHit)
 
-	chunks, err := s.provider.Stream(execCtx, ProviderRequest{
-		Protocol: run.ProviderProtocol, BaseURL: agent.BaseURL, APIKey: apiKey,
-		Model: agent.UpstreamModel, SystemPrompt: agent.SystemPrompt, Messages: messages, Timeout: timeout,
-	})
-	if err != nil {
-		if isCanceled(execCtx, cancelHit) || errors.Is(err, context.Canceled) {
-			return s.finish(persistCtx, run, assistant, nil, RunCanceled, chat.MessageStopped, "canceled", "用户取消生成", "", nil)
+	systemPrompt := agent.SystemPrompt
+	var citations []chat.Citation
+	if run.WebSearch {
+		if lastUserQuery == "" {
+			systemPrompt = searchSystemPrompt(systemPrompt, nil)
+		} else {
+			results, searchErr := SearchWeb(execCtx, lastUserQuery, defaultSearchResults)
+			if searchErr != nil {
+				s.logger.Warn("web search", "runId", run.ID, "error", searchErr)
+			}
+			citations = results
+			systemPrompt = searchSystemPrompt(systemPrompt, results)
 		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return s.finish(persistCtx, run, assistant, nil, RunTimeout, chat.MessageStopped, "timeout", "生成超时", "", nil)
+	}
+	assistant.Citations = citations
+
+	toolDefs := make([]ToolDefinition, 0, 2)
+	if s.tools != nil {
+		enabled, toolErr := s.tools.Enabled(execCtx)
+		if toolErr != nil {
+			s.logger.Warn("load enabled tools", "runId", run.ID, "error", toolErr)
+		} else {
+			for _, definition := range enabled {
+				toolDefs = append(toolDefs, ToolDefinition{
+					Name: definition.APIName, Description: definition.Description, Parameters: definition.Parameters,
+				})
+			}
 		}
-		return s.finish(persistCtx, run, assistant, nil, RunFailed, chat.MessageFailed, "upstream_error", err.Error(), "", nil)
 	}
 
 	var content strings.Builder
+	var reasoning strings.Builder
 	var pending strings.Builder
+	var pendingReasoning strings.Builder
 	var usage *ChatUsage
 	deliverySeq := assistant.DeliverySeq
 	lastFlush := time.Now()
 	var firstTokenAt *time.Time
 
+	addUsage := func(value *ChatUsage) {
+		if value == nil {
+			return
+		}
+		if usage == nil {
+			usage = &ChatUsage{}
+		}
+		usage.UncachedInput += value.UncachedInput
+		usage.CacheRead += value.CacheRead
+		usage.CacheWrite += value.CacheWrite
+		usage.Output += value.Output
+	}
+
 	flush := func(force bool) error {
-		if pending.Len() == 0 {
+		if pending.Len() == 0 && pendingReasoning.Len() == 0 {
 			return nil
 		}
-		if !force && pending.Len() < streamFlushBytes && time.Since(lastFlush) < streamFlushInterval {
+		if !force && pending.Len()+pendingReasoning.Len() < streamFlushBytes && time.Since(lastFlush) < streamFlushInterval {
 			return nil
 		}
 		deliverySeq++
 		delta := pending.String()
+		reasoningDelta := pendingReasoning.String()
 		pending.Reset()
-		if err := s.chat.UpdateStreamingMessage(persistCtx, assistant.ID, content.String(), deliverySeq, s.now().UTC()); err != nil {
+		pendingReasoning.Reset()
+		if err := s.chat.UpdateStreamingMessage(persistCtx, assistant.ID, content.String(), reasoning.String(), deliverySeq, s.now().UTC()); err != nil {
 			return err
 		}
 		lastFlush = time.Now()
-		s.publish(persistCtx, run, realtime.EventAIChatDelta, map[string]any{
-			"runId": run.ID, "conversationId": run.ConversationID,
-			"assistantMessageId": assistant.ID, "deliverySeq": deliverySeq, "delta": delta,
-		})
+		if delta != "" {
+			s.publish(persistCtx, run, realtime.EventAIChatDelta, map[string]any{
+				"runId": run.ID, "conversationId": run.ConversationID,
+				"assistantMessageId": assistant.ID, "deliverySeq": deliverySeq, "delta": delta,
+			})
+		}
+		if reasoningDelta != "" {
+			s.publish(persistCtx, run, realtime.EventAIChatReasoning, map[string]any{
+				"runId": run.ID, "conversationId": run.ConversationID,
+				"assistantMessageId": assistant.ID, "deliverySeq": deliverySeq, "delta": reasoningDelta,
+			})
+		}
 		return nil
 	}
 
@@ -250,42 +297,134 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 		if err := flush(true); err != nil {
 			return err
 		}
-		return s.finish(persistCtx, run, assistant, usage, status, messageStatus, code, message, content.String(), firstTokenAt)
+		return s.finish(persistCtx, run, assistant, usage, status, messageStatus, code, message, content.String(), reasoning.String(), firstTokenAt)
+	}
+	failStream := func(err error) error {
+		if isCanceled(execCtx, cancelHit) || errors.Is(err, context.Canceled) {
+			return finishWith(RunCanceled, chat.MessageStopped, "canceled", "用户取消生成")
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return finishWith(RunTimeout, chat.MessageStopped, "timeout", "生成超时")
+		}
+		return finishWith(RunFailed, chat.MessageFailed, "upstream_error", err.Error())
 	}
 
-	for {
-		select {
-		case <-execCtx.Done():
-			if isCanceled(execCtx, cancelHit) {
-				return finishWith(RunCanceled, chat.MessageStopped, "canceled", "用户取消生成")
-			}
-			return finishWith(RunTimeout, chat.MessageStopped, "timeout", "生成超时")
-		case chunk, ok := <-chunks:
-			if !ok {
-				return finishWith(RunFailed, chat.MessageFailed, "upstream_closed", "上游连接提前结束")
-			}
-			if chunk.Err != nil {
-				return finishWith(RunFailed, chat.MessageFailed, "upstream_stream_error", chunk.Err.Error())
-			}
-			if chunk.Usage != nil {
-				usage = chunk.Usage
-			}
-			if chunk.Delta != "" {
-				if firstTokenAt == nil {
-					value := time.Now()
-					firstTokenAt = &value
+	for round := 0; round < maxToolRounds; round++ {
+		chunks, err := s.provider.Stream(execCtx, ProviderRequest{
+			Protocol: run.ProviderProtocol, BaseURL: agent.BaseURL, APIKey: apiKey,
+			Model: agent.UpstreamModel, SystemPrompt: systemPrompt, Messages: messages,
+			Tools: toolDefs, Timeout: timeout,
+		})
+		if err != nil {
+			return failStream(err)
+		}
+
+		roundContent := strings.Builder{}
+		var roundCalls []ToolCall
+		roundDone := false
+		for !roundDone {
+			select {
+			case <-execCtx.Done():
+				if isCanceled(execCtx, cancelHit) {
+					return finishWith(RunCanceled, chat.MessageStopped, "canceled", "用户取消生成")
 				}
-				content.WriteString(chunk.Delta)
-				pending.WriteString(chunk.Delta)
-				if err := flush(false); err != nil {
-					return s.finish(persistCtx, run, assistant, usage, RunFailed, chat.MessageFailed, "persist_error", err.Error(), content.String(), firstTokenAt)
+				return finishWith(RunTimeout, chat.MessageStopped, "timeout", "生成超时")
+			case chunk, ok := <-chunks:
+				if !ok {
+					return finishWith(RunFailed, chat.MessageFailed, "upstream_closed", "上游连接提前结束")
+				}
+				if chunk.Err != nil {
+					return finishWith(RunFailed, chat.MessageFailed, "upstream_stream_error", chunk.Err.Error())
+				}
+				if len(chunk.ToolCalls) > 0 {
+					roundCalls = append(roundCalls, chunk.ToolCalls...)
+				}
+				addUsage(chunk.Usage)
+				if chunk.Reasoning != "" {
+					if firstTokenAt == nil {
+						value := time.Now()
+						firstTokenAt = &value
+					}
+					if pending.Len() > 0 {
+						if err := flush(true); err != nil {
+							return s.finish(persistCtx, run, assistant, usage, RunFailed, chat.MessageFailed, "persist_error", err.Error(), content.String(), reasoning.String(), firstTokenAt)
+						}
+					}
+					reasoning.WriteString(chunk.Reasoning)
+					pendingReasoning.WriteString(chunk.Reasoning)
+					if err := flush(false); err != nil {
+						return s.finish(persistCtx, run, assistant, usage, RunFailed, chat.MessageFailed, "persist_error", err.Error(), content.String(), reasoning.String(), firstTokenAt)
+					}
+				}
+				if chunk.Delta != "" {
+					if firstTokenAt == nil {
+						value := time.Now()
+						firstTokenAt = &value
+					}
+					if pendingReasoning.Len() > 0 {
+						if err := flush(true); err != nil {
+							return s.finish(persistCtx, run, assistant, usage, RunFailed, chat.MessageFailed, "persist_error", err.Error(), content.String(), reasoning.String(), firstTokenAt)
+						}
+					}
+					content.WriteString(chunk.Delta)
+					roundContent.WriteString(chunk.Delta)
+					pending.WriteString(chunk.Delta)
+					if err := flush(false); err != nil {
+						return s.finish(persistCtx, run, assistant, usage, RunFailed, chat.MessageFailed, "persist_error", err.Error(), content.String(), reasoning.String(), firstTokenAt)
+					}
+				}
+				if chunk.Done {
+					roundDone = true
 				}
 			}
-			if chunk.Done {
-				return finishWith(RunSucceeded, chat.MessageCompleted, "", "")
+		}
+
+		if len(roundCalls) == 0 {
+			return finishWith(RunSucceeded, chat.MessageCompleted, "", "")
+		}
+		if round == maxToolRounds-1 {
+			return finishWith(RunFailed, chat.MessageFailed, "tool_round_limit", "工具调用轮次超过限制")
+		}
+		if err := flush(true); err != nil {
+			return s.finish(persistCtx, run, assistant, usage, RunFailed, chat.MessageFailed, "persist_error", err.Error(), content.String(), reasoning.String(), firstTokenAt)
+		}
+		for index := range roundCalls {
+			if strings.TrimSpace(roundCalls[index].ID) == "" {
+				roundCalls[index].ID = fmt.Sprintf("tool_%d_%d", round, index)
+			}
+			if strings.TrimSpace(roundCalls[index].Arguments) == "" {
+				roundCalls[index].Arguments = "{}"
+			}
+		}
+		messages = append(messages, ChatMessage{
+			Role: "assistant", Content: roundContent.String(), ToolCalls: roundCalls,
+		})
+		for _, call := range roundCalls {
+			result := `{"error":"tool execution is not configured"}`
+			if s.tools != nil {
+				executed, executeErr := s.tools.Execute(execCtx, call.Name, call.Arguments, aitool.Invocation{
+					PlatformID: run.PlatformID, UserID: run.UserID, RunID: run.ID,
+				})
+				if executeErr != nil {
+					s.logger.Warn("execute tool", "runId", run.ID, "tool", call.Name, "error", executeErr)
+					payload, _ := json.Marshal(map[string]string{"error": executeErr.Error()})
+					result = string(payload)
+				} else {
+					result = executed
+				}
+			}
+			result = truncate(result, maxToolResultRunes)
+			messages = append(messages, ChatMessage{
+				Role: "tool", Content: result, ToolCallID: call.ID, Name: call.Name,
+			})
+			if eventErr := s.appendEvent(execCtx, run.ID, "tool_call", "工具调用: "+call.Name, map[string]any{
+				"name": call.Name, "arguments": call.Arguments, "result": result,
+			}); eventErr != nil {
+				s.logger.Warn("append tool event", "runId", run.ID, "error", eventErr)
 			}
 		}
 	}
+	return finishWith(RunFailed, chat.MessageFailed, "tool_round_limit", "工具调用轮次超过限制")
 }
 
 func (s *Service) watchCancel(ctx context.Context, runID int64, cancel context.CancelFunc, once *sync.Once, hit chan struct{}) {
@@ -319,12 +458,12 @@ func isCanceled(ctx context.Context, hit chan struct{}) bool {
 
 func (s *Service) failBeforeStream(ctx context.Context, run Run, cause error) error {
 	assistant, _ := s.chat.MessageByRunID(ctx, run.ID)
-	return s.finish(ctx, run, assistant, nil, RunFailed, chat.MessageFailed, "run_failed", cause.Error(), assistant.Content, nil)
+	return s.finish(ctx, run, assistant, nil, RunFailed, chat.MessageFailed, "run_failed", cause.Error(), assistant.Content, assistant.ReasoningContent, nil)
 }
 
 func (s *Service) finish(
 	ctx context.Context, run Run, assistant chat.Message, usage *ChatUsage,
-	status RunStatus, messageStatus chat.MessageStatus, code, message, content string, firstTokenAt *time.Time,
+	status RunStatus, messageStatus chat.MessageStatus, code, message, content, reasoning string, firstTokenAt *time.Time,
 ) error {
 	now := s.now().UTC()
 	var amount int64
@@ -422,7 +561,11 @@ func (s *Service) finish(
 			return err
 		}
 		if err := tx.WithContext(ctx).Model(&chat.Message{}).Where("id = ?", assistant.ID).
-			Updates(map[string]any{"content": content, "status": messageStatus, "updated_at": now}).Error; err != nil {
+			Updates(map[string]any{
+				"content": content, "reasoning_content": reasoning,
+				"citations": string(citationsJSON(assistant.Citations)),
+				"status":    messageStatus, "updated_at": now,
+			}).Error; err != nil {
 			return err
 		}
 		eventType := "completed"
@@ -436,7 +579,7 @@ func (s *Service) finish(
 		s.logger.Error("settle chat run", "runId", run.ID, "error", txErr)
 		now := s.now().UTC()
 		_ = s.repo.MarkRunFailed(ctx, run.ID, RunFailed, BillingFailed, "settle_failed", "结算失败", now)
-		_ = s.chat.FinishMessage(ctx, assistant.ID, content, chat.MessageFailed, now)
+		_ = s.chat.FinishMessage(ctx, assistant.ID, content, reasoning, assistant.Citations, chat.MessageFailed, now)
 		s.publish(ctx, run, realtime.EventAIChatFailed, map[string]any{
 			"runId": run.ID, "requestId": run.RequestID, "conversationId": run.ConversationID,
 			"assistantMessageId": assistant.ID, "status": RunFailed, "billingStatus": BillingFailed,
@@ -481,6 +624,17 @@ func (s *Service) publish(ctx context.Context, run Run, eventType string, data a
 	if err := realtime.PublishEphemeral(ctx, s.publisher, run.PlatformID, run.UserID, eventType, data, s.now().UTC()); err != nil {
 		s.logger.Warn("publish chat event", "runId", run.ID, "type", eventType, "error", err)
 	}
+}
+
+func citationsJSON(citations []chat.Citation) []byte {
+	if citations == nil {
+		return []byte("[]")
+	}
+	payload, err := json.Marshal(citations)
+	if err != nil {
+		return []byte("[]")
+	}
+	return payload
 }
 
 func truncate(value string, max int) string {

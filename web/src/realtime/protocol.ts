@@ -104,6 +104,16 @@ export type RealtimeEvent =
       }
     }
   | {
+      type: 'ai.chat.reasoning.v1'
+      data: {
+        runId: number
+        conversationId: number
+        assistantMessageId: number
+        deliverySeq: number
+        delta: string
+      }
+    }
+  | {
       type: 'ai.chat.completed.v1' | 'ai.chat.failed.v1' | 'ai.chat.canceled.v1'
       data: {
         runId: number
@@ -248,6 +258,22 @@ export function parseRealtimeEnvelope(value: unknown): RealtimeEnvelope {
       m.r.data,
       ['runId', 'conversationId', 'assistantMessageId', 'deliverySeq', 'delta'],
       'chat delta data',
+    )
+    event = {
+      type,
+      data: {
+        runId: positive(d.runId, 'runId'),
+        conversationId: positive(d.conversationId, 'conversationId'),
+        assistantMessageId: positive(d.assistantMessageId, 'assistantMessageId'),
+        deliverySeq: positive(d.deliverySeq, 'deliverySeq'),
+        delta: eventText(d.delta, 'delta'),
+      },
+    }
+  } else if (type === 'ai.chat.reasoning.v1') {
+    const d = eventFields(
+      m.r.data,
+      ['runId', 'conversationId', 'assistantMessageId', 'deliverySeq', 'delta'],
+      'chat reasoning data',
     )
     event = {
       type,

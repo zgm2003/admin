@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -214,14 +215,24 @@ func (r *Repository) ActiveRunSummary(ctx context.Context, conversationID int64)
 	return row, err == nil, err
 }
 
-func (r *Repository) UpdateStreamingMessage(ctx context.Context, messageID int64, content string, deliverySeq int64, now time.Time) error {
+func (r *Repository) UpdateStreamingMessage(ctx context.Context, messageID int64, content, reasoning string, deliverySeq int64, now time.Time) error {
 	return r.db.WithContext(ctx).Model(&Message{}).Where("id = ? AND status = 1", messageID).
-		Updates(map[string]any{"content": content, "delivery_seq": deliverySeq, "updated_at": now}).Error
+		Updates(map[string]any{
+			"content": content, "reasoning_content": reasoning,
+			"delivery_seq": deliverySeq, "updated_at": now,
+		}).Error
 }
 
-func (r *Repository) FinishMessage(ctx context.Context, messageID int64, content string, status MessageStatus, now time.Time) error {
+func (r *Repository) FinishMessage(ctx context.Context, messageID int64, content, reasoning string, citations []Citation, status MessageStatus, now time.Time) error {
+	payload, err := json.Marshal(citations)
+	if err != nil {
+		return err
+	}
 	return r.db.WithContext(ctx).Model(&Message{}).Where("id = ?", messageID).
-		Updates(map[string]any{"content": content, "status": status, "updated_at": now}).Error
+		Updates(map[string]any{
+			"content": content, "reasoning_content": reasoning,
+			"citations": string(payload), "status": status, "updated_at": now,
+		}).Error
 }
 
 func normalizeLimit(limit int) int {

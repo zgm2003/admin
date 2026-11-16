@@ -41,6 +41,7 @@ type Run struct {
 	ModelKey           string        `gorm:"column:model_key;type:varchar(128);not null"`
 	ModelName          string        `gorm:"column:model_name;type:varchar(128);not null"`
 	TimeoutMS          int32         `gorm:"column:timeout_ms;not null"`
+	WebSearch          bool          `gorm:"column:web_search;not null"`
 	PricingSnapshot    string        `gorm:"column:pricing_snapshot;type:jsonb;not null"`
 	Status             RunStatus     `gorm:"column:status;type:smallint;not null"`
 	BillingStatus      BillingStatus `gorm:"column:billing_status;type:smallint;not null"`

@@ -31,6 +31,7 @@ const (
 	EventNotificationStateChanged = "notification.stateChanged.v1"
 	EventAIChatStarted            = "ai.chat.started.v1"
 	EventAIChatDelta              = "ai.chat.delta.v1"
+	EventAIChatReasoning          = "ai.chat.reasoning.v1"
 	EventAIChatCompleted          = "ai.chat.completed.v1"
 	EventAIChatFailed             = "ai.chat.failed.v1"
 	EventAIChatCanceled           = "ai.chat.canceled.v1"
@@ -243,7 +244,7 @@ func validServerEventType(value string) bool {
 	switch value {
 	case EventRealtimeConnected, EventRealtimePong, EventRealtimeResumed, EventRealtimeResyncRequired,
 		EventRealtimeError, EventNotificationCreated, EventNotificationStateChanged,
-		EventAIChatStarted, EventAIChatDelta, EventAIChatCompleted, EventAIChatFailed, EventAIChatCanceled:
+		EventAIChatStarted, EventAIChatDelta, EventAIChatReasoning, EventAIChatCompleted, EventAIChatFailed, EventAIChatCanceled:
 		return true
 	default:
 		return false

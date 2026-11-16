@@ -13,7 +13,17 @@ import {
   Search,
   VideoPause,
 } from '@element-plus/icons-vue'
-import { Copy, FileText, ThumbsDown, ThumbsUp, Upload, X } from 'lucide-vue-next'
+import {
+  Brain,
+  ChevronDown,
+  Copy,
+  FileText,
+  Globe2,
+  ThumbsDown,
+  ThumbsUp,
+  Upload,
+  X,
+} from 'lucide-vue-next'
 import { ElMessage } from 'element-plus/es/components/message/index'
 import { ElMessageBox } from 'element-plus/es/components/message-box/index'
 
@@ -64,6 +74,8 @@ const attachmentInput = ref<HTMLInputElement | null>(null)
 const attachmentUploading = ref(false)
 const fileLibraryVisible = ref(false)
 const dragActive = ref(false)
+const webSearchEnabled = ref(false)
+const openReasoning = ref<Set<number>>(new Set())
 let dragDepth = 0
 const sending = ref(false)
 const canceling = ref(false)
@@ -76,9 +88,11 @@ const feedbackBusyID = ref<number | null>(null)
 const sessions = reactive(new Map<number, SessionState>())
 const messagesEl = ref<HTMLElement | null>(null)
 const followBottom = ref(true)
+const messagesScrolling = ref(false)
 const resyncing = new Set<number>()
 let pollTimer: number | undefined
 let searchTimer: number | undefined
+let scrollbarTimer: number | undefined
 
 const canSendPermission = computed(() => access.hasPermission('ai:workbench:send'))
 const canCreate = computed(() => access.hasPermission('ai:workbench:create'))
@@ -395,6 +409,7 @@ async function send(): Promise<void> {
       content,
       requestId: crypto.randomUUID(),
       attachments: attachments.value.map((attachment) => ({ objectKey: attachment.objectKey })),
+      webSearch: webSearchEnabled.value,
     })
     input.value = ''
     attachments.value = []
@@ -575,6 +590,56 @@ function onScroll(): void {
   const element = messagesEl.value
   if (element === null) return
   followBottom.value = element.scrollHeight - element.scrollTop - element.clientHeight < 80
+  messagesScrolling.value = true
+  if (scrollbarTimer !== undefined) window.clearTimeout(scrollbarTimer)
+  scrollbarTimer = window.setTimeout(() => {
+    messagesScrolling.value = false
+  }, 700)
+}
+
+function reasoningOpenFor(messageID: number): boolean {
+  return openReasoning.value.has(messageID)
+}
+
+function citationDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+function toggleReasoning(messageID: number): void {
+  const next = new Set(openReasoning.value)
+  if (next.has(messageID)) next.delete(messageID)
+  else next.add(messageID)
+  openReasoning.value = next
+}
+
+function applyReasoningDelta(event: {
+  conversationId: number
+  assistantMessageId: number
+  deliverySeq: number
+  delta: string
+}): void {
+  const state = sessions.get(event.conversationId)
+  if (state === undefined || !state.loaded) return
+  const message = state.messages.find((item) => item.id === event.assistantMessageId)
+  if (message === undefined) return
+  if (event.deliverySeq <= message.deliverySeq) return
+  if (event.deliverySeq !== message.deliverySeq + 1) {
+    void resync(event.conversationId)
+    return
+  }
+  message.reasoningContent = `${message.reasoningContent ?? ''}${event.delta}`
+  message.deliverySeq = event.deliverySeq
+  if (!reasoningOpenFor(message.id)) {
+    const next = new Set(openReasoning.value)
+    next.add(message.id)
+    openReasoning.value = next
+  }
+  if (activeId.value === event.conversationId && followBottom.value)
+    void nextTick(() => scrollToBottom())
 }
 
 function applyDelta(event: {
@@ -594,6 +659,11 @@ function applyDelta(event: {
   }
   message.content += event.delta
   message.deliverySeq = event.deliverySeq
+  if ((message.reasoningContent ?? '') !== '' && reasoningOpenFor(message.id)) {
+    const next = new Set(openReasoning.value)
+    next.delete(message.id)
+    openReasoning.value = next
+  }
   if (activeId.value === event.conversationId && followBottom.value)
     void nextTick(() => scrollToBottom())
 }
@@ -624,6 +694,10 @@ const unsubscribeEvent = subscribeChatRealtime((event) => {
   }
   if (event.type === 'ai.chat.delta.v1') {
     applyDelta(event.data)
+    return
+  }
+  if (event.type === 'ai.chat.reasoning.v1') {
+    applyReasoningDelta(event.data)
     return
   }
   const state = sessions.get(event.data.conversationId)
@@ -674,6 +748,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (pollTimer !== undefined) window.clearInterval(pollTimer)
   if (searchTimer !== undefined) window.clearTimeout(searchTimer)
+  if (scrollbarTimer !== undefined) window.clearTimeout(scrollbarTimer)
   unsubscribeEvent()
   unsubscribeReconnect()
 })
@@ -843,7 +918,12 @@ onBeforeUnmount(() => {
         <el-alert :title="chatError" type="error" :closable="false" show-icon />
       </div>
 
-      <div ref="messagesEl" class="ai-workbench__messages" @scroll.passive="onScroll">
+      <div
+        ref="messagesEl"
+        class="ai-workbench__messages"
+        :class="{ 'is-scrolling': messagesScrolling }"
+        @scroll.passive="onScroll"
+      >
         <div v-if="session?.loading && !session?.loaded" class="ai-workbench__loading">
           <span class="ai-workbench__typing-dot" />
           <span class="ai-workbench__typing-dot" />
@@ -902,6 +982,8 @@ onBeforeUnmount(() => {
                     v-if="attachment.kind === 1 && attachmentUrls[attachment.objectKey]"
                     :src="attachmentUrls[attachment.objectKey]"
                     :preview-src-list="[attachmentUrls[attachment.objectKey]]"
+                    preview-teleported
+                    hide-on-click-modal
                     fit="cover"
                     class="ai-workbench__message-image"
                     :alt="attachment.fileName"
@@ -922,6 +1004,34 @@ onBeforeUnmount(() => {
                   </span>
                 </template>
               </div>
+              <div
+                v-if="message.role === 2 && message.reasoningContent"
+                class="ai-workbench__thinking"
+              >
+                <button
+                  type="button"
+                  class="ai-workbench__thinking-toggle"
+                  :aria-expanded="reasoningOpenFor(message.id)"
+                  @click="toggleReasoning(message.id)"
+                >
+                  <Brain :size="14" aria-hidden="true" />
+                  <span>
+                    {{
+                      message.status === 1 && !message.content
+                        ? t('ai.workbench.thinking')
+                        : t('ai.workbench.thoughtProcess')
+                    }}
+                  </span>
+                  <ChevronDown
+                    :size="14"
+                    :class="{ 'is-open': reasoningOpenFor(message.id) }"
+                    aria-hidden="true"
+                  />
+                </button>
+                <div v-if="reasoningOpenFor(message.id)" class="ai-workbench__thinking-content">
+                  {{ message.reasoningContent }}
+                </div>
+              </div>
               <MarkdownContent
                 v-if="message.role === 2 && (message.content || message.status !== 1)"
                 :content="message.content"
@@ -935,6 +1045,28 @@ onBeforeUnmount(() => {
                 <span class="ai-workbench__typing-dot" />
                 <span class="ai-workbench__typing-dot" />
               </span>
+              <div
+                v-if="message.role === 2 && (message.citations?.length ?? 0) > 0"
+                class="ai-workbench__citations"
+              >
+                <div class="ai-workbench__citations-title">
+                  {{ t('ai.workbench.sources') }}
+                </div>
+                <a
+                  v-for="citation in message.citations ?? []"
+                  :key="`${message.id}-${citation.index}-${citation.url}`"
+                  :href="citation.url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="ai-workbench__citation"
+                >
+                  <span class="ai-workbench__citation-index">{{ citation.index }}</span>
+                  <span class="ai-workbench__citation-title">{{ citation.title }}</span>
+                  <span class="ai-workbench__citation-domain">{{
+                    citationDomain(citation.url)
+                  }}</span>
+                </a>
+              </div>
               <div v-if="message.usage" class="ai-workbench__message-usage">
                 <span>{{
                   t('ai.workbench.usageTokens', {
@@ -1010,10 +1142,7 @@ onBeforeUnmount(() => {
 
       <footer v-if="!showEmpty" class="ai-workbench__composer">
         <div class="ai-workbench__composer-shell" :class="{ 'is-dragging': dragActive }">
-          <div
-            v-if="canUploadAttachment || canSelectAttachment"
-            class="ai-workbench__composer-attachments"
-          >
+          <div class="ai-workbench__composer-attachments">
             <input
               ref="attachmentInput"
               class="ai-workbench__attachment-input"
@@ -1040,6 +1169,18 @@ onBeforeUnmount(() => {
               :title="t('ai.workbench.selectAttachment')"
               :aria-label="t('ai.workbench.selectAttachment')"
               @click="openAttachmentLibrary"
+            />
+            <el-button
+              class="ai-workbench__web-search"
+              :class="{ 'is-active': webSearchEnabled }"
+              :type="webSearchEnabled ? 'primary' : 'default'"
+              :plain="!webSearchEnabled"
+              circle
+              :icon="Globe2"
+              :title="t('ai.workbench.webSearch')"
+              :aria-label="t('ai.workbench.webSearch')"
+              :aria-pressed="webSearchEnabled"
+              @click="webSearchEnabled = !webSearchEnabled"
             />
             <div v-if="attachments.length > 0" class="ai-workbench__attachment-list">
               <div
@@ -1286,6 +1427,33 @@ onBeforeUnmount(() => {
   gap: 16px;
   padding: 20px 24px;
   overflow-y: auto;
+  scrollbar-color: transparent transparent;
+  scrollbar-width: thin;
+}
+
+.ai-workbench__messages::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ai-workbench__messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-workbench__messages::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  background-clip: padding-box;
+}
+
+.ai-workbench__messages.is-scrolling {
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.ai-workbench__messages.is-scrolling::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  background-clip: padding-box;
 }
 
 .ai-workbench__message {
@@ -1993,6 +2161,52 @@ onBeforeUnmount(() => {
   line-height: 1.75;
 }
 
+.ai-workbench__thinking {
+  margin-bottom: 9px;
+}
+
+.ai-workbench__thinking-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid #e5eaf3;
+  border-radius: 999px;
+  color: #64748b;
+  background: #f8fafc;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ai-workbench__thinking-toggle:hover {
+  border-color: #bfdbfe;
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.ai-workbench__thinking-toggle svg:last-child {
+  transition: transform 150ms ease;
+}
+
+.ai-workbench__thinking-toggle svg:last-child.is-open {
+  transform: rotate(180deg);
+}
+
+.ai-workbench__thinking-content {
+  max-height: 280px;
+  margin-top: 6px;
+  padding: 9px 11px;
+  overflow-y: auto;
+  border-left: 2px solid #dbe7f7;
+  border-radius: 0 8px 8px 0;
+  color: #718096;
+  background: #f8fafc;
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
 .ai-workbench__message.is-user .ai-workbench__message-body {
   max-width: min(72%, 620px);
   padding: 10px 14px;
@@ -2024,6 +2238,71 @@ onBeforeUnmount(() => {
   font-family: var(--admin-font-data);
   font-size: 11px;
   font-weight: 650;
+}
+
+.ai-workbench__composer-attachments :deep(.el-button) {
+  margin-left: 0;
+}
+
+.ai-workbench__web-search.is-active {
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 12%);
+}
+
+.ai-workbench__citations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #edf1f7;
+}
+
+.ai-workbench__citations-title {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ai-workbench__citation {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  color: #475569;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.ai-workbench__citation:hover {
+  color: #2563eb;
+  background: #f8fbff;
+}
+
+.ai-workbench__citation-index {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  place-items: center;
+  border-radius: 5px;
+  color: #2563eb;
+  background: #eff6ff;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.ai-workbench__citation-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-workbench__citation-domain {
+  flex: 0 0 auto;
+  color: #a3adbd;
+  font-size: 10px;
 }
 
 .ai-workbench__message-files {

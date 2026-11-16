@@ -72,7 +72,8 @@ func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation
 	}
 	userMessage := chat.Message{
 		ConversationID: conversation.ID, Seq: maxSeq + 1, Role: chat.RoleUser,
-		Content: userContent, Status: chat.MessageCompleted, CreatedAt: now, UpdatedAt: now,
+		Content: userContent, Citations: make([]chat.Citation, 0),
+		Status: chat.MessageCompleted, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := tx.WithContext(ctx).Create(&userMessage).Error; err != nil {
 		return chat.Message{}, chat.Message{}, err
@@ -87,7 +88,8 @@ func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation
 	userMessage.Attachments = attachments
 	assistant := chat.Message{
 		ConversationID: conversation.ID, Seq: maxSeq + 2, Role: chat.RoleAssistant,
-		Content: "", Status: chat.MessageStreaming, CreatedAt: now, UpdatedAt: now,
+		Content: "", Citations: make([]chat.Citation, 0),
+		Status: chat.MessageStreaming, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := tx.WithContext(ctx).Create(&assistant).Error; err != nil {
 		return chat.Message{}, chat.Message{}, err

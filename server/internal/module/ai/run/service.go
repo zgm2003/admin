@@ -12,6 +12,7 @@ import (
 
 	"admin/server/internal/module/ai/chat"
 	"admin/server/internal/module/ai/pricing"
+	aitool "admin/server/internal/module/ai/tool"
 	auth "admin/server/internal/module/auth/login"
 	"admin/server/internal/module/payment/wallet"
 	"admin/server/internal/module/realtime"
@@ -34,6 +35,7 @@ type Service struct {
 	keys           *secretkey.KeyRing
 	publisher      realtime.RawPublisher
 	provider       *ProviderClient
+	tools          *aitool.Service
 	logger         *slog.Logger
 	attachmentURLs AttachmentURLResolver
 	now            func() time.Time
@@ -47,6 +49,7 @@ func NewService(
 	keys *secretkey.KeyRing,
 	publisher realtime.RawPublisher,
 	provider *ProviderClient,
+	tools *aitool.Service,
 	logger *slog.Logger,
 ) *Service {
 	if logger == nil {
@@ -57,7 +60,7 @@ func NewService(
 	}
 	return &Service{
 		repo: repo, chat: chatRepository, db: db, wallet: walletRepository,
-		keys: keys, publisher: publisher, provider: provider, logger: logger, now: time.Now,
+		keys: keys, publisher: publisher, provider: provider, tools: tools, logger: logger, now: time.Now,
 	}
 }
 
@@ -93,6 +96,7 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 	}
 	walletRow, exists, err := s.wallet.Find(ctx, identity.UserID)
 	if err != nil {
+		s.logger.Error("send wallet lookup", "userId", identity.UserID, "error", err)
 		return SendResult{}, dependency(err)
 	}
 	if !exists || walletRow.BalanceUnits <= 0 {
@@ -139,7 +143,7 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 		AgentID: agent.ID, ProviderID: agent.ProviderID, ProviderModelID: agent.ProviderModelID,
 		ProviderProtocol: agent.ProviderProtocol, AgentName: agent.Name,
 		ProviderName: agent.ProviderName, ModelKey: agent.ModelKey, ModelName: agent.ModelName,
-		TimeoutMS: agent.TimeoutMS, PricingSnapshot: string(snapshot),
+		TimeoutMS: agent.TimeoutMS, WebSearch: input.WebSearch, PricingSnapshot: string(snapshot),
 		Status: RunQueued, BillingStatus: BillingPending, CreatedAt: now, UpdatedAt: now,
 	}
 	title := titleFromContent(input.Content)
