@@ -498,6 +498,16 @@ function attachmentKind(fileName: string, mimeType: string): 'image' | 'file' {
     : 'file'
 }
 
+function attachmentExtension(fileName: string): string {
+  const index = fileName.lastIndexOf('.')
+  return index > 0
+    ? fileName
+        .slice(index + 1)
+        .toUpperCase()
+        .slice(0, 4)
+    : 'FILE'
+}
+
 async function resolveAttachmentPreview(item: PendingAttachment): Promise<void> {
   if (item.kind !== 'image' || item.previewUrl !== '') return
   try {
@@ -1153,68 +1163,38 @@ onBeforeUnmount(() => {
 
       <footer v-if="!showEmpty" class="ai-workbench__composer">
         <div class="ai-workbench__composer-shell" :class="{ 'is-dragging': dragActive }">
-          <div class="ai-workbench__composer-attachments">
-            <input
-              ref="attachmentInput"
-              class="ai-workbench__attachment-input"
-              type="file"
-              multiple
-              @change="onAttachmentChange"
-            />
-            <el-button
-              v-if="canUploadAttachment"
-              type="primary"
-              circle
-              :icon="Plus"
-              :loading="attachmentUploading"
-              :title="t('ai.workbench.uploadAttachment')"
-              :aria-label="t('ai.workbench.uploadAttachment')"
-              @click="openAttachmentPicker"
-            />
-            <el-button
-              v-if="canSelectAttachment"
-              type="primary"
-              plain
-              circle
-              :icon="FolderOpened"
-              :title="t('ai.workbench.selectAttachment')"
-              :aria-label="t('ai.workbench.selectAttachment')"
-              @click="openAttachmentLibrary"
-            />
-            <el-button
-              class="ai-workbench__web-search"
-              :class="{ 'is-active': webSearchEnabled }"
-              :type="webSearchEnabled ? 'primary' : 'default'"
-              :plain="!webSearchEnabled"
-              circle
-              :icon="Globe2"
-              :title="t('ai.workbench.webSearch')"
-              :aria-label="t('ai.workbench.webSearch')"
-              :aria-pressed="webSearchEnabled"
-              @click="webSearchEnabled = !webSearchEnabled"
-            />
-            <div v-if="attachments.length > 0" class="ai-workbench__attachment-list">
-              <div
-                v-for="(attachment, index) in attachments"
-                :key="attachment.objectKey"
-                class="ai-workbench__attachment-item"
+          <input
+            ref="attachmentInput"
+            class="ai-workbench__attachment-input"
+            type="file"
+            multiple
+            @change="onAttachmentChange"
+          />
+          <div v-if="attachments.length > 0" class="ai-workbench__composer-files">
+            <div
+              v-for="(attachment, index) in attachments"
+              :key="attachment.objectKey"
+              class="ai-workbench__composer-file"
+              :title="attachment.fileName"
+            >
+              <img
+                v-if="attachment.kind === 'image' && attachment.previewUrl"
+                :src="attachment.previewUrl"
+                :alt="attachment.fileName"
+              />
+              <span v-else class="ai-workbench__composer-file-icon">
+                <FileText :size="19" aria-hidden="true" />
+                <small>{{ attachmentExtension(attachment.fileName) }}</small>
+              </span>
+              <button
+                type="button"
+                class="ai-workbench__composer-file-remove"
+                :aria-label="t('common.delete')"
+                :title="t('common.delete')"
+                @click="removeAttachment(index)"
               >
-                <img
-                  v-if="attachment.kind === 'image' && attachment.previewUrl"
-                  :src="attachment.previewUrl"
-                  :alt="attachment.fileName"
-                />
-                <FileText v-else :size="14" aria-hidden="true" />
-                <span>{{ attachment.fileName }}</span>
-                <button
-                  type="button"
-                  :aria-label="t('common.delete')"
-                  :title="t('common.delete')"
-                  @click="removeAttachment(index)"
-                >
-                  <X :size="12" />
-                </button>
-              </div>
+                <X :size="10" />
+              </button>
             </div>
           </div>
           <el-input
@@ -1228,14 +1208,44 @@ onBeforeUnmount(() => {
             @keydown="onKeydown"
           />
           <div class="ai-workbench__composer-bar">
-            <div class="ai-workbench__composer-left">
-              <AgentPicker
-                :model-value="selectedAgentId"
-                :agents="agents"
-                :avatar-urls="agentAvatarUrls"
-                :placeholder="t('ai.workbench.agentPlaceholder')"
-                @select="selectAgent"
-              />
+            <div class="ai-workbench__composer-tools">
+              <el-button
+                v-if="canUploadAttachment"
+                text
+                class="ai-workbench__composer-tool"
+                :icon="Plus"
+                :loading="attachmentUploading"
+                :title="t('ai.workbench.uploadAttachment')"
+                :aria-label="t('ai.workbench.uploadAttachment')"
+                @click="openAttachmentPicker"
+              >
+                {{ t('ai.workbench.uploadShort') }}
+              </el-button>
+              <el-button
+                v-if="canSelectAttachment"
+                text
+                class="ai-workbench__composer-tool"
+                :icon="FolderOpened"
+                :title="t('ai.workbench.selectAttachment')"
+                :aria-label="t('ai.workbench.selectAttachment')"
+                @click="openAttachmentLibrary"
+              >
+                {{ t('ai.workbench.filesShort') }}
+              </el-button>
+              <el-button
+                text
+                class="ai-workbench__composer-tool ai-workbench__web-search"
+                :class="{ 'is-active': webSearchEnabled }"
+                :icon="Globe2"
+                :title="t('ai.workbench.webSearch')"
+                :aria-label="t('ai.workbench.webSearch')"
+                :aria-pressed="webSearchEnabled"
+                @click="webSearchEnabled = !webSearchEnabled"
+              >
+                {{ t('ai.workbench.webSearchShort') }}
+              </el-button>
+            </div>
+            <div class="ai-workbench__composer-actions">
               <el-tag
                 v-if="
                   activeConversation &&
@@ -1249,11 +1259,14 @@ onBeforeUnmount(() => {
               >
                 {{ t('ai.workbench.nextReplyAgent') }}
               </el-tag>
-              <span class="ai-workbench__composer-hint">
-                {{ t('ai.workbench.inputHint') }}
-              </span>
-            </div>
-            <div class="ai-workbench__composer-actions">
+              <AgentPicker
+                :model-value="selectedAgentId"
+                :agents="agents"
+                :avatar-urls="agentAvatarUrls"
+                :placeholder="t('ai.workbench.agentPlaceholder')"
+                compact
+                @select="selectAgent"
+              />
               <el-button
                 v-if="streaming"
                 circle
@@ -2199,12 +2212,21 @@ onBeforeUnmount(() => {
   font-weight: 650;
 }
 
-.ai-workbench__composer-attachments :deep(.el-button) {
-  margin-left: 0;
+.ai-workbench__composer-tool {
+  height: 30px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  --el-button-text-color: #667085;
+  --el-button-hover-text-color: #2563eb;
+  --el-button-hover-bg-color: #f3f8ff;
+  font-size: 12px;
 }
 
-.ai-workbench__web-search.is-active {
-  box-shadow: 0 0 0 2px rgb(37 99 235 / 12%);
+.ai-workbench__composer-tool.is-active {
+  color: #2563eb;
+  background: #eff6ff;
 }
 
 .ai-workbench__citations {
@@ -2304,69 +2326,87 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.ai-workbench__composer-attachments {
-  display: flex;
-  max-height: 160px;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 4px 0;
-  overflow-y: auto;
-}
-
 .ai-workbench__attachment-input {
   display: none;
 }
 
-.ai-workbench__attachment-list {
+.ai-workbench__composer-files {
   display: flex;
-  min-width: 0;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 14px;
+  padding: 10px 10px 10px;
+  overflow: visible;
 }
 
-.ai-workbench__attachment-item {
-  display: inline-flex;
-  max-width: 220px;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 6px 4px 8px;
-  border: 1px solid #e1e8f3;
-  border-radius: 999px;
-  color: #475569;
+.ai-workbench__composer-file {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border: 1px solid #e5eaf2;
+  border-radius: 12px;
   background: #f8fafc;
-  font-size: 11px;
 }
 
-.ai-workbench__attachment-item img {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
-  border-radius: 4px;
+.ai-workbench__composer-file img {
+  width: 100%;
+  height: 100%;
+  border-radius: 11px;
   object-fit: cover;
 }
 
-.ai-workbench__attachment-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ai-workbench__attachment-item button {
-  display: inline-flex;
+.ai-workbench__composer-file-icon {
+  display: flex;
+  width: 100%;
+  height: 100%;
   align-items: center;
   justify-content: center;
-  padding: 2px;
-  border: 0;
-  border-radius: 50%;
-  color: #94a3b8;
-  background: transparent;
-  cursor: pointer;
+  flex-direction: column;
+  gap: 1px;
+  border-radius: 11px;
+  color: #7c8799;
+  background: linear-gradient(135deg, #f8fafc, #eef3fa);
 }
 
-.ai-workbench__attachment-item button:hover {
-  color: #dc2626;
-  background: #fee2e2;
+.ai-workbench__composer-file-icon small {
+  color: #9aa5b7;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.ai-workbench__composer-file-remove {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  opacity: 0;
+  color: #fff;
+  background: #202938;
+  cursor: pointer;
+  pointer-events: none;
+  transform: scale(0.9);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    background 150ms ease;
+}
+
+.ai-workbench__composer-file:hover .ai-workbench__composer-file-remove,
+.ai-workbench__composer-file:focus-within .ai-workbench__composer-file-remove {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+.ai-workbench__composer-file-remove:hover {
+  background: #dc2626;
 }
 
 .ai-workbench__message-actions {
@@ -2514,33 +2554,27 @@ onBeforeUnmount(() => {
 
 .ai-workbench__composer-bar {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 2px 2px 0 6px;
+  gap: 8px;
+  padding: 6px 2px 0;
 }
 
-.ai-workbench__composer-left {
+.ai-workbench__composer-tools {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
 }
 
 .ai-workbench__next-tag {
   flex: 0 0 auto;
 }
 
-.ai-workbench__composer-hint {
-  overflow: hidden;
-  color: #a0aaba;
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .ai-workbench__composer-actions {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;

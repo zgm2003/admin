@@ -10,8 +10,9 @@ const props = withDefaults(
     agents: ChatAgent[]
     avatarUrls: Record<string, string>
     placeholder?: string
+    compact?: boolean
   }>(),
-  { placeholder: 'Select agent' },
+  { placeholder: 'Select agent', compact: false },
 )
 
 const emit = defineEmits<{ select: [id: number] }>()
@@ -31,17 +32,22 @@ function choose(id: number): void {
     :disabled="agents.length === 0"
     @command="choose"
   >
-    <button type="button" class="ai-agent-picker__trigger" :aria-label="placeholder">
+    <button
+      type="button"
+      class="ai-agent-picker__trigger"
+      :class="{ 'is-compact': compact }"
+      :aria-label="placeholder"
+    >
       <el-avatar
         class="ai-agent-picker__avatar"
-        :size="24"
+        :size="compact ? 20 : 24"
         :src="selected ? avatarUrls[selected.avatar] : undefined"
       >
         {{ selected?.name.slice(0, 1) }}
       </el-avatar>
       <span class="ai-agent-picker__copy">
         <strong>{{ selected?.name || placeholder }}</strong>
-        <small v-if="selected">{{ selected.modelName }}</small>
+        <small v-if="selected && !compact">{{ selected.modelName }}</small>
       </span>
       <ChevronDown :size="14" class="ai-agent-picker__chevron" aria-hidden="true" />
     </button>
@@ -101,6 +107,20 @@ function choose(id: number): void {
   outline: none;
   background: #f7faff;
   box-shadow: 0 0 0 3px rgb(37 99 235 / 7%);
+}
+
+.ai-agent-picker__trigger.is-compact {
+  max-width: 180px;
+  padding: 2px 6px 2px 2px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.ai-agent-picker__trigger.is-compact:hover,
+.ai-agent-picker__trigger.is-compact:focus-visible {
+  border-color: #e4eaf3;
+  background: #f7faff;
+  box-shadow: none;
 }
 
 .ai-agent-picker__avatar {
