@@ -75,6 +75,8 @@ func TestNormalizeSearchQuery(t *testing.T) {
 		"帮我搜索 OpenAI Responses API": "OpenAI Responses API",
 		"Go 语言是什么":                  "Go 语言",
 		"现任美国总统":                    "现任美国总统",
+		"联网确认现任美国总统是谁，同时告诉我系统有多少用户": "现任美国总统",
+		"OpenAI 是什么？请用 [1] 标注来源":    "OpenAI",
 	}
 	for input, want := range cases {
 		if got := normalizeSearchQuery(input); got != want {

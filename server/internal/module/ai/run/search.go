@@ -193,6 +193,9 @@ func searchBingRSS(ctx context.Context, query string, limit int) ([]chat.Citatio
 
 func normalizeSearchQuery(value string) string {
 	value = strings.TrimSpace(value)
+	if index := strings.IndexAny(value, "。！？!?；;，,\n\r"); index > 0 {
+		value = value[:index]
+	}
 	value = strings.Trim(value, " \t\r\n,，.。!！?？;；:：\"'“”‘’")
 	value = strings.Join(strings.Fields(value), " ")
 	if len([]rune(value)) > maxSearchQueryRunes {
@@ -201,9 +204,11 @@ func normalizeSearchQuery(value string) string {
 	prefixes := []string{
 		"帮我搜索一下", "帮我搜一下", "帮我查一下", "帮我查询一下",
 		"请帮我搜索", "请帮我查", "麻烦搜索一下", "麻烦查一下",
+		"联网搜索一下", "联网搜索", "网络搜索", "请联网搜索", "帮我联网搜索",
 		"搜索一下", "查询一下", "查一下", "搜一下", "查询", "搜索",
 		"帮我搜索", "帮我查询", "请问", "请帮我", "帮我", "麻烦",
-		"现在的", "目前的", "当前的", "最新的", "今天",
+		"请联网查", "帮我联网查", "联网确认", "联网查", "联网", "上网查",
+		"确认", "现在的", "目前的", "当前的", "最新的", "今天",
 	}
 	for round := 0; round < 3; round++ {
 		changed := false
