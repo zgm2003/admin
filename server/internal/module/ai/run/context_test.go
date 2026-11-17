@@ -41,6 +41,15 @@ func TestEstimateTextTokensIsConservative(t *testing.T) {
 	}
 }
 
+func TestStripZeroWidth(t *testing.T) {
+	if got := stripZeroWidth("\u200B\u200C\u200D\uFEFF"); got != "" {
+		t.Fatalf("zero-width text = %q", got)
+	}
+	if got := stripZeroWidth("思考\u200B过程"); got != "思考过程" {
+		t.Fatalf("reasoning text = %q", got)
+	}
+}
+
 func TestLatestUserQueryUsesNewestUserMessage(t *testing.T) {
 	history := []chat.Message{
 		{ID: 3, Role: chat.RoleUser, Content: "最新的问题"},

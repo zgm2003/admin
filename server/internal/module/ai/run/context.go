@@ -269,6 +269,16 @@ func (s *Service) assembleContext(
 	return selected, plan, nil
 }
 
+func stripZeroWidth(value string) string {
+	return strings.Map(func(char rune) rune {
+		switch char {
+		case '\u200B', '\u200C', '\u200D', '\uFEFF':
+			return -1
+		}
+		return char
+	}, value)
+}
+
 func latestUserQuery(history []chat.Message) string {
 	for _, message := range history {
 		if message.Role != chat.RoleUser {

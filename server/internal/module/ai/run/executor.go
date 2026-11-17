@@ -302,7 +302,8 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 					roundCalls = append(roundCalls, chunk.ToolCalls...)
 				}
 				addUsage(chunk.Usage)
-				if chunk.Reasoning != "" {
+				if reasoningDelta := stripZeroWidth(chunk.Reasoning); reasoningDelta != "" {
+					chunk.Reasoning = reasoningDelta
 					if firstTokenAt == nil {
 						value := time.Now()
 						firstTokenAt = &value

@@ -138,7 +138,7 @@ const contextUsage = computed<{ used: number; window: number; percent: number } 
     const agent = agents.value.find((item) => item.id === message.agentId) ?? selectedAgent.value
     const window = agent?.contextWindowTokens ?? defaultContextWindowTokens
     if (!window || window <= 0) return null
-    const used = message.usage.inputTokens
+    const used = message.usage.inputTokens + message.usage.cachedInputTokens
     return { used, window, percent: Math.min(100, Math.round((used / window) * 100)) }
   }
   return null
@@ -852,6 +852,10 @@ function onScroll(): void {
   }, 700)
 }
 
+function hasReasoning(message: ChatMessage): boolean {
+  return (message.reasoningContent ?? '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim() !== ''
+}
+
 function reasoningOpenFor(messageID: number): boolean {
   return openReasoning.value.has(messageID)
 }
@@ -1142,7 +1146,12 @@ onBeforeUnmount(() => {
               class="ai-workbench__context"
               :class="{ 'is-warning': contextUsage.percent >= 75 }"
             >
-              {{ t('ai.workbench.contextUsage', { percent: contextUsage.percent }) }}
+              {{
+                t('ai.workbench.contextUsage', {
+                  used: formatTokenCount(contextUsage.used),
+                  window: formatTokenCount(contextUsage.window),
+                })
+              }}
             </span>
           </el-tooltip>
           <div
@@ -1298,7 +1307,7 @@ onBeforeUnmount(() => {
                   </template>
                 </div>
                 <div
-                  v-if="message.role === 2 && message.reasoningContent"
+                  v-if="message.role === 2 && hasReasoning(message)"
                   class="ai-workbench__thinking"
                 >
                   <button

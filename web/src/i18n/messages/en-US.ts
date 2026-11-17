@@ -330,8 +330,9 @@ export const enUS = {
   'ai.workbench.empty': 'No conversations yet',
   'ai.workbench.welcome': 'Start a conversation',
   'ai.workbench.balance': 'Available balance',
-  'ai.workbench.contextUsage': 'Context {percent}%',
-  'ai.workbench.contextUsageHint': 'Last request used about {used} / {window} tokens',
+  'ai.workbench.contextUsage': 'Context {used} / {window}',
+  'ai.workbench.contextUsageHint':
+    'Last request used about {used} / {window} tokens, including cache hits',
   'ai.workbench.insufficient': 'Insufficient balance. Recharge before sending another message.',
   'ai.workbench.selectConversation': 'Create or select a conversation',
   'ai.workbench.loadMore': 'Load earlier messages',
