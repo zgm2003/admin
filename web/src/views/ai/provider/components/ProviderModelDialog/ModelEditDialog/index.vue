@@ -53,7 +53,9 @@ const statusOptions = computed(() => [
   { value: 0, label: t('ai.providerModel.disabled') },
 ])
 const pricingModes = computed(() =>
-  props.options.pricingModes.filter((item) => form.value.modelKind !== 1 || item.value === 1),
+  props.options.pricingModes.filter((item) =>
+    form.value.modelKind === 1 ? item.value === 1 : item.value === 2,
+  ),
 )
 const priceUnits = computed(() => {
   if (form.value.pricingMode === 1) {

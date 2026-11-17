@@ -162,6 +162,7 @@ export const zhCN = {
   'ai.officialModel.contextColumn': '上下文窗口',
   'ai.officialModel.contextNotConfigured': '上下文未配置',
   'ai.officialModel.contextDefaultHint': '未配置官方值，运行时默认 128K 上下文 / 8K 输出',
+  'ai.officialModel.mediaPriceInProvider': '价格在供应商配置',
   'ai.officialModel.outputShort': '输出',
   'ai.officialModel.contextWindowTokens': '上下文窗口（tokens）',
   'ai.officialModel.maxOutputTokens': '最大输出（tokens）',
@@ -287,7 +288,7 @@ export const zhCN = {
     'Token 模式使用官方目录价格，并乘以供应商的 Token 倍率；图片/视频/音频请使用供应商单位价格。',
   'ai.providerModel.prices': '供应商价格',
   'ai.providerModel.pricesHint':
-    '图片按质量、视频按分辨率、音频按单位设置；价格单位由上方计价单位决定。',
+    '图片按质量档位设置每张价格，视频按分辨率设置每秒价格，音频按单位设置；媒体模型直接按次数/时长计费，不使用倍率。',
   'ai.providerModel.addTier': '添加档位',
   'ai.providerModel.tierKey': '档位 key，例如 quality:medium',
   'ai.providerModel.tierLabel': '档位名称',

@@ -14,6 +14,7 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 		t.Fatalf("catalog = %+v", catalog)
 	}
 	found := false
+	imageModels := 0
 	vendors := make(map[Vendor]bool)
 	for _, model := range catalog.Models {
 		if !model.Vendor.Valid() {
@@ -37,6 +38,19 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 			if model.ContextWindowTokens == nil || *model.ContextWindowTokens != 8_192 ||
 				model.MaxOutputTokens == nil || *model.MaxOutputTokens != 4_096 {
 				t.Fatalf("gpt-4-0613 context = %+v/%+v", model.ContextWindowTokens, model.MaxOutputTokens)
+			}
+		}
+		if strings.HasPrefix(model.ModelKey, "gpt-image-") {
+			imageModels++
+			if model.Vendor != VendorOpenAI || model.ModelKind != 2 {
+				t.Fatalf("image model %s = vendor %d kind %d",
+					model.ModelKey, model.Vendor, model.ModelKind)
+			}
+			if model.InputUSDMicros != 0 || model.OutputUSDMicros != 0 {
+				t.Fatalf("image model %s has official token prices", model.ModelKey)
+			}
+			if model.ContextWindowTokens != nil || model.MaxOutputTokens != nil {
+				t.Fatalf("image model %s has context limits", model.ModelKey)
 			}
 		}
 		if model.ModelKey == "gpt-6-astra" {
@@ -66,6 +80,9 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("gpt-5.5 not found in catalog")
+	}
+	if imageModels < 4 {
+		t.Fatalf("gpt-image models = %d, want at least 4", imageModels)
 	}
 	for _, vendor := range []Vendor{VendorOpenAI, VendorAnthropic, VendorGoogle, VendorVolcengine} {
 		if !vendors[vendor] {

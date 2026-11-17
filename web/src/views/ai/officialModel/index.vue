@@ -404,8 +404,11 @@ onBeforeUnmount(() => {
         <span v-else class="ai-official-model-page__money">—</span>
       </template>
       <template #cell-actions="{ row }: { row: OfficialModel }">
+        <span v-if="row.modelKind === 2" class="ai-official-model-page__provider-price">
+          {{ t('ai.officialModel.mediaPriceInProvider') }}
+        </span>
         <el-button
-          v-if="canUpdate && row.actions.update"
+          v-else-if="canUpdate && row.actions.update"
           link
           type="primary"
           :disabled="busyID !== null || syncing"
@@ -508,6 +511,12 @@ onBeforeUnmount(() => {
       color: var(--admin-text-soft);
       font-weight: 500;
     }
+  }
+
+  &__provider-price {
+    color: var(--admin-text-muted);
+    font-size: 11px;
+    white-space: nowrap;
   }
 
   &__context-inline {

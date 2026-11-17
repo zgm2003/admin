@@ -255,6 +255,9 @@ func (s *Service) validateConfiguration(ctx context.Context, vendor int16, input
 	if input.ModelKind == pricing.KindChat && input.PricingMode != pricing.ModeOfficialToken {
 		return nil, invalid(fmt.Errorf("chat models must use official token pricing"))
 	}
+	if input.ModelKind != pricing.KindChat && input.PricingMode != pricing.ModeProviderUnit {
+		return nil, invalid(fmt.Errorf("image, video and audio models must use provider unit pricing"))
+	}
 	if input.PricingMode == pricing.ModeOfficialToken && input.PriceUnit != pricing.UnitMillionTokens {
 		return nil, invalid(fmt.Errorf("token pricing must use million tokens"))
 	}

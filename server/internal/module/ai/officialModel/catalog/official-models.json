@@ -1,5 +1,5 @@
 {
-  "catalogVersion": "multi-vendor-2026-11-09-video",
+  "catalogVersion": "multi-vendor-2026-11-17-image",
   "sourceUrl": "https://developers.openai.com/api/docs/pricing",
   "verifiedAt": "2026-11-09T00:00:00Z",
   "models": [
@@ -406,6 +406,50 @@
       "outputUsdPerMillion": "1.50",
       "contextWindowTokens": 16385,
       "maxOutputTokens": 4096
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-image-2",
+      "displayName": "GPT Image 2",
+      "modelKind": 2,
+      "inputUsdPerMillion": "0.00",
+      "outputUsdPerMillion": "0.00",
+      "sourceUrl": "https://developers.openai.com/api/docs/guides/image-generation",
+      "verifiedAt": "2026-11-17T00:00:00Z"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-image-1.5",
+      "displayName": "GPT Image 1.5",
+      "modelKind": 2,
+      "inputUsdPerMillion": "0.00",
+      "outputUsdPerMillion": "0.00",
+      "sourceUrl": "https://developers.openai.com/api/docs/guides/image-generation",
+      "verifiedAt": "2026-11-17T00:00:00Z"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-image-1",
+      "displayName": "GPT Image 1",
+      "modelKind": 2,
+      "inputUsdPerMillion": "0.00",
+      "outputUsdPerMillion": "0.00",
+      "sourceUrl": "https://developers.openai.com/api/docs/guides/image-generation",
+      "verifiedAt": "2026-11-17T00:00:00Z"
+    },
+    {
+      "vendorCode": "openai",
+      "vendorName": "OpenAI",
+      "modelKey": "gpt-image-1-mini",
+      "displayName": "GPT Image 1 Mini",
+      "modelKind": 2,
+      "inputUsdPerMillion": "0.00",
+      "outputUsdPerMillion": "0.00",
+      "sourceUrl": "https://developers.openai.com/api/docs/guides/image-generation",
+      "verifiedAt": "2026-11-17T00:00:00Z"
     },
     {
       "outputUsdPerMillion": "25.00",

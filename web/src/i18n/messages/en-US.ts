@@ -174,6 +174,7 @@ export const enUS = {
   'ai.officialModel.contextNotConfigured': 'Context not configured',
   'ai.officialModel.contextDefaultHint':
     'No official value configured; runtime defaults to 128K context / 8K output',
+  'ai.officialModel.mediaPriceInProvider': 'Priced on provider model',
   'ai.officialModel.outputShort': 'Output',
   'ai.officialModel.contextWindowTokens': 'Context window (tokens)',
   'ai.officialModel.maxOutputTokens': 'Max output (tokens)',
@@ -306,7 +307,7 @@ export const enUS = {
     'Token mode uses official catalog prices multiplied by the provider token multiplier. Use provider unit prices for image/video/audio.',
   'ai.providerModel.prices': 'Provider prices',
   'ai.providerModel.pricesHint':
-    'Set image prices by quality, video by resolution, and audio by unit. The unit comes from the field above.',
+    'Set image prices per image by quality, video prices per second by resolution, and audio prices by unit. Media models bill by unit directly, without a multiplier.',
   'ai.providerModel.addTier': 'Add tier',
   'ai.providerModel.tierKey': 'Tier key, e.g. quality:medium',
   'ai.providerModel.tierLabel': 'Tier label',

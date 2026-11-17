@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"admin/server/internal/module/ai/pricing"
 	aiprovider "admin/server/internal/module/ai/provider"
+	"admin/server/pkg/yesno"
 )
 
 func TestListUpstreamModelsByProtocol(t *testing.T) {
@@ -71,6 +73,22 @@ func TestListUpstreamModelsByProtocol(t *testing.T) {
 				t.Fatalf("models = %+v", models)
 			}
 		})
+	}
+}
+
+func TestValidateConfigurationRequiresProviderUnitForMedia(t *testing.T) {
+	service := &Service{}
+	image := UpdateInput{
+		ModelKind: pricing.KindImage, PricingMode: pricing.ModeOfficialToken,
+		PriceUnit: pricing.UnitMillionTokens, Status: yesno.No,
+	}
+	if _, err := service.validateConfiguration(context.Background(), 1, image); err == nil {
+		t.Fatal("image official-token pricing accepted")
+	}
+	image.PricingMode = pricing.ModeProviderUnit
+	image.PriceUnit = pricing.UnitImage
+	if _, err := service.validateConfiguration(context.Background(), 1, image); err != nil {
+		t.Fatalf("image provider-unit pricing rejected: %v", err)
 	}
 }
 
