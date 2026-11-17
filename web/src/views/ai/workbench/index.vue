@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import {
   ChatDotRound,
   Delete,
-  Edit,
   FolderOpened,
   MoreFilled,
   Plus,
@@ -19,6 +18,7 @@ import {
   Copy,
   FileText,
   Globe2,
+  Pencil,
   ThumbsDown,
   ThumbsUp,
   Upload,
@@ -62,7 +62,7 @@ interface PendingAttachment {
   previewUrl: string
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const access = usePermissionStore()
 const agents = ref<ChatAgent[]>([])
 const agentAvatarUrls = ref<Record<string, string>>({})
@@ -87,6 +87,10 @@ const listError = ref('')
 const chatError = ref('')
 const searchKeyword = ref('')
 const feedbackBusyID = ref<number | null>(null)
+const deletingMessageID = ref<number | null>(null)
+const editingMessageId = ref<number | null>(null)
+const editContent = ref('')
+const editSaving = ref(false)
 const sessions = reactive(new Map<number, SessionState>())
 const messagesEl = ref<HTMLElement | null>(null)
 const followBottom = ref(true)
@@ -124,6 +128,7 @@ const canSend = computed(
     canSendPermission.value &&
     activeId.value !== null &&
     !sending.value &&
+    !editSaving.value &&
     !streaming.value &&
     !attachmentUploading.value &&
     (input.value.trim() !== '' || attachments.value.length > 0) &&
@@ -144,6 +149,39 @@ const balanceText = computed(() => {
 })
 function formatTokenCount(value: number): string {
   return new Intl.NumberFormat().format(value)
+}
+
+function startOfLocalDay(value: Date): number {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+}
+
+function formatMessageTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const now = new Date()
+  const day = startOfLocalDay(date)
+  const today = startOfLocalDay(now)
+  const yesterday = startOfLocalDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+  const time = new Intl.DateTimeFormat(locale.value, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+  if (day === today) return t('ai.workbench.timeToday', { time })
+  if (day === yesterday) return t('ai.workbench.timeYesterday', { time })
+  return new Intl.DateTimeFormat(locale.value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date)
+}
+
+function formatMessageFullTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString(locale.value)
 }
 
 async function hydrateAttachments(messages: ChatMessage[]): Promise<void> {
@@ -194,6 +232,131 @@ async function setFeedback(message: ChatMessage, feedback: -1 | 1): Promise<void
   } finally {
     feedbackBusyID.value = null
   }
+}
+
+function agentIdForEdit(message: ChatMessage): number | null {
+  const state = session.value
+  if (state === null) return selectedAgentId.value
+  const index = state.messages.findIndex((item) => item.id === message.id)
+  const reply = index >= 0 ? state.messages[index + 1] : undefined
+  if (reply?.role === 2 && reply.agentId > 0) return reply.agentId
+  return selectedAgentId.value
+}
+
+async function startEdit(message: ChatMessage): Promise<void> {
+  if (
+    message.role !== 1 ||
+    !canUpdate.value ||
+    streaming.value ||
+    sending.value ||
+    editingMessageId.value !== null
+  ) {
+    return
+  }
+  editingMessageId.value = message.id
+  editContent.value = message.content
+  await nextTick()
+  const input = document.querySelector<HTMLTextAreaElement>('.ai-workbench__message-editor-input')
+  input?.focus()
+  input?.setSelectionRange(editContent.value.length, editContent.value.length)
+}
+
+function cancelEdit(): void {
+  if (editSaving.value) return
+  editingMessageId.value = null
+  editContent.value = ''
+}
+
+function onEditKeydown(event: KeyboardEvent, message: ChatMessage): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelEdit()
+    return
+  }
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault()
+    void saveEdit(message)
+  }
+}
+
+async function saveEdit(message: ChatMessage): Promise<void> {
+  if (editSaving.value || activeId.value === null) return
+  const content = editContent.value.trim()
+  if (content === '') {
+    ElMessage.warning(t('ai.workbench.editEmpty'))
+    return
+  }
+  const conversationID = activeId.value
+  const agentID = agentIdForEdit(message)
+  editSaving.value = true
+  chatError.value = ''
+  try {
+    const result = await api.sendMessage(conversationID, {
+      content,
+      requestId: crypto.randomUUID(),
+      editMessageId: message.id,
+      agentId: agentID ?? undefined,
+    })
+    const state = ensureSession(conversationID)
+    state.messages = state.messages.filter((item) => item.seq < message.seq)
+    state.messages.push(result.userMessage)
+    state.messages.push(result.assistantMessage)
+    state.loaded = true
+    state.activeRun = {
+      id: result.runId,
+      requestId: '',
+      status: 1,
+      billingStatus: 1,
+      assistantMessageId: result.assistantMessage.id,
+      deliverySeq: result.assistantMessage.deliverySeq,
+    }
+    editingMessageId.value = null
+    editContent.value = ''
+    void hydrateAttachments([result.userMessage])
+    followBottom.value = true
+    const conversation = conversations.value.find((item) => item.id === conversationID)
+    if (conversation && result.assistantMessage.agentName) {
+      conversation.agentId = result.assistantMessage.agentId
+      conversation.agentName = result.assistantMessage.agentName
+      conversation.modelName = result.assistantMessage.modelName
+    }
+    void loadConversations(false)
+    await nextTick(() => scrollToBottom())
+    await loadSession(conversationID)
+  } catch {
+    // request.ts shows the API error
+  } finally {
+    editSaving.value = false
+  }
+}
+
+async function removeMessage(message: ChatMessage): Promise<void> {
+  if (!canDelete.value || streaming.value || deletingMessageID.value !== null) return
+  try {
+    await ElMessageBox.confirm(t('ai.workbench.deleteMessageConfirm'), t('confirm.title'), {
+      type: 'warning',
+      confirmButtonText: t('common.delete'),
+      cancelButtonText: t('common.cancel'),
+    })
+    deletingMessageID.value = message.id
+    await api.deleteMessage(message.id)
+    const state = session.value
+    if (state !== null) {
+      state.messages = state.messages.filter((item) => item.id !== message.id)
+    }
+    if (editingMessageId.value === message.id) cancelEdit()
+    void loadConversations(false)
+    ElMessage.success(t('ai.workbench.deleteMessageSuccess'))
+  } catch {
+    // cancelled or request failed
+  } finally {
+    deletingMessageID.value = null
+  }
+}
+
+function onMessageMenuCommand(command: string | number | object, message: ChatMessage): void {
+  if (String(command) !== 'delete') return
+  void removeMessage(message)
 }
 
 const welcomeTitle = computed(() =>
@@ -759,6 +922,8 @@ const unsubscribeReconnect = subscribeChatReconnect(() => {
 
 watch(activeId, () => {
   attachments.value = []
+  editingMessageId.value = null
+  editContent.value = ''
 })
 
 watch(
@@ -984,12 +1149,16 @@ onBeforeUnmount(() => {
             v-for="message in session?.messages ?? []"
             :key="message.id"
             class="ai-workbench__message"
-            :class="message.role === 1 ? 'is-user' : 'is-assistant'"
+            :class="{
+              'is-user': message.role === 1,
+              'is-assistant': message.role === 2,
+              'is-editing': editingMessageId === message.id,
+            }"
           >
             <span v-if="message.role === 2" class="ai-workbench__message-mark">
               <el-icon :size="15"><ChatDotRound /></el-icon>
             </span>
-            <div class="ai-workbench__message-body">
+            <div class="ai-workbench__message-column">
               <div
                 v-if="message.role === 2 && message.agentName"
                 class="ai-workbench__message-agent"
@@ -997,155 +1166,244 @@ onBeforeUnmount(() => {
                 <span>{{ message.agentName }}</span>
                 <span v-if="message.modelName">{{ message.modelName }}</span>
               </div>
-              <div v-if="message.attachments.length > 0" class="ai-workbench__message-files">
-                <template v-for="attachment in message.attachments" :key="attachment.objectKey">
-                  <el-image
-                    v-if="attachment.kind === 1 && attachmentUrls[attachment.objectKey]"
-                    :src="attachmentUrls[attachment.objectKey]"
-                    :preview-src-list="[attachmentUrls[attachment.objectKey]]"
-                    preview-teleported
-                    hide-on-click-modal
-                    fit="cover"
-                    class="ai-workbench__message-image"
-                    :alt="attachment.fileName"
-                  />
-                  <a
-                    v-else-if="attachmentUrls[attachment.objectKey]"
-                    :href="attachmentUrls[attachment.objectKey]"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="ai-workbench__message-file"
+              <div class="ai-workbench__message-body">
+                <div v-if="message.attachments.length > 0" class="ai-workbench__message-files">
+                  <template v-for="attachment in message.attachments" :key="attachment.objectKey">
+                    <el-image
+                      v-if="attachment.kind === 1 && attachmentUrls[attachment.objectKey]"
+                      :src="attachmentUrls[attachment.objectKey]"
+                      :preview-src-list="[attachmentUrls[attachment.objectKey]]"
+                      preview-teleported
+                      hide-on-click-modal
+                      fit="cover"
+                      class="ai-workbench__message-image"
+                      :alt="attachment.fileName"
+                    />
+                    <a
+                      v-else-if="attachmentUrls[attachment.objectKey]"
+                      :href="attachmentUrls[attachment.objectKey]"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="ai-workbench__message-file"
+                    >
+                      <FileText :size="13" aria-hidden="true" />
+                      <span>{{ attachment.fileName }}</span>
+                    </a>
+                    <span v-else class="ai-workbench__message-file">
+                      <FileText :size="13" aria-hidden="true" />
+                      <span>{{ attachment.fileName }}</span>
+                    </span>
+                  </template>
+                </div>
+                <div
+                  v-if="message.role === 2 && message.reasoningContent"
+                  class="ai-workbench__thinking"
+                >
+                  <button
+                    type="button"
+                    class="ai-workbench__thinking-toggle"
+                    :aria-expanded="reasoningOpenFor(message.id)"
+                    @click="toggleReasoning(message.id)"
                   >
-                    <FileText :size="13" aria-hidden="true" />
-                    <span>{{ attachment.fileName }}</span>
-                  </a>
-                  <span v-else class="ai-workbench__message-file">
-                    <FileText :size="13" aria-hidden="true" />
-                    <span>{{ attachment.fileName }}</span>
+                    <Brain :size="14" aria-hidden="true" />
+                    <span>
+                      {{
+                        message.status === 1 && !message.content
+                          ? t('ai.workbench.thinking')
+                          : t('ai.workbench.thoughtProcess')
+                      }}
+                    </span>
+                    <ChevronDown
+                      :size="14"
+                      :class="{ 'is-open': reasoningOpenFor(message.id) }"
+                      aria-hidden="true"
+                    />
+                  </button>
+                  <div v-if="reasoningOpenFor(message.id)" class="ai-workbench__thinking-content">
+                    {{ message.reasoningContent }}
+                  </div>
+                </div>
+                <div v-if="editingMessageId === message.id" class="ai-workbench__message-editor">
+                  <textarea
+                    v-model="editContent"
+                    class="ai-workbench__message-editor-input"
+                    rows="3"
+                    :disabled="editSaving"
+                    @keydown="onEditKeydown($event, message)"
+                  />
+                  <p class="ai-workbench__message-editor-hint">
+                    {{ t('ai.workbench.editHint') }}
+                  </p>
+                  <div class="ai-workbench__message-editor-actions">
+                    <el-button text size="small" :disabled="editSaving" @click="cancelEdit">
+                      {{ t('common.cancel') }}
+                    </el-button>
+                    <el-button
+                      type="primary"
+                      size="small"
+                      :loading="editSaving"
+                      @click="saveEdit(message)"
+                    >
+                      {{ t('ai.workbench.saveAndRegenerate') }}
+                    </el-button>
+                  </div>
+                </div>
+                <template v-else>
+                  <MarkdownContent
+                    v-if="message.role === 2 && (message.content || message.status !== 1)"
+                    :content="message.content"
+                    :streaming="message.status === 1"
+                  />
+                  <span v-else-if="message.role === 1" class="ai-workbench__plain">
+                    {{ message.content }}
+                  </span>
+                  <span v-else class="ai-workbench__typing">
+                    <span class="ai-workbench__typing-dot" />
+                    <span class="ai-workbench__typing-dot" />
+                    <span class="ai-workbench__typing-dot" />
                   </span>
                 </template>
-              </div>
-              <div
-                v-if="message.role === 2 && message.reasoningContent"
-                class="ai-workbench__thinking"
-              >
-                <button
-                  type="button"
-                  class="ai-workbench__thinking-toggle"
-                  :aria-expanded="reasoningOpenFor(message.id)"
-                  @click="toggleReasoning(message.id)"
+                <div
+                  v-if="message.role === 2 && (message.citations?.length ?? 0) > 0"
+                  class="ai-workbench__citations"
                 >
-                  <Brain :size="14" aria-hidden="true" />
-                  <span>
-                    {{
-                      message.status === 1 && !message.content
-                        ? t('ai.workbench.thinking')
-                        : t('ai.workbench.thoughtProcess')
-                    }}
-                  </span>
-                  <ChevronDown
-                    :size="14"
-                    :class="{ 'is-open': reasoningOpenFor(message.id) }"
-                    aria-hidden="true"
-                  />
-                </button>
-                <div v-if="reasoningOpenFor(message.id)" class="ai-workbench__thinking-content">
-                  {{ message.reasoningContent }}
+                  <div class="ai-workbench__citations-title">
+                    {{ t('ai.workbench.sources') }}
+                  </div>
+                  <a
+                    v-for="citation in message.citations ?? []"
+                    :key="`${message.id}-${citation.index}-${citation.url}`"
+                    :href="citation.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ai-workbench__citation"
+                  >
+                    <span class="ai-workbench__citation-index">{{ citation.index }}</span>
+                    <span class="ai-workbench__citation-title">{{ citation.title }}</span>
+                    <span class="ai-workbench__citation-domain">{{
+                      citationDomain(citation.url)
+                    }}</span>
+                  </a>
                 </div>
-              </div>
-              <MarkdownContent
-                v-if="message.role === 2 && (message.content || message.status !== 1)"
-                :content="message.content"
-                :streaming="message.status === 1"
-              />
-              <span v-else-if="message.role === 1" class="ai-workbench__plain">
-                {{ message.content }}
-              </span>
-              <span v-else class="ai-workbench__typing">
-                <span class="ai-workbench__typing-dot" />
-                <span class="ai-workbench__typing-dot" />
-                <span class="ai-workbench__typing-dot" />
-              </span>
-              <div
-                v-if="message.role === 2 && (message.citations?.length ?? 0) > 0"
-                class="ai-workbench__citations"
-              >
-                <div class="ai-workbench__citations-title">
-                  {{ t('ai.workbench.sources') }}
-                </div>
-                <a
-                  v-for="citation in message.citations ?? []"
-                  :key="`${message.id}-${citation.index}-${citation.url}`"
-                  :href="citation.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="ai-workbench__citation"
-                >
-                  <span class="ai-workbench__citation-index">{{ citation.index }}</span>
-                  <span class="ai-workbench__citation-title">{{ citation.title }}</span>
-                  <span class="ai-workbench__citation-domain">{{
-                    citationDomain(citation.url)
+                <div v-if="message.usage" class="ai-workbench__message-usage">
+                  <span>{{
+                    t('ai.workbench.usageTokens', {
+                      input: formatTokenCount(message.usage.inputTokens),
+                      output: formatTokenCount(message.usage.outputTokens),
+                    })
                   }}</span>
-                </a>
+                  <span>{{
+                    t('ai.workbench.cachedTokens', {
+                      cached: formatTokenCount(message.usage.cachedInputTokens),
+                    })
+                  }}</span>
+                  <span class="ai-workbench__message-cost">¥{{ message.usage.amount }}</span>
+                </div>
+                <div v-if="message.status === 4" class="ai-workbench__message-error">
+                  {{ t('ai.workbench.messageFailed') }}
+                </div>
               </div>
-              <div v-if="message.usage" class="ai-workbench__message-usage">
-                <span>{{
-                  t('ai.workbench.usageTokens', {
-                    input: formatTokenCount(message.usage.inputTokens),
-                    output: formatTokenCount(message.usage.outputTokens),
-                  })
-                }}</span>
-                <span>{{
-                  t('ai.workbench.cachedTokens', {
-                    cached: formatTokenCount(message.usage.cachedInputTokens),
-                  })
-                }}</span>
-                <span class="ai-workbench__message-cost">¥{{ message.usage.amount }}</span>
-              </div>
-              <div
-                v-if="message.role === 2 && message.status === 2"
-                class="ai-workbench__message-actions"
-              >
-                <el-tooltip :content="t('ai.workbench.copy')" placement="top" :show-after="300">
-                  <el-button
-                    text
-                    circle
-                    size="small"
-                    :aria-label="t('ai.workbench.copy')"
-                    @click="copyMessage(message)"
+              <div v-if="editingMessageId !== message.id" class="ai-workbench__message-footer">
+                <span
+                  class="ai-workbench__message-time"
+                  :title="formatMessageFullTime(message.createdAt)"
+                >
+                  {{ formatMessageTime(message.createdAt) }}
+                </span>
+                <div class="ai-workbench__message-actions">
+                  <el-tooltip
+                    v-if="message.content"
+                    :content="t('ai.workbench.copy')"
+                    placement="top"
+                    :show-after="300"
                   >
-                    <Copy :size="13" aria-hidden="true" />
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip :content="t('ai.workbench.like')" placement="top" :show-after="300">
-                  <el-button
-                    text
-                    circle
-                    size="small"
-                    :class="{ 'is-liked': message.feedback === 1 }"
-                    :disabled="feedbackBusyID !== null"
-                    :aria-label="t('ai.workbench.like')"
-                    @click="setFeedback(message, 1)"
+                    <el-button
+                      text
+                      circle
+                      size="small"
+                      :aria-label="t('ai.workbench.copy')"
+                      @click="copyMessage(message)"
+                    >
+                      <Copy :size="13" aria-hidden="true" />
+                    </el-button>
+                  </el-tooltip>
+                  <el-tooltip
+                    v-if="message.role === 1 && canUpdate"
+                    :content="t('ai.workbench.edit')"
+                    placement="top"
+                    :show-after="300"
                   >
-                    <ThumbsUp :size="13" aria-hidden="true" />
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip :content="t('ai.workbench.dislike')" placement="top" :show-after="300">
-                  <el-button
-                    text
-                    circle
-                    size="small"
-                    :class="{ 'is-disliked': message.feedback === -1 }"
-                    :disabled="feedbackBusyID !== null"
-                    :aria-label="t('ai.workbench.dislike')"
-                    @click="setFeedback(message, -1)"
+                    <el-button
+                      text
+                      circle
+                      size="small"
+                      :disabled="streaming || sending || editingMessageId !== null"
+                      :aria-label="t('ai.workbench.edit')"
+                      @click="startEdit(message)"
+                    >
+                      <Pencil :size="13" aria-hidden="true" />
+                    </el-button>
+                  </el-tooltip>
+                  <template v-if="message.role === 2 && message.status === 2">
+                    <el-tooltip :content="t('ai.workbench.like')" placement="top" :show-after="300">
+                      <el-button
+                        text
+                        circle
+                        size="small"
+                        :class="{ 'is-liked': message.feedback === 1 }"
+                        :disabled="feedbackBusyID !== null"
+                        :aria-label="t('ai.workbench.like')"
+                        @click="setFeedback(message, 1)"
+                      >
+                        <ThumbsUp :size="13" aria-hidden="true" />
+                      </el-button>
+                    </el-tooltip>
+                    <el-tooltip
+                      :content="t('ai.workbench.dislike')"
+                      placement="top"
+                      :show-after="300"
+                    >
+                      <el-button
+                        text
+                        circle
+                        size="small"
+                        :class="{ 'is-disliked': message.feedback === -1 }"
+                        :disabled="feedbackBusyID !== null"
+                        :aria-label="t('ai.workbench.dislike')"
+                        @click="setFeedback(message, -1)"
+                      >
+                        <ThumbsDown :size="13" aria-hidden="true" />
+                      </el-button>
+                    </el-tooltip>
+                  </template>
+                  <el-dropdown
+                    v-if="canDelete"
+                    trigger="click"
+                    :disabled="streaming || sending || deletingMessageID !== null"
+                    @command="onMessageMenuCommand($event, message)"
                   >
-                    <ThumbsDown :size="13" aria-hidden="true" />
-                  </el-button>
-                </el-tooltip>
-              </div>
-              <div v-if="message.status === 4" class="ai-workbench__message-error">
-                {{ t('ai.workbench.messageFailed') }}
+                    <button
+                      type="button"
+                      class="ai-workbench__message-more"
+                      :disabled="streaming || sending || deletingMessageID !== null"
+                      :aria-label="t('ai.workbench.more')"
+                      :title="t('ai.workbench.more')"
+                    >
+                      <MoreFilled :size="14" aria-hidden="true" />
+                    </button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item
+                          command="delete"
+                          :icon="Delete"
+                          class="ai-workbench__danger-command"
+                        >
+                          {{ t('ai.workbench.deleteMessage') }}
+                        </el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </div>
               </div>
             </div>
           </article>
@@ -1203,7 +1461,7 @@ onBeforeUnmount(() => {
             type="textarea"
             :autosize="{ minRows: 1, maxRows: 7 }"
             resize="none"
-            :disabled="!canSendPermission || streaming || balance?.canSend === false"
+            :disabled="!canSendPermission || editSaving || streaming || balance?.canSend === false"
             :placeholder="t('ai.workbench.inputPlaceholder')"
             @keydown="onKeydown"
           />
@@ -2088,6 +2346,24 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
+.ai-workbench__message-column {
+  display: flex;
+  min-width: 0;
+  max-width: min(760px, calc(100% - 40px));
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.ai-workbench__message.is-user .ai-workbench__message-column {
+  max-width: min(72%, 620px);
+  align-items: flex-end;
+}
+
+.ai-workbench__message.is-editing .ai-workbench__message-column {
+  width: min(72%, 620px);
+  max-width: min(72%, 620px);
+}
+
 .ai-workbench__message-mark {
   display: grid;
   width: 30px;
@@ -2104,11 +2380,17 @@ onBeforeUnmount(() => {
 }
 
 .ai-workbench__message-body {
+  width: fit-content;
   min-width: 0;
-  max-width: min(760px, calc(100% - 40px));
+  max-width: 100%;
   color: #344054;
   font-size: 14px;
   line-height: 1.75;
+}
+
+.ai-workbench__message.is-editing .ai-workbench__message-body {
+  width: 100%;
+  max-width: 100%;
 }
 
 .ai-workbench__message-agent {
@@ -2180,7 +2462,7 @@ onBeforeUnmount(() => {
 }
 
 .ai-workbench__message.is-user .ai-workbench__message-body {
-  max-width: min(72%, 620px);
+  max-width: 100%;
   padding: 10px 14px;
   border: 1px solid #e9eef5;
   border-radius: 14px 14px 4px 14px;
@@ -2409,18 +2691,115 @@ onBeforeUnmount(() => {
   background: #dc2626;
 }
 
+.ai-workbench__message-footer {
+  display: flex;
+  width: 100%;
+  min-height: 24px;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 2px 0;
+  color: #98a2b3;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ai-workbench__message-time {
+  flex: 0 0 auto;
+  color: #a1abba;
+  white-space: nowrap;
+}
+
 .ai-workbench__message-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 2px;
+  margin-top: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+}
+
+.ai-workbench__message:hover .ai-workbench__message-actions,
+.ai-workbench__message:focus-within .ai-workbench__message-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .ai-workbench__message-actions :deep(.el-button) {
-  width: 27px;
-  height: 27px;
+  width: 24px;
+  height: 24px;
   margin-left: 0;
   color: #98a2b3;
+}
+
+.ai-workbench__message-more {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #98a2b3;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ai-workbench__message-more:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.ai-workbench__message-more:disabled {
+  color: #c7d0dd;
+  cursor: not-allowed;
+}
+
+:global(.ai-workbench__danger-command) {
+  color: var(--el-color-danger);
+}
+
+.ai-workbench__message-editor {
+  width: 100%;
+}
+
+.ai-workbench__message-editor-input {
+  width: 100%;
+  min-height: 82px;
+  padding: 8px 10px;
+  border: 1px solid #d6e0ee;
+  border-radius: 9px;
+  outline: none;
+  color: #263044;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.ai-workbench__message-editor-input:focus {
+  border-color: #93b4e8;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 8%);
+}
+
+.ai-workbench__message-editor-hint {
+  margin: 6px 0 0;
+  color: #8d99ab;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.ai-workbench__message-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ai-workbench__message-editor-actions :deep(.el-button) {
+  margin-left: 0;
 }
 
 .ai-workbench__message-actions :deep(.el-button:hover),
@@ -2691,13 +3070,25 @@ onBeforeUnmount(() => {
     font-size: 21px;
   }
 
-  .ai-workbench__message.is-user .ai-workbench__message-body {
+  .ai-workbench__message.is-user .ai-workbench__message-column {
+    max-width: 88%;
+  }
+
+  .ai-workbench__message.is-editing .ai-workbench__message-column {
+    width: 88%;
     max-width: 88%;
   }
 
   .ai-workbench__to-bottom {
     right: 20px;
     bottom: 138px;
+  }
+}
+
+@media (hover: none) {
+  .ai-workbench__message-actions {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

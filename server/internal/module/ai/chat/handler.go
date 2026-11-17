@@ -130,6 +130,24 @@ func (h *Handler) Messages(c *gin.Context) {
 	response.OK(c, http.StatusOK, result)
 }
 
+func (h *Handler) DeleteMessage(c *gin.Context) {
+	identity := mustIdentity(c)
+	id, err := validate.ParsePositiveInt64(c.Param("id"), "id")
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if err = validate.RequireEmptyBody(c); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	if err = h.service.DeleteMessage(c.Request.Context(), identity, id); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, http.StatusOK, struct{}{})
+}
+
 func (h *Handler) Feedback(c *gin.Context) {
 	identity := mustIdentity(c)
 	id, err := validate.ParsePositiveInt64(c.Param("id"), "id")

@@ -40,7 +40,7 @@ func mapError(err error) error {
 		return nil
 	case errors.As(err, &public):
 		return err
-	case errors.Is(err, chat.ErrConversationNotFound):
+	case errors.Is(err, chat.ErrConversationNotFound), errors.Is(err, chat.ErrMessageNotFound):
 		return apperror.NotFound(err)
 	case errors.Is(err, ErrRunNotFound), errors.Is(err, ErrAgentNotFound):
 		return apperror.NotFound(err)

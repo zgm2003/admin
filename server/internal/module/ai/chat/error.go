@@ -34,6 +34,8 @@ func mapError(err error) error {
 		return err
 	case errors.Is(err, ErrConversationNotFound), errors.Is(err, ErrAgentNotFound), errors.Is(err, ErrMessageNotFound):
 		return apperror.NotFound(err)
+	case errors.Is(err, ErrConversationBusy):
+		return apperror.Conflict(i18n.KeyConflict, nil, err)
 	default:
 		return dependency(err)
 	}

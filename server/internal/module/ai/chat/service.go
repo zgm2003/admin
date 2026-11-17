@@ -138,6 +138,16 @@ func (s *Service) Feedback(ctx context.Context, identity auth.Identity, messageI
 	return feedback, nil
 }
 
+func (s *Service) DeleteMessage(ctx context.Context, identity auth.Identity, messageID int64) error {
+	if s == nil || s.repo == nil {
+		return dependency(errors.New("chat service is not configured"))
+	}
+	if messageID < 1 {
+		return invalid(errors.New("messageId is invalid"))
+	}
+	return mapError(s.repo.DeleteMessage(ctx, identity.PlatformID, identity.UserID, messageID, s.now().UTC()))
+}
+
 func (s *Service) Balance(ctx context.Context, userID int64) (BalanceValue, error) {
 	row, exists, err := s.wallet.Find(ctx, userID)
 	if err != nil {

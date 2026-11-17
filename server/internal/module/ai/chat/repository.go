@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
 	ErrConversationNotFound = errors.New("conversation not found")
 	ErrAgentNotFound        = errors.New("chat agent is unavailable")
 	ErrMessageNotFound      = errors.New("chat message not found")
+	ErrConversationBusy     = errors.New("conversation has an active run")
 )
 
 type Repository struct{ db *gorm.DB }
@@ -127,7 +129,7 @@ func (r *Repository) SetMessageFeedback(ctx context.Context, platformID, userID,
 		FROM ai_chat_conversation AS c
 		WHERE m.id = ? AND m.conversation_id = c.id
 		  AND c.platform_id = ? AND c.user_id = ?
-		  AND m.role = ? AND m.status = ?
+		  AND m.role = ? AND m.status = ? AND m.deleted_at IS NULL
 	`, feedback, func() any {
 		if feedback == 0 {
 			return nil
@@ -186,7 +188,8 @@ func (r *Repository) messageQuery(ctx context.Context) *gorm.DB {
 
 func (r *Repository) ListMessages(ctx context.Context, conversationID int64, beforeSeq int32, limit int) ([]Message, error) {
 	rows := make([]Message, 0)
-	db := r.messageQuery(ctx).Where("m.conversation_id = ?", conversationID)
+	db := r.messageQuery(ctx).
+		Where("m.conversation_id = ? AND m.deleted_at IS NULL", conversationID)
 	if beforeSeq > 0 {
 		db = db.Where("m.seq < ?", beforeSeq)
 	}
@@ -196,13 +199,32 @@ func (r *Repository) ListMessages(ctx context.Context, conversationID int64, bef
 
 func (r *Repository) FindMessage(ctx context.Context, id int64) (Message, error) {
 	var row Message
-	err := r.messageQuery(ctx).Where("m.id = ?", id).Take(&row).Error
+	err := r.messageQuery(ctx).Where("m.id = ? AND m.deleted_at IS NULL", id).Take(&row).Error
+	return row, err
+}
+
+func (r *Repository) FindOwnedUserMessage(ctx context.Context, platformID, userID, conversationID, messageID int64) (Message, error) {
+	var row Message
+	err := r.db.WithContext(ctx).
+		Table("ai_chat_message AS m").
+		Select("m.*").
+		Joins("JOIN ai_chat_conversation AS c ON c.id = m.conversation_id").
+		Where(`m.id = ? AND m.conversation_id = ?
+			AND c.platform_id = ? AND c.user_id = ? AND c.deleted_at IS NULL
+			AND m.role = ? AND m.deleted_at IS NULL`,
+			messageID, conversationID, platformID, userID, RoleUser).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return Message{}, ErrMessageNotFound
+	}
 	return row, err
 }
 
 func (r *Repository) MessageByRunID(ctx context.Context, runID int64) (Message, error) {
 	var row Message
-	err := r.messageQuery(ctx).Where("m.run_id = ? AND m.role = ?", runID, RoleAssistant).Take(&row).Error
+	err := r.messageQuery(ctx).
+		Where("m.run_id = ? AND m.role = ? AND m.deleted_at IS NULL", runID, RoleAssistant).
+		Take(&row).Error
 	return row, err
 }
 
@@ -211,13 +233,87 @@ func (r *Repository) ActiveRunSummary(ctx context.Context, conversationID int64)
 	err := r.db.WithContext(ctx).
 		Table("ai_chat_run AS r").
 		Select("r.id, r.request_id, r.status, r.billing_status, m.id AS assistant_message_id, m.delivery_seq").
-		Joins("JOIN ai_chat_message m ON m.run_id = r.id AND m.role = 2").
+		Joins("JOIN ai_chat_message m ON m.run_id = r.id AND m.role = 2 AND m.deleted_at IS NULL").
 		Where("r.conversation_id = ? AND r.status IN (1, 2)", conversationID).
 		Order("r.id DESC").Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return ActiveRunSummary{}, false, nil
 	}
 	return row, err == nil, err
+}
+
+func (r *Repository) HideMessagesFromSeqTx(ctx context.Context, tx *gorm.DB, conversationID int64, fromSeq int32, now time.Time) (int64, error) {
+	result := tx.WithContext(ctx).Model(&Message{}).
+		Where("conversation_id = ? AND seq >= ? AND deleted_at IS NULL", conversationID, fromSeq).
+		Updates(map[string]any{"deleted_at": now, "updated_at": now})
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	if result.RowsAffected > 0 {
+		if err := tx.WithContext(ctx).Exec(`
+			UPDATE ai_chat_conversation
+			SET message_count = (
+				SELECT COUNT(*) FROM ai_chat_message
+				WHERE conversation_id = ? AND deleted_at IS NULL
+			), updated_at = ?, version = version + 1
+			WHERE id = ?
+		`, conversationID, now, conversationID).Error; err != nil {
+			return 0, err
+		}
+	}
+	return result.RowsAffected, nil
+}
+
+func (r *Repository) DeleteMessage(ctx context.Context, platformID, userID, messageID int64, now time.Time) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var row Message
+		err := tx.WithContext(ctx).
+			Table("ai_chat_message AS m").
+			Select("m.*").
+			Joins("JOIN ai_chat_conversation AS c ON c.id = m.conversation_id").
+			Where(`m.id = ? AND c.platform_id = ? AND c.user_id = ? AND c.deleted_at IS NULL
+				AND m.deleted_at IS NULL`, messageID, platformID, userID).
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Take(&row).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrMessageNotFound
+		}
+		if err != nil {
+			return err
+		}
+		var active int64
+		if err := tx.WithContext(ctx).Table("ai_chat_run").
+			Where("conversation_id = ? AND status IN (1, 2)", row.ConversationID).
+			Count(&active).Error; err != nil {
+			return err
+		}
+		if active > 0 {
+			return ErrConversationBusy
+		}
+		result := tx.WithContext(ctx).Model(&Message{}).
+			Where("id = ? AND deleted_at IS NULL", row.ID).
+			Updates(map[string]any{"deleted_at": now, "updated_at": now})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return ErrMessageNotFound
+		}
+		var lastMessageAt time.Time
+		if err := tx.WithContext(ctx).Model(&Message{}).
+			Select("COALESCE(MAX(created_at), ?)", now).
+			Where("conversation_id = ? AND deleted_at IS NULL", row.ConversationID).
+			Scan(&lastMessageAt).Error; err != nil {
+			return err
+		}
+		return tx.WithContext(ctx).Model(&Conversation{}).Where("id = ?", row.ConversationID).
+			Updates(map[string]any{
+				"message_count":   gorm.Expr("GREATEST(message_count - 1, 0)"),
+				"last_message_at": lastMessageAt,
+				"updated_at":      now,
+				"version":         gorm.Expr("version + 1"),
+			}).Error
+	})
 }
 
 func (r *Repository) UpdateStreamingMessage(ctx context.Context, messageID int64, content, reasoning string, deliverySeq int64, now time.Time) error {

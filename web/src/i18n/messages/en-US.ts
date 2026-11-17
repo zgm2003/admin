@@ -382,6 +382,18 @@ export const enUS = {
   'ai.workbench.copyFailed': 'Copy failed',
   'ai.workbench.like': 'Like',
   'ai.workbench.dislike': 'Dislike',
+  'ai.workbench.edit': 'Edit',
+  'ai.workbench.more': 'More',
+  'ai.workbench.deleteMessage': 'Delete message',
+  'ai.workbench.deleteMessageConfirm':
+    'Only this message will be deleted. The run log keeps the original message. Continue?',
+  'ai.workbench.deleteMessageSuccess': 'Message deleted',
+  'ai.workbench.editHint':
+    'Saving regenerates the reply from the edited content. The original conversation stays in the run log.',
+  'ai.workbench.saveAndRegenerate': 'Save and regenerate',
+  'ai.workbench.editEmpty': 'Message content is required',
+  'ai.workbench.timeToday': 'Today {time}',
+  'ai.workbench.timeYesterday': 'Yesterday {time}',
   'ai.run.title': 'AI run logs',
   'ai.run.keyword': 'Keyword',
   'ai.run.keywordPlaceholder': 'Model, agent or error',

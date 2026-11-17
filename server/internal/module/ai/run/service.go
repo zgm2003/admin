@@ -87,6 +87,15 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 	if err != nil {
 		return SendResult{}, mapError(err)
 	}
+	var editMessage chat.Message
+	if input.EditMessageID != nil {
+		editMessage, err = s.chat.FindOwnedUserMessage(
+			ctx, identity.PlatformID, identity.UserID, conversation.ID, *input.EditMessageID,
+		)
+		if err != nil {
+			return SendResult{}, mapError(err)
+		}
+	}
 	agentID := conversation.AgentID
 	if input.AgentID != nil {
 		agentID = *input.AgentID
@@ -106,32 +115,45 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 	if !exists || walletRow.BalanceUnits <= 0 {
 		return SendResult{}, insufficient(errors.New("wallet balance is not positive"))
 	}
-	objectKeys := make([]string, 0, len(input.Attachments))
-	for _, attachment := range input.Attachments {
-		objectKeys = append(objectKeys, attachment.ObjectKey)
-	}
-	fileRefs, err := s.chat.FindReadyFilesByObjectKeys(ctx, identity.PlatformID, identity.UserID, objectKeys)
-	if err != nil {
-		return SendResult{}, dependency(err)
-	}
-	if len(fileRefs) != len(objectKeys) {
-		return SendResult{}, invalid(errors.New("attachment is unavailable"))
-	}
-	attachments := make([]chat.MessageAttachment, 0, len(fileRefs))
-	fileByKey := make(map[string]chat.StorageFileRef, len(fileRefs))
-	for _, file := range fileRefs {
-		fileByKey[file.ObjectKey] = file
-	}
-	for _, objectKey := range objectKeys {
-		file := fileByKey[objectKey]
-		kind := chat.AttachmentFile
-		if strings.HasPrefix(strings.ToLower(file.MimeType), "image/") {
-			kind = chat.AttachmentImage
+	attachments := make([]chat.MessageAttachment, 0)
+	if input.EditMessageID != nil {
+		existing, attachErr := s.chat.AttachmentsByMessageIDs(ctx, []int64{editMessage.ID})
+		if attachErr != nil {
+			return SendResult{}, dependency(attachErr)
 		}
-		attachments = append(attachments, chat.MessageAttachment{
-			Kind: kind, ObjectKey: file.ObjectKey, FileName: file.FileName,
-			MimeType: file.MimeType, SizeBytes: file.SizeBytes,
-		})
+		for _, attachment := range existing[editMessage.ID] {
+			attachments = append(attachments, chat.MessageAttachment{
+				Kind: attachment.Kind, ObjectKey: attachment.ObjectKey, FileName: attachment.FileName,
+				MimeType: attachment.MimeType, SizeBytes: attachment.SizeBytes,
+			})
+		}
+	} else {
+		objectKeys := make([]string, 0, len(input.Attachments))
+		for _, attachment := range input.Attachments {
+			objectKeys = append(objectKeys, attachment.ObjectKey)
+		}
+		fileRefs, fileErr := s.chat.FindReadyFilesByObjectKeys(ctx, identity.PlatformID, identity.UserID, objectKeys)
+		if fileErr != nil {
+			return SendResult{}, dependency(fileErr)
+		}
+		if len(fileRefs) != len(objectKeys) {
+			return SendResult{}, invalid(errors.New("attachment is unavailable"))
+		}
+		fileByKey := make(map[string]chat.StorageFileRef, len(fileRefs))
+		for _, file := range fileRefs {
+			fileByKey[file.ObjectKey] = file
+		}
+		for _, objectKey := range objectKeys {
+			file := fileByKey[objectKey]
+			kind := chat.AttachmentFile
+			if strings.HasPrefix(strings.ToLower(file.MimeType), "image/") {
+				kind = chat.AttachmentImage
+			}
+			attachments = append(attachments, chat.MessageAttachment{
+				Kind: kind, ObjectKey: file.ObjectKey, FileName: file.FileName,
+				MimeType: file.MimeType, SizeBytes: file.SizeBytes,
+			})
+		}
 	}
 	snapshot, err := json.Marshal(PriceSnapshot{
 		Currency: "CNY", InputCNYMicros: agent.InputCNYMicros, OutputCNYMicros: agent.OutputCNYMicros,
@@ -156,6 +178,13 @@ func (s *Service) Send(ctx context.Context, identity auth.Identity, conversation
 	}
 	var userMessage, assistant chat.Message
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if input.EditMessageID != nil {
+			if _, hideErr := s.chat.HideMessagesFromSeqTx(
+				ctx, tx, conversation.ID, editMessage.Seq, now,
+			); hideErr != nil {
+				return hideErr
+			}
+		}
 		var txErr error
 		userMessage, assistant, txErr = s.repo.CreateTurnTx(
 			ctx, tx, conversation, input.Content, title, attachments, run, now,

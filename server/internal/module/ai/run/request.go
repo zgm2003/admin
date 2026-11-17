@@ -22,11 +22,12 @@ type AttachmentInput struct {
 }
 
 type SendInput struct {
-	Content     string
-	RequestID   string
-	Attachments []AttachmentInput
-	WebSearch   bool
-	AgentID     *int64
+	Content       string
+	RequestID     string
+	Attachments   []AttachmentInput
+	WebSearch     bool
+	AgentID       *int64
+	EditMessageID *int64
 }
 
 type RunListQuery struct {
@@ -45,11 +46,12 @@ type attachmentRequest struct {
 }
 
 type sendMessageRequest struct {
-	Content     *string             `json:"content"`
-	RequestID   *string             `json:"requestId"`
-	Attachments []attachmentRequest `json:"attachments"`
-	WebSearch   bool                `json:"webSearch"`
-	AgentID     *int64              `json:"agentId"`
+	Content       *string             `json:"content"`
+	RequestID     *string             `json:"requestId"`
+	Attachments   []attachmentRequest `json:"attachments"`
+	WebSearch     bool                `json:"webSearch"`
+	AgentID       *int64              `json:"agentId"`
+	EditMessageID *int64              `json:"editMessageId"`
 }
 
 func (r sendMessageRequest) input() (SendInput, error) {
@@ -68,6 +70,9 @@ func (r sendMessageRequest) input() (SendInput, error) {
 	}
 	if r.AgentID != nil && *r.AgentID < 1 {
 		return SendInput{}, fmt.Errorf("agentId is invalid")
+	}
+	if r.EditMessageID != nil && *r.EditMessageID < 1 {
+		return SendInput{}, fmt.Errorf("editMessageId is invalid")
 	}
 	attachments := make([]AttachmentInput, 0, len(r.Attachments))
 	seen := make(map[string]struct{}, len(r.Attachments))
@@ -99,7 +104,7 @@ func (r sendMessageRequest) input() (SendInput, error) {
 	}
 	return SendInput{
 		Content: content, RequestID: requestID, Attachments: attachments,
-		WebSearch: r.WebSearch, AgentID: r.AgentID,
+		WebSearch: r.WebSearch, AgentID: r.AgentID, EditMessageID: r.EditMessageID,
 	}, nil
 }
 

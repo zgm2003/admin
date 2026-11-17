@@ -51,6 +51,7 @@ type Message struct {
 	DeliverySeq      int64         `gorm:"column:delivery_seq;not null"`
 	Feedback         int16         `gorm:"column:feedback;type:smallint;not null"`
 	FeedbackAt       *time.Time    `gorm:"column:feedback_at;type:timestamptz"`
+	DeletedAt        *time.Time    `gorm:"column:deleted_at;type:timestamptz"`
 	CreatedAt        time.Time     `gorm:"column:created_at;type:timestamptz;not null"`
 	UpdatedAt        time.Time     `gorm:"column:updated_at;type:timestamptz;not null"`
 

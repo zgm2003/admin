@@ -34,4 +34,25 @@ func TestSendMessageRequestRejectsInvalidAgent(t *testing.T) {
 	}
 }
 
+func TestSendMessageRequestAcceptsOptionalEditMessage(t *testing.T) {
+	requestID := "3c9f1714-51f9-4a1e-9f8f-ffde2b7e1a4e"
+	messageID := int64(18)
+	input, err := (sendMessageRequest{
+		RequestID: &requestID, Content: stringPointer("edited"), EditMessageID: &messageID,
+	}).input()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.EditMessageID == nil || *input.EditMessageID != messageID {
+		t.Fatalf("editMessageId = %v", input.EditMessageID)
+	}
+
+	messageID = 0
+	if _, err = (sendMessageRequest{
+		RequestID: &requestID, Content: stringPointer("edited"), EditMessageID: &messageID,
+	}).input(); err == nil {
+		t.Fatal("invalid editMessageId was accepted")
+	}
+}
+
 func stringPointer(value string) *string { return &value }

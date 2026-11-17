@@ -64,6 +64,12 @@ func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation
 	if active > 0 {
 		return chat.Message{}, chat.Message{}, ErrActiveRun
 	}
+	var visibleCount int64
+	if err := tx.WithContext(ctx).Model(&chat.Message{}).
+		Where("conversation_id = ? AND deleted_at IS NULL", conversation.ID).
+		Count(&visibleCount).Error; err != nil {
+		return chat.Message{}, chat.Message{}, err
+	}
 	var maxSeq int32
 	if err := tx.WithContext(ctx).Model(&chat.Message{}).
 		Where("conversation_id = ?", conversation.ID).
@@ -108,7 +114,7 @@ func (r *Repository) CreateTurnTx(ctx context.Context, tx *gorm.DB, conversation
 		"last_message_at": now, "updated_at": now,
 		"message_count": gorm.Expr("message_count + 2"), "version": gorm.Expr("version + 1"),
 	}
-	if conversation.MessageCount == 0 && strings.TrimSpace(title) != "" {
+	if visibleCount == 0 && strings.TrimSpace(title) != "" {
 		updates["title"] = title
 	}
 	if run.AgentID != conversation.AgentID {

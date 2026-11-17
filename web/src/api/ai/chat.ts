@@ -93,6 +93,7 @@ export interface SendMessageInput {
   attachments?: Array<{ objectKey: string }>
   webSearch?: boolean
   agentId?: number
+  editMessageId?: number
 }
 
 export interface SendMessageResult {
@@ -203,6 +204,10 @@ export function renameConversation(id: number, title: string): Promise<Record<st
 
 export function deleteConversation(id: number): Promise<Record<string, never>> {
   return request.delete<Record<string, never>>(`${base}/conversations/${id}`)
+}
+
+export function deleteMessage(id: number): Promise<Record<string, never>> {
+  return request.delete<Record<string, never>>(`${base}/messages/${id}`)
 }
 
 export function getMessages(
