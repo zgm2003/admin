@@ -31,6 +31,8 @@ type CatalogModel struct {
 	OutputUSDMicros     int64
 	CacheReadUSDMicros  *int64
 	CacheWriteUSDMicros *int64
+	ContextWindowTokens *int64
+	MaxOutputTokens     *int64
 	VideoPrices         []CatalogVideoPrice
 	SourceURL           string
 	VerifiedAt          time.Time
@@ -52,18 +54,20 @@ type catalogDocument struct {
 }
 
 type catalogModelRecord struct {
-	VendorCode    string                    `json:"vendorCode"`
-	VendorName    string                    `json:"vendorName"`
-	ModelKey      string                    `json:"modelKey"`
-	DisplayName   string                    `json:"displayName"`
-	ModelKind     int16                     `json:"modelKind"`
-	InputUSD      string                    `json:"inputUsdPerMillion"`
-	OutputUSD     string                    `json:"outputUsdPerMillion"`
-	CacheReadUSD  string                    `json:"cacheReadUsdPerMillion"`
-	CacheWriteUSD string                    `json:"cacheWriteUsdPerMillion"`
-	VideoPrices   []catalogVideoPriceRecord `json:"videoPrices"`
-	SourceURL     string                    `json:"sourceUrl"`
-	VerifiedAt    time.Time                 `json:"verifiedAt"`
+	VendorCode          string                    `json:"vendorCode"`
+	VendorName          string                    `json:"vendorName"`
+	ModelKey            string                    `json:"modelKey"`
+	DisplayName         string                    `json:"displayName"`
+	ModelKind           int16                     `json:"modelKind"`
+	InputUSD            string                    `json:"inputUsdPerMillion"`
+	OutputUSD           string                    `json:"outputUsdPerMillion"`
+	CacheReadUSD        string                    `json:"cacheReadUsdPerMillion"`
+	CacheWriteUSD       string                    `json:"cacheWriteUsdPerMillion"`
+	ContextWindowTokens *int64                    `json:"contextWindowTokens"`
+	MaxOutputTokens     *int64                    `json:"maxOutputTokens"`
+	VideoPrices         []catalogVideoPriceRecord `json:"videoPrices"`
+	SourceURL           string                    `json:"sourceUrl"`
+	VerifiedAt          time.Time                 `json:"verifiedAt"`
 }
 
 type catalogVideoPriceRecord struct {
@@ -162,6 +166,18 @@ func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, 
 	if err != nil {
 		return CatalogModel{}, fmt.Errorf("cacheWriteUsdPerMillion: %w", err)
 	}
+	if (record.ContextWindowTokens == nil) != (record.MaxOutputTokens == nil) {
+		return CatalogModel{}, fmt.Errorf("contextWindowTokens and maxOutputTokens must be provided together")
+	}
+	if record.ContextWindowTokens != nil {
+		if *record.ContextWindowTokens < 1024 || *record.ContextWindowTokens > 10000000 {
+			return CatalogModel{}, fmt.Errorf("contextWindowTokens is invalid")
+		}
+		if *record.MaxOutputTokens < 1 || *record.MaxOutputTokens > 1000000 ||
+			*record.MaxOutputTokens >= *record.ContextWindowTokens {
+			return CatalogModel{}, fmt.Errorf("maxOutputTokens is invalid")
+		}
+	}
 	videoPrices, err := normalizeCatalogVideoPrices(record.VideoPrices)
 	if err != nil {
 		return CatalogModel{}, err
@@ -184,6 +200,7 @@ func normalizeCatalogModel(record catalogModelRecord, fallbackSourceURL string, 
 		Vendor: vendor, ModelKey: modelKey, DisplayName: displayName, ModelKind: modelKind,
 		InputUSDMicros: input, OutputUSDMicros: output,
 		CacheReadUSDMicros: cacheRead, CacheWriteUSDMicros: cacheWrite,
+		ContextWindowTokens: record.ContextWindowTokens, MaxOutputTokens: record.MaxOutputTokens,
 		VideoPrices: videoPrices,
 		SourceURL:   sourceURL, VerifiedAt: verifiedAt.UTC(),
 	}, nil

@@ -128,6 +128,7 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					InputCNYMicros: entry.InputUSDMicros, OutputCNYMicros: entry.OutputUSDMicros,
 					CacheReadUSD: entry.CacheReadUSDMicros, CacheWriteUSD: entry.CacheWriteUSDMicros,
 					CacheReadCNY: entry.CacheReadUSDMicros, CacheWriteCNY: entry.CacheWriteUSDMicros,
+					ContextWindowTokens: entry.ContextWindowTokens, MaxOutputTokens: entry.MaxOutputTokens,
 					ModelKind:      entry.ModelKind,
 					CatalogVersion: catalog.Version, SourceURL: entry.SourceURL,
 					VerifiedAt: entry.VerifiedAt, SortOrder: entry.SortOrder,
@@ -147,6 +148,8 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					row.OutputUSDMicros == entry.OutputUSDMicros && row.ModelKind == entry.ModelKind &&
 					sameOptionalMicros(row.CacheReadUSD, entry.CacheReadUSDMicros) &&
 					sameOptionalMicros(row.CacheWriteUSD, entry.CacheWriteUSDMicros) &&
+					sameCatalogOptionalInt64(row.ContextWindowTokens, entry.ContextWindowTokens) &&
+					sameCatalogOptionalInt64(row.MaxOutputTokens, entry.MaxOutputTokens) &&
 					!fillCacheRead && !fillCacheWrite &&
 					row.DisplayName == entry.DisplayName &&
 					row.CatalogVersion == catalog.Version &&
@@ -167,7 +170,7 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 				if fillCacheWrite {
 					cacheWriteCNY = entry.CacheWriteUSDMicros
 				}
-				update := tx.Model(&Model{}).Where("id = ? AND version = ?", row.ID, row.Version).Updates(map[string]any{
+				updates := map[string]any{
 					"display_name":     entry.DisplayName,
 					"model_kind":       entry.ModelKind,
 					"input_usd_micros": entry.InputUSDMicros, "output_usd_micros": entry.OutputUSDMicros,
@@ -178,7 +181,12 @@ func (r *Repository) SyncCatalog(ctx context.Context, catalog Catalog, now time.
 					"catalog_version":        catalog.Version, "source_url": entry.SourceURL,
 					"verified_at": entry.VerifiedAt, "sort_order": entry.SortOrder,
 					"version": gorm.Expr("version + 1"), "updated_at": now,
-				})
+				}
+				if entry.ContextWindowTokens != nil {
+					updates["context_window_tokens"] = *entry.ContextWindowTokens
+					updates["max_output_tokens"] = *entry.MaxOutputTokens
+				}
+				update := tx.Model(&Model{}).Where("id = ? AND version = ?", row.ID, row.Version).Updates(updates)
 				if update.Error != nil {
 					return update.Error
 				}
@@ -221,6 +229,15 @@ func sameOptionalMicros(left, right *int64) bool {
 		return left == nil && right == nil
 	}
 	return *left == *right
+}
+
+// sameCatalogOptionalInt64 treats a nil incoming value as "catalog does not
+// manage this field", so manual context settings survive older catalogs.
+func sameCatalogOptionalInt64(row, incoming *int64) bool {
+	if incoming == nil {
+		return true
+	}
+	return row != nil && *row == *incoming
 }
 
 func nullableMicros(value *int64) any {

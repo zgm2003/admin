@@ -28,6 +28,16 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 			if model.InputUSDMicros != 5_000_000 || model.OutputUSDMicros != 30_000_000 {
 				t.Fatalf("gpt-5.5 prices = %d/%d", model.InputUSDMicros, model.OutputUSDMicros)
 			}
+			if model.ContextWindowTokens == nil || *model.ContextWindowTokens != 400_000 ||
+				model.MaxOutputTokens == nil || *model.MaxOutputTokens != 128_000 {
+				t.Fatalf("gpt-5.5 context = %+v/%+v", model.ContextWindowTokens, model.MaxOutputTokens)
+			}
+		}
+		if model.ModelKey == "gpt-4-0613" {
+			if model.ContextWindowTokens == nil || *model.ContextWindowTokens != 8_192 ||
+				model.MaxOutputTokens == nil || *model.MaxOutputTokens != 4_096 {
+				t.Fatalf("gpt-4-0613 context = %+v/%+v", model.ContextWindowTokens, model.MaxOutputTokens)
+			}
 		}
 		if model.ModelKey == "gpt-6-astra" {
 			if model.CacheReadUSDMicros == nil || *model.CacheReadUSDMicros != 1_000_000 ||
@@ -40,6 +50,10 @@ func TestEmbeddedCatalogIsValid(t *testing.T) {
 			if model.Vendor != VendorVolcengine || model.ModelKind != 3 || len(model.VideoPrices) != 6 {
 				t.Fatalf("seedance 2.5 = vendor %d kind %d prices %+v",
 					model.Vendor, model.ModelKind, model.VideoPrices)
+			}
+			if model.ContextWindowTokens != nil || model.MaxOutputTokens != nil {
+				t.Fatalf("video model has context limits: %+v/%+v",
+					model.ContextWindowTokens, model.MaxOutputTokens)
 			}
 			if model.VideoPrices[0].TierKey != "480p:no_input" ||
 				model.VideoPrices[0].PriceCNYMicros == nil || *model.VideoPrices[0].PriceCNYMicros != 670_000 {
@@ -94,5 +108,19 @@ func TestParseCatalogRejectsDuplicateAndInvalidPrices(t *testing.T) {
 		`"outputUsdPerMillion":"2","modelKind":3,"videoPrices":[{"tierKey":"480p","priceCnyPerSecond":"-1"}]`, 1)
 	if _, err := parseCatalog([]byte(invalidVideo)); err == nil || !strings.Contains(err.Error(), "videoPrices") {
 		t.Fatalf("negative video price error = %v", err)
+	}
+
+	partialContext := strings.Replace(duplicate, `"outputUsdPerMillion":"2"`,
+		`"outputUsdPerMillion":"2","contextWindowTokens":128000`, 1)
+	if _, err := parseCatalog([]byte(partialContext)); err == nil ||
+		!strings.Contains(err.Error(), "provided together") {
+		t.Fatalf("partial context error = %v", err)
+	}
+
+	invalidContext := strings.Replace(duplicate, `"outputUsdPerMillion":"2"`,
+		`"outputUsdPerMillion":"2","contextWindowTokens":128000,"maxOutputTokens":128000`, 1)
+	if _, err := parseCatalog([]byte(invalidContext)); err == nil ||
+		!strings.Contains(err.Error(), "maxOutputTokens") {
+		t.Fatalf("invalid context error = %v", err)
 	}
 }
