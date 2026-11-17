@@ -170,6 +170,11 @@ export const enUS = {
   'ai.officialModel.pricePlaceholder': 'e.g. 5.00',
   'ai.officialModel.priceRequired': 'Enter a CNY price',
   'ai.officialModel.priceRule': 'Enter a non-negative number with at most 6 decimal places',
+  'ai.officialModel.contextColumn': 'Context window',
+  'ai.officialModel.contextNotConfigured': 'Context not configured',
+  'ai.officialModel.contextDefaultHint':
+    'No official value configured; runtime defaults to 128K context / 8K output',
+  'ai.officialModel.outputShort': 'Output',
   'ai.officialModel.contextWindowTokens': 'Context window (tokens)',
   'ai.officialModel.maxOutputTokens': 'Max output (tokens)',
   'ai.officialModel.contextWindowPlaceholder': 'Blank uses the default',

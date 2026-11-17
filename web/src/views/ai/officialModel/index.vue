@@ -149,6 +149,26 @@ function price(value: string, currency: 'USD' | 'CNY'): string {
   return `${currency === 'USD' ? '$' : '¥'}${value}/M`
 }
 
+function tokenCount(value: number | null): string {
+  if (value === null || value <= 0) return '—'
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(value % 1000000 === 0 ? 0 : 1)}M`
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}K`
+  }
+  return String(value)
+}
+
+function contextTooltip(row: OfficialModel): string {
+  if (!row.contextWindowTokens) {
+    return t('ai.officialModel.contextDefaultHint')
+  }
+  const context = row.contextWindowTokens.toLocaleString()
+  const output = row.maxOutputTokens?.toLocaleString() ?? '—'
+  return `${t('ai.officialModel.contextColumn')}: ${context} / ${output} tokens`
+}
+
 function modelKindLabel(kind: number): string {
   if (kind === 2) return t('ai.officialModel.kindImage')
   if (kind === 3) return t('ai.officialModel.kindVideo')
@@ -329,6 +349,22 @@ onBeforeUnmount(() => {
             {{ modelKindLabel(row.modelKind) }}
           </el-tag>
           <code v-if="row.displayName !== row.modelKey">{{ row.modelKey }}</code>
+          <el-tooltip
+            v-if="row.modelKind === 1"
+            :content="contextTooltip(row)"
+            placement="top"
+            :show-after="300"
+          >
+            <span class="ai-official-model-page__context-inline">
+              <template v-if="row.contextWindowTokens">
+                {{ t('ai.officialModel.contextColumn') }} {{ tokenCount(row.contextWindowTokens) }}
+                <template v-if="row.maxOutputTokens">
+                  · {{ t('ai.officialModel.outputShort') }} {{ tokenCount(row.maxOutputTokens) }}
+                </template>
+              </template>
+              <template v-else>{{ t('ai.officialModel.contextNotConfigured') }}</template>
+            </span>
+          </el-tooltip>
         </div>
       </template>
       <template #cell-officialInput="{ row }: { row: OfficialModel }">
@@ -472,6 +508,16 @@ onBeforeUnmount(() => {
       color: var(--admin-text-soft);
       font-weight: 500;
     }
+  }
+
+  &__context-inline {
+    color: var(--admin-text-muted);
+    font-family: var(--admin-font-data, ui-monospace, monospace);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: help;
   }
 
   &__video-prices {
