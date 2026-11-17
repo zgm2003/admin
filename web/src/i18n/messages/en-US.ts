@@ -383,7 +383,6 @@ export const enUS = {
   'ai.workbench.like': 'Like',
   'ai.workbench.dislike': 'Dislike',
   'ai.workbench.edit': 'Edit',
-  'ai.workbench.more': 'More',
   'ai.workbench.deleteMessage': 'Delete message',
   'ai.workbench.deleteMessageConfirm':
     'Only this message will be deleted. The run log keeps the original message. Continue?',

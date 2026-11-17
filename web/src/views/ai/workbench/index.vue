@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import {
   ChatDotRound,
   Delete,
+  Edit,
   FolderOpened,
   MoreFilled,
   Plus,
@@ -21,6 +22,7 @@ import {
   Pencil,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
   Upload,
   X,
 } from 'lucide-vue-next'
@@ -352,11 +354,6 @@ async function removeMessage(message: ChatMessage): Promise<void> {
   } finally {
     deletingMessageID.value = null
   }
-}
-
-function onMessageMenuCommand(command: string | number | object, message: ChatMessage): void {
-  if (String(command) !== 'delete') return
-  void removeMessage(message)
 }
 
 const welcomeTitle = computed(() =>
@@ -1376,33 +1373,24 @@ onBeforeUnmount(() => {
                       </el-button>
                     </el-tooltip>
                   </template>
-                  <el-dropdown
+                  <el-tooltip
                     v-if="canDelete"
-                    trigger="click"
-                    :disabled="streaming || sending || deletingMessageID !== null"
-                    @command="onMessageMenuCommand($event, message)"
+                    :content="t('ai.workbench.deleteMessage')"
+                    placement="top"
+                    :show-after="300"
                   >
-                    <button
-                      type="button"
-                      class="ai-workbench__message-more"
+                    <el-button
+                      text
+                      circle
+                      size="small"
+                      class="ai-workbench__message-delete"
                       :disabled="streaming || sending || deletingMessageID !== null"
-                      :aria-label="t('ai.workbench.more')"
-                      :title="t('ai.workbench.more')"
+                      :aria-label="t('ai.workbench.deleteMessage')"
+                      @click="removeMessage(message)"
                     >
-                      <MoreFilled :size="14" aria-hidden="true" />
-                    </button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item
-                          command="delete"
-                          :icon="Delete"
-                          class="ai-workbench__danger-command"
-                        >
-                          {{ t('ai.workbench.deleteMessage') }}
-                        </el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
+                      <Trash2 :size="13" aria-hidden="true" />
+                    </el-button>
+                  </el-tooltip>
                 </div>
               </div>
             </div>
@@ -2696,6 +2684,7 @@ onBeforeUnmount(() => {
   width: 100%;
   min-height: 24px;
   align-items: center;
+  justify-content: space-between;
   gap: 5px;
   padding: 2px 2px 0;
   color: #98a2b3;
@@ -2711,9 +2700,9 @@ onBeforeUnmount(() => {
 
 .ai-workbench__message-actions {
   display: flex;
+  margin-left: auto;
   align-items: center;
   gap: 2px;
-  margin-top: 0;
   opacity: 0;
   pointer-events: none;
   transition: opacity 140ms ease;
@@ -2732,31 +2721,9 @@ onBeforeUnmount(() => {
   color: #98a2b3;
 }
 
-.ai-workbench__message-more {
-  display: inline-grid;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  color: #98a2b3;
-  background: transparent;
-  cursor: pointer;
-}
-
-.ai-workbench__message-more:hover {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-
-.ai-workbench__message-more:disabled {
-  color: #c7d0dd;
-  cursor: not-allowed;
-}
-
-:global(.ai-workbench__danger-command) {
+.ai-workbench__message-actions :deep(.ai-workbench__message-delete:hover) {
   color: var(--el-color-danger);
+  background: var(--el-color-danger-light-9);
 }
 
 .ai-workbench__message-editor {

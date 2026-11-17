@@ -362,7 +362,6 @@ export const zhCN = {
   'ai.workbench.like': '点赞',
   'ai.workbench.dislike': '踩一踩',
   'ai.workbench.edit': '编辑',
-  'ai.workbench.more': '更多',
   'ai.workbench.deleteMessage': '删除消息',
   'ai.workbench.deleteMessageConfirm':
     '只删除这一条消息，不影响其他消息；运行日志仍会保留该消息。确定删除吗？',
