@@ -1,6 +1,8 @@
 import { completeFileUpload, type CompletedFile } from '@/api/storage/file'
 import { requestUploadCredentials } from '@/api/storage/upload'
 
+const AI_UPLOAD_RULE_CODE = 'ai-file'
+
 const contentTypes: Record<string, string> = {
   csv: 'text/csv',
   txt: 'text/plain',
@@ -27,7 +29,7 @@ function contentType(file: File): string {
 
 export async function uploadAttachmentFiles(files: File[]): Promise<CompletedFile[]> {
   const credentials = await requestUploadCredentials(
-    'file',
+    AI_UPLOAD_RULE_CODE,
     files.map((file) => ({
       fileName: file.name,
       contentType: contentType(file),
