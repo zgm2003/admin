@@ -10,6 +10,7 @@ export interface ChatAgent {
   providerName: string
   modelName: string
   timeoutMs: number
+  contextWindowTokens: number | null
 }
 
 export interface ChatConversation {

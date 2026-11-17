@@ -7,14 +7,15 @@ import (
 )
 
 type AgentValue struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	Avatar       string `json:"avatar"`
-	Scene        int16  `json:"scene"`
-	ProviderName string `json:"providerName"`
-	ModelName    string `json:"modelName"`
-	TimeoutMS    int32  `json:"timeoutMs"`
+	ID                  int64  `json:"id"`
+	Name                string `json:"name"`
+	Description         string `json:"description"`
+	Avatar              string `json:"avatar"`
+	Scene               int16  `json:"scene"`
+	ProviderName        string `json:"providerName"`
+	ModelName           string `json:"modelName"`
+	TimeoutMS           int32  `json:"timeoutMs"`
+	ContextWindowTokens *int64 `json:"contextWindowTokens"`
 }
 
 type ConversationValue struct {
@@ -130,5 +131,6 @@ func agentValue(row AgentRow) AgentValue {
 	return AgentValue{
 		ID: row.ID, Name: row.Name, Description: row.Description, Avatar: row.Avatar, Scene: row.Scene,
 		ProviderName: row.ProviderName, ModelName: row.ModelName, TimeoutMS: row.TimeoutMS,
+		ContextWindowTokens: row.ContextWindowTokens,
 	}
 }

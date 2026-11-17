@@ -31,7 +31,8 @@ func (r *Repository) FindAgent(ctx context.Context, id int64) (AgentConfig, erro
 			p.base_url, p.api_key_ciphertext, p.encryption_key_id,
 			p.token_rate_multiplier_ppm, pm.model_key, pm.display_name, pm.upstream_model,
 			pm.pricing_mode, pm.official_model_id,
-			o.input_cny_micros, o.output_cny_micros, o.cache_read_cny_micros, o.cache_write_cny_micros`).
+			o.input_cny_micros, o.output_cny_micros, o.cache_read_cny_micros, o.cache_write_cny_micros,
+			o.context_window_tokens, o.max_output_tokens`).
 		Joins("JOIN ai_provider_model pm ON pm.id = a.provider_model_id AND pm.deleted_at IS NULL").
 		Joins("JOIN ai_provider p ON p.id = pm.provider_id AND p.deleted_at IS NULL").
 		Joins("JOIN ai_official_model o ON o.id = pm.official_model_id").

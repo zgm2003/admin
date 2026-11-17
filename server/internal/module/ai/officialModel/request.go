@@ -18,11 +18,13 @@ type ListQuery struct {
 }
 
 type UpdatePriceInput struct {
-	ExpectedVersion int64
-	InputCNYMicros  int64
-	OutputCNYMicros int64
-	CacheReadCNY    *int64
-	CacheWriteCNY   *int64
+	ExpectedVersion     int64
+	InputCNYMicros      int64
+	OutputCNYMicros     int64
+	CacheReadCNY        *int64
+	CacheWriteCNY       *int64
+	ContextWindowTokens *int64
+	MaxOutputTokens     *int64
 }
 
 type ResetPriceInput struct {
@@ -30,11 +32,13 @@ type ResetPriceInput struct {
 }
 
 type updatePriceRequest struct {
-	ExpectedVersion *int64  `json:"expectedVersion"`
-	InputCNY        *string `json:"inputCnyPerMillion"`
-	OutputCNY       *string `json:"outputCnyPerMillion"`
-	CacheReadCNY    *string `json:"cacheReadCnyPerMillion"`
-	CacheWriteCNY   *string `json:"cacheWriteCnyPerMillion"`
+	ExpectedVersion     *int64  `json:"expectedVersion"`
+	InputCNY            *string `json:"inputCnyPerMillion"`
+	OutputCNY           *string `json:"outputCnyPerMillion"`
+	CacheReadCNY        *string `json:"cacheReadCnyPerMillion"`
+	CacheWriteCNY       *string `json:"cacheWriteCnyPerMillion"`
+	ContextWindowTokens *int64  `json:"contextWindowTokens"`
+	MaxOutputTokens     *int64  `json:"maxOutputTokens"`
 }
 
 func (r updatePriceRequest) input() (UpdatePriceInput, error) {
@@ -60,9 +64,22 @@ func (r updatePriceRequest) input() (UpdatePriceInput, error) {
 	if err != nil {
 		return UpdatePriceInput{}, fmt.Errorf("cacheWriteCnyPerMillion: %w", err)
 	}
+	if (r.ContextWindowTokens == nil) != (r.MaxOutputTokens == nil) {
+		return UpdatePriceInput{}, fmt.Errorf("contextWindowTokens and maxOutputTokens must be provided together")
+	}
+	if r.ContextWindowTokens != nil {
+		if *r.ContextWindowTokens < 1024 || *r.ContextWindowTokens > 10000000 {
+			return UpdatePriceInput{}, fmt.Errorf("contextWindowTokens is invalid")
+		}
+		if *r.MaxOutputTokens < 1 || *r.MaxOutputTokens > 1000000 ||
+			*r.MaxOutputTokens >= *r.ContextWindowTokens {
+			return UpdatePriceInput{}, fmt.Errorf("maxOutputTokens is invalid")
+		}
+	}
 	return UpdatePriceInput{
 		ExpectedVersion: *r.ExpectedVersion, InputCNYMicros: input, OutputCNYMicros: output,
 		CacheReadCNY: cacheRead, CacheWriteCNY: cacheWrite,
+		ContextWindowTokens: r.ContextWindowTokens, MaxOutputTokens: r.MaxOutputTokens,
 	}, nil
 }
 

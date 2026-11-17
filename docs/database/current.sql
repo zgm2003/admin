@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rv2yIwh9jNLVPldcF4CPYdWpk5i38RwwGaCbzf5aohpvE23srIhDykRdkvy5tc3
+\restrict wHr5MxgISPRYxv7gogUe7whMsbt6ffhSGpc1NkvxVFtHuPqV8lC9xlmO4f21bH8
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -578,12 +578,17 @@ CREATE TABLE public.ai_official_model (
     cache_write_cny_micros bigint,
     cache_read_usd_micros bigint,
     cache_write_usd_micros bigint,
+    context_window_tokens bigint,
+    max_output_tokens bigint,
     CONSTRAINT ai_official_model_cache_read_cny_micros_check CHECK (((cache_read_cny_micros IS NULL) OR (cache_read_cny_micros >= 0))),
     CONSTRAINT ai_official_model_cache_read_usd_micros_check CHECK (((cache_read_usd_micros IS NULL) OR (cache_read_usd_micros >= 0))),
     CONSTRAINT ai_official_model_cache_write_cny_micros_check CHECK (((cache_write_cny_micros IS NULL) OR (cache_write_cny_micros >= 0))),
     CONSTRAINT ai_official_model_cache_write_usd_micros_check CHECK (((cache_write_usd_micros IS NULL) OR (cache_write_usd_micros >= 0))),
+    CONSTRAINT ai_official_model_context_budget_check CHECK (((context_window_tokens IS NULL) OR (max_output_tokens IS NULL) OR (max_output_tokens < context_window_tokens))),
+    CONSTRAINT ai_official_model_context_window_tokens_check CHECK (((context_window_tokens IS NULL) OR ((context_window_tokens >= 1024) AND (context_window_tokens <= 10000000)))),
     CONSTRAINT ai_official_model_input_cny_micros_check CHECK ((input_cny_micros >= 0)),
     CONSTRAINT ai_official_model_input_usd_micros_check CHECK ((input_usd_micros >= 0)),
+    CONSTRAINT ai_official_model_max_output_tokens_check CHECK (((max_output_tokens IS NULL) OR ((max_output_tokens >= 1) AND (max_output_tokens <= 1000000)))),
     CONSTRAINT ai_official_model_model_kind_check CHECK ((model_kind = ANY (ARRAY[1, 2, 3, 4]))),
     CONSTRAINT ai_official_model_output_cny_micros_check CHECK ((output_cny_micros >= 0)),
     CONSTRAINT ai_official_model_output_usd_micros_check CHECK ((output_usd_micros >= 0)),
@@ -5734,5 +5739,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rv2yIwh9jNLVPldcF4CPYdWpk5i38RwwGaCbzf5aohpvE23srIhDykRdkvy5tc3
+\unrestrict wHr5MxgISPRYxv7gogUe7whMsbt6ffhSGpc1NkvxVFtHuPqV8lC9xlmO4f21bH8
 

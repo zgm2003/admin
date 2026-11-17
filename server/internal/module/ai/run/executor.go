@@ -16,7 +16,6 @@ import (
 	"admin/server/internal/module/ai/chat"
 	"admin/server/internal/module/ai/pricing"
 	aitool "admin/server/internal/module/ai/tool"
-	auth "admin/server/internal/module/auth/login"
 	"admin/server/internal/module/realtime"
 	"admin/server/internal/shared/money"
 
@@ -27,7 +26,6 @@ const (
 	streamFlushInterval    = 50 * time.Millisecond
 	streamFlushBytes       = 2048
 	maxHistoryMessages     = 40
-	maxHistoryRunes        = 60000
 	maxAttachmentTextBytes = 256 * 1024
 	maxAttachmentTextRunes = 20000
 	attachmentReadTimeout  = 10 * time.Second
@@ -143,60 +141,7 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 	if err != nil {
 		return s.failBeforeStream(parent, run, err)
 	}
-	messages := make([]ChatMessage, 0, len(history))
-	usedRunes := 0
-	lastUserQuery := ""
-	for i := len(history) - 1; i >= 0; i-- {
-		message := history[i]
-		message.Attachments = attachments[message.ID]
-		if (message.Content == "" && len(message.Attachments) == 0) ||
-			message.Role == chat.RoleAssistant && message.Status == chat.MessageStreaming {
-			continue
-		}
-		role := "user"
-		if message.Role == chat.RoleAssistant {
-			role = "assistant"
-		} else if query := strings.TrimSpace(message.Content); query != "" {
-			lastUserQuery = query
-		}
-		content := message.Content
-		providerAttachments := make([]ChatAttachment, 0, len(message.Attachments))
-		for _, attachment := range message.Attachments {
-			if s.attachmentURLs == nil {
-				return s.failBeforeStream(parent, run, errors.New("attachment URL resolver is not configured"))
-			}
-			disposition := "attachment"
-			if attachment.Kind == chat.AttachmentImage {
-				disposition = "inline"
-			}
-			resolved, resolveErr := s.attachmentURLs.ObjectURL(parent, auth.Identity{
-				UserID: run.UserID, PlatformID: run.PlatformID,
-			}, attachment.ObjectKey, disposition)
-			if resolveErr != nil {
-				return s.failBeforeStream(parent, run, resolveErr)
-			}
-			if attachment.Kind == chat.AttachmentImage {
-				providerAttachments = append(providerAttachments, ChatAttachment{
-					URL: resolved.URL, IsImage: true, FileName: attachment.FileName,
-				})
-				continue
-			}
-			if isTextAttachment(attachment.MimeType, attachment.FileName) {
-				if text, textErr := readAttachmentText(parent, resolved.URL); textErr == nil && text != "" {
-					content += "\n\n[附件: " + attachment.FileName + "]\n" + text
-					continue
-				}
-			}
-			content += "\n\n[附件: " + attachment.FileName + "](" + resolved.URL + ")"
-		}
-		usedRunes += len([]rune(content))
-		if usedRunes > maxHistoryRunes {
-			break
-		}
-		messages = append(messages, ChatMessage{
-			Role: role, Content: content, Attachments: providerAttachments,
-		})
-	}
+	lastUserQuery := latestUserQuery(history)
 
 	timeout := time.Duration(run.TimeoutMS) * time.Millisecond
 	if timeout <= 0 {
@@ -238,6 +183,22 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 				})
 			}
 		}
+	}
+
+	messages, plan, err := s.assembleContext(
+		execCtx, run, agent, history, attachments, systemPrompt, toolDefs,
+	)
+	if err != nil {
+		return s.failBeforeStream(parent, run, err)
+	}
+	if err := s.appendEvent(parent, runID, "context", "上下文组装完成", map[string]any{
+		"windowTokens": plan.WindowTokens, "maxOutputTokens": plan.MaxOutputTokens,
+		"inputBudgetTokens": plan.InputBudgetTokens, "estimatedTokens": plan.EstimatedTokens,
+		"systemTokens": plan.SystemTokens, "toolTokens": plan.ToolTokens,
+		"includedMessages": plan.IncludedMessages, "droppedMessages": plan.DroppedMessages,
+		"truncatedAttachments": plan.TruncatedAttachments, "overBudget": plan.OverBudget,
+	}); err != nil {
+		s.logger.Warn("append context event", "runId", runID, "error", err)
 	}
 
 	var content strings.Builder
@@ -309,11 +270,12 @@ func (s *Service) Execute(parent context.Context, runID int64) error {
 		return finishWith(RunFailed, chat.MessageFailed, "upstream_error", err.Error())
 	}
 
+	_, maxOutputTokens := resolveContextLimits(agent)
 	for round := 0; round < maxToolRounds; round++ {
 		chunks, err := s.provider.Stream(execCtx, ProviderRequest{
 			Protocol: run.ProviderProtocol, BaseURL: agent.BaseURL, APIKey: apiKey,
 			Model: agent.UpstreamModel, SystemPrompt: systemPrompt, Messages: messages,
-			Tools: toolDefs, Timeout: timeout,
+			Tools: toolDefs, MaxOutputTokens: maxOutputTokens, Timeout: timeout,
 		})
 		if err != nil {
 			return failStream(err)

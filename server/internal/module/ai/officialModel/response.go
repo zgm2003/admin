@@ -25,6 +25,8 @@ type SafeValue struct {
 	CacheWriteCNYPerMillion *string           `json:"cacheWriteCnyPerMillion"`
 	CacheReadUSDPerMillion  *string           `json:"cacheReadUsdPerMillion"`
 	CacheWriteUSDPerMillion *string           `json:"cacheWriteUsdPerMillion"`
+	ContextWindowTokens     *int64            `json:"contextWindowTokens"`
+	MaxOutputTokens         *int64            `json:"maxOutputTokens"`
 	VideoPrices             []VideoPriceValue `json:"videoPrices"`
 	CatalogVersion          string            `json:"catalogVersion"`
 	SourceURL               string            `json:"sourceUrl"`
@@ -60,6 +62,9 @@ func safeValue(row Model) (SafeValue, error) {
 		(row.CacheWriteCNY != nil && *row.CacheWriteCNY < 0) ||
 		(row.CacheReadUSD != nil && *row.CacheReadUSD < 0) ||
 		(row.CacheWriteUSD != nil && *row.CacheWriteUSD < 0) ||
+		(row.ContextWindowTokens != nil && (*row.ContextWindowTokens < 1024 || *row.ContextWindowTokens > 10000000)) ||
+		(row.MaxOutputTokens != nil && (*row.MaxOutputTokens < 1 || *row.MaxOutputTokens > 1000000)) ||
+		(row.ContextWindowTokens != nil && row.MaxOutputTokens != nil && *row.MaxOutputTokens >= *row.ContextWindowTokens) ||
 		len(row.VideoPrices) > 40 {
 		return SafeValue{}, fmt.Errorf("stored official model is invalid")
 	}
@@ -90,6 +95,8 @@ func safeValue(row Model) (SafeValue, error) {
 		CacheWriteCNYPerMillion: formatOptionalMicros(row.CacheWriteCNY),
 		CacheReadUSDPerMillion:  formatOptionalMicros(row.CacheReadUSD),
 		CacheWriteUSDPerMillion: formatOptionalMicros(row.CacheWriteUSD),
+		ContextWindowTokens:     row.ContextWindowTokens,
+		MaxOutputTokens:         row.MaxOutputTokens,
 		VideoPrices:             videoPrices,
 		CatalogVersion:          row.CatalogVersion, SourceURL: row.SourceURL, VerifiedAt: row.VerifiedAt.UTC(),
 		Version: row.Version, Actions: Actions{Update: true, Reset: true},

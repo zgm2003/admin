@@ -48,17 +48,22 @@ func (r *Repository) List(ctx context.Context, query ListQuery) ([]Model, error)
 }
 
 func (r *Repository) UpdatePrice(ctx context.Context, id int64, expectedVersion int64, inputCNY, outputCNY int64,
-	cacheReadCNY, cacheWriteCNY *int64, now time.Time) error {
+	cacheReadCNY, cacheWriteCNY, contextWindowTokens, maxOutputTokens *int64, now time.Time) error {
 	if r == nil || r.db == nil {
 		return errors.New("official model database missing")
 	}
+	updates := map[string]any{
+		"input_cny_micros": inputCNY, "output_cny_micros": outputCNY,
+		"cache_read_cny_micros": cacheReadCNY, "cache_write_cny_micros": cacheWriteCNY,
+		"version": gorm.Expr("version + 1"), "updated_at": now,
+	}
+	if contextWindowTokens != nil {
+		updates["context_window_tokens"] = *contextWindowTokens
+		updates["max_output_tokens"] = *maxOutputTokens
+	}
 	result := r.db.WithContext(ctx).Model(&Model{}).
 		Where("id = ? AND version = ?", id, expectedVersion).
-		Updates(map[string]any{
-			"input_cny_micros": inputCNY, "output_cny_micros": outputCNY,
-			"cache_read_cny_micros": cacheReadCNY, "cache_write_cny_micros": cacheWriteCNY,
-			"version": gorm.Expr("version + 1"), "updated_at": now,
-		})
+		Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}

@@ -51,4 +51,30 @@ func TestUpdatePriceRequest(t *testing.T) {
 	if _, err := (updatePriceRequest{ExpectedVersion: &version, InputCNY: &bad, OutputCNY: &output}).input(); err == nil {
 		t.Fatal("invalid price accepted")
 	}
+
+	contextWindow, maxOutput := int64(200000), int64(8192)
+	got, err = (updatePriceRequest{
+		ExpectedVersion: &version, InputCNY: &input, OutputCNY: &output,
+		ContextWindowTokens: &contextWindow, MaxOutputTokens: &maxOutput,
+	}).input()
+	if err != nil {
+		t.Fatalf("context input() error = %v", err)
+	}
+	if got.ContextWindowTokens == nil || *got.ContextWindowTokens != contextWindow ||
+		got.MaxOutputTokens == nil || *got.MaxOutputTokens != maxOutput {
+		t.Fatalf("context input = %+v", got)
+	}
+	if _, err := (updatePriceRequest{
+		ExpectedVersion: &version, InputCNY: &input, OutputCNY: &output,
+		ContextWindowTokens: &contextWindow,
+	}).input(); err == nil {
+		t.Fatal("partial context config accepted")
+	}
+	tooLarge := int64(999999)
+	if _, err := (updatePriceRequest{
+		ExpectedVersion: &version, InputCNY: &input, OutputCNY: &output,
+		ContextWindowTokens: &contextWindow, MaxOutputTokens: &tooLarge,
+	}).input(); err == nil {
+		t.Fatal("max output larger than context accepted")
+	}
 }

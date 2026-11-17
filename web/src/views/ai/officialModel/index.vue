@@ -185,6 +185,12 @@ async function save(payload: PriceForm): Promise<void> {
       outputCnyPerMillion: payload.outputCny,
       ...(payload.cacheReadCny ? { cacheReadCnyPerMillion: payload.cacheReadCny } : {}),
       ...(payload.cacheWriteCny ? { cacheWriteCnyPerMillion: payload.cacheWriteCny } : {}),
+      ...(payload.contextWindowTokens && payload.maxOutputTokens
+        ? {
+            contextWindowTokens: Number(payload.contextWindowTokens),
+            maxOutputTokens: Number(payload.maxOutputTokens),
+          }
+        : {}),
     })
     dialogVisible.value = false
     ElNotification.success({ title: t('ai.officialModel.saved') })

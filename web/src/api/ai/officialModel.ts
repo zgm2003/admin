@@ -28,6 +28,8 @@ export interface OfficialModel {
   cacheWriteCnyPerMillion: string | null
   cacheReadUsdPerMillion: string | null
   cacheWriteUsdPerMillion: string | null
+  contextWindowTokens: number | null
+  maxOutputTokens: number | null
   videoPrices: OfficialVideoPrice[]
   catalogVersion: string
   sourceUrl: string
@@ -58,6 +60,8 @@ export interface UpdateOfficialModelPriceInput {
   outputCnyPerMillion: string
   cacheReadCnyPerMillion?: string
   cacheWriteCnyPerMillion?: string
+  contextWindowTokens?: number
+  maxOutputTokens?: number
 }
 
 export interface OfficialModelSyncResult {

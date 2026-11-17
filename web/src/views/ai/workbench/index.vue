@@ -127,6 +127,22 @@ const selectedAgentId = computed<number | null>(() => {
 const selectedAgent = computed(
   () => agents.value.find((agent) => agent.id === selectedAgentId.value) ?? null,
 )
+
+const defaultContextWindowTokens = 128000
+
+const contextUsage = computed<{ used: number; window: number; percent: number } | null>(() => {
+  const messages = session.value?.messages ?? []
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index]
+    if (message.role !== 2 || !message.usage || message.usage.inputTokens <= 0) continue
+    const agent = agents.value.find((item) => item.id === message.agentId) ?? selectedAgent.value
+    const window = agent?.contextWindowTokens ?? defaultContextWindowTokens
+    if (!window || window <= 0) return null
+    const used = message.usage.inputTokens
+    return { used, window, percent: Math.min(100, Math.round((used / window) * 100)) }
+  }
+  return null
+})
 const canSend = computed(
   () =>
     canSendPermission.value &&
@@ -1110,12 +1126,32 @@ onBeforeUnmount(() => {
           <span v-if="activeConversation">{{ t('ai.workbench.contextSwitchHint') }}</span>
           <span v-else>{{ t('ai.workbench.subtitle') }}</span>
         </div>
-        <div
-          class="ai-workbench__balance"
-          :class="{ 'is-negative': (balance?.balanceUnits ?? 0) <= 0 }"
-        >
-          <small>{{ t('ai.workbench.balance') }}</small>
-          <strong>¥{{ balanceText }}</strong>
+        <div class="ai-workbench__head-meta">
+          <el-tooltip
+            v-if="contextUsage"
+            :content="
+              t('ai.workbench.contextUsageHint', {
+                used: formatTokenCount(contextUsage.used),
+                window: formatTokenCount(contextUsage.window),
+              })
+            "
+            placement="bottom"
+            :show-after="300"
+          >
+            <span
+              class="ai-workbench__context"
+              :class="{ 'is-warning': contextUsage.percent >= 75 }"
+            >
+              {{ t('ai.workbench.contextUsage', { percent: contextUsage.percent }) }}
+            </span>
+          </el-tooltip>
+          <div
+            class="ai-workbench__balance"
+            :class="{ 'is-negative': (balance?.balanceUnits ?? 0) <= 0 }"
+          >
+            <small>{{ t('ai.workbench.balance') }}</small>
+            <strong>¥{{ balanceText }}</strong>
+          </div>
         </div>
       </header>
       <header v-else class="ai-workbench__head ai-workbench__head--selection">
@@ -2237,6 +2273,29 @@ onBeforeUnmount(() => {
 .ai-workbench__head-copy span {
   color: #98a2b3;
   font-size: 11px;
+}
+
+.ai-workbench__head-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-workbench__context {
+  padding: 5px 9px;
+  border: 1px solid #e3eaf4;
+  border-radius: 999px;
+  color: #667085;
+  background: #fff;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ai-workbench__context.is-warning {
+  border-color: #f5d7a8;
+  color: #b45309;
+  background: #fffaf0;
 }
 
 .ai-workbench__balance {

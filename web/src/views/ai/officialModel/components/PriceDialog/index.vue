@@ -20,7 +20,14 @@ const visible = defineModel<boolean>({ required: true })
 const { t, locale } = useI18n()
 
 const formRef = ref<FormInstance>()
-const form = ref<PriceForm>({ inputCny: '', outputCny: '', cacheReadCny: '', cacheWriteCny: '' })
+const form = ref<PriceForm>({
+  inputCny: '',
+  outputCny: '',
+  cacheReadCny: '',
+  cacheWriteCny: '',
+  contextWindowTokens: '',
+  maxOutputTokens: '',
+})
 const isTokenModel = computed(() => props.model?.modelKind === 1)
 const isVideoModel = computed(() => props.model?.modelKind === 3)
 const dialogTitle = computed(() =>
@@ -49,6 +56,42 @@ const rules = computed<FormRules<PriceForm>>(() => ({
       trigger: 'blur',
     },
   ],
+  contextWindowTokens: [
+    {
+      validator: (_rule, value: string, callback: (error?: Error) => void) => {
+        const context = value.trim()
+        const output = form.value.maxOutputTokens.trim()
+        if (context === '' && output === '') return callback()
+        if (!/^\d+$/.test(context)) {
+          return callback(new Error(t('ai.officialModel.contextWindowRule')))
+        }
+        const tokens = Number(context)
+        if (tokens < 1024 || tokens > 10000000) {
+          return callback(new Error(t('ai.officialModel.contextWindowRule')))
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+  maxOutputTokens: [
+    {
+      validator: (_rule, value: string, callback: (error?: Error) => void) => {
+        const context = form.value.contextWindowTokens.trim()
+        const output = value.trim()
+        if (context === '' && output === '') return callback()
+        if (!/^\d+$/.test(output)) {
+          return callback(new Error(t('ai.officialModel.maxOutputRule')))
+        }
+        const tokens = Number(output)
+        if (tokens < 1 || tokens >= Number(context)) {
+          return callback(new Error(t('ai.officialModel.maxOutputRule')))
+        }
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
 }))
 
 watch(
@@ -60,6 +103,8 @@ watch(
       outputCny: props.model.outputCnyPerMillion,
       cacheReadCny: props.model.cacheReadCnyPerMillion ?? '',
       cacheWriteCny: props.model.cacheWriteCnyPerMillion ?? '',
+      contextWindowTokens: props.model.contextWindowTokens?.toString() ?? '',
+      maxOutputTokens: props.model.maxOutputTokens?.toString() ?? '',
     }
     void nextTick(() => formRef.value?.clearValidate())
   },
@@ -94,6 +139,8 @@ async function submit(): Promise<void> {
     outputCny: form.value.outputCny.trim(),
     cacheReadCny: form.value.cacheReadCny.trim(),
     cacheWriteCny: form.value.cacheWriteCny.trim(),
+    contextWindowTokens: form.value.contextWindowTokens.trim(),
+    maxOutputTokens: form.value.maxOutputTokens.trim(),
   })
 }
 </script>
@@ -199,9 +246,35 @@ async function submit(): Promise<void> {
               <template #append>¥ / M</template>
             </el-input>
           </el-form-item>
+          <el-form-item
+            prop="contextWindowTokens"
+            :label="t('ai.officialModel.contextWindowTokens')"
+          >
+            <el-input
+              v-model="form.contextWindowTokens"
+              inputmode="numeric"
+              :placeholder="t('ai.officialModel.contextWindowPlaceholder')"
+              data-testid="ai-official-model-context-window"
+            >
+              <template #append>tokens</template>
+            </el-input>
+          </el-form-item>
+          <el-form-item prop="maxOutputTokens" :label="t('ai.officialModel.maxOutputTokens')">
+            <el-input
+              v-model="form.maxOutputTokens"
+              inputmode="numeric"
+              :placeholder="t('ai.officialModel.contextWindowPlaceholder')"
+              data-testid="ai-official-model-max-output"
+            >
+              <template #append>tokens</template>
+            </el-input>
+          </el-form-item>
         </div>
         <p class="official-model-price-dialog__cache-note">
           {{ t('ai.officialModel.cacheHint') }}
+        </p>
+        <p class="official-model-price-dialog__cache-note">
+          {{ t('ai.officialModel.contextWindowHint') }}
         </p>
         <p class="official-model-price-dialog__ratio-note">
           {{ t('ai.officialModel.ratioNote') }}

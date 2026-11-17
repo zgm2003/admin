@@ -63,14 +63,15 @@ type StreamChunk struct {
 }
 
 type ProviderRequest struct {
-	Protocol     int16
-	BaseURL      string
-	APIKey       string
-	Model        string
-	SystemPrompt string
-	Messages     []ChatMessage
-	Tools        []ToolDefinition
-	Timeout      time.Duration
+	Protocol        int16
+	BaseURL         string
+	APIKey          string
+	Model           string
+	SystemPrompt    string
+	Messages        []ChatMessage
+	Tools           []ToolDefinition
+	MaxOutputTokens int
+	Timeout         time.Duration
 }
 
 type ProviderClient struct {
@@ -232,8 +233,12 @@ func (c *ProviderClient) streamOpenAI(ctx context.Context, request ProviderReque
 
 func (c *ProviderClient) streamAnthropic(ctx context.Context, request ProviderRequest) (<-chan StreamChunk, error) {
 	messages := anthropicMessages(request.Messages)
+	maxTokens := request.MaxOutputTokens
+	if maxTokens < 1 {
+		maxTokens = 4096
+	}
 	payload := map[string]any{
-		"model": request.Model, "max_tokens": 4096, "stream": true,
+		"model": request.Model, "max_tokens": maxTokens, "stream": true,
 		"messages": messages,
 	}
 	if strings.TrimSpace(request.SystemPrompt) != "" {
@@ -353,6 +358,9 @@ func (c *ProviderClient) streamAnthropic(ctx context.Context, request ProviderRe
 func (c *ProviderClient) streamGemini(ctx context.Context, request ProviderRequest) (<-chan StreamChunk, error) {
 	contents := geminiContents(request.Messages)
 	payload := map[string]any{"contents": contents}
+	if request.MaxOutputTokens > 0 {
+		payload["generationConfig"] = map[string]any{"maxOutputTokens": request.MaxOutputTokens}
+	}
 	if strings.TrimSpace(request.SystemPrompt) != "" {
 		payload["systemInstruction"] = map[string]any{"parts": []map[string]any{{"text": request.SystemPrompt}}}
 	}
@@ -460,6 +468,9 @@ func (c *ProviderClient) streamOpenAIResponses(ctx context.Context, request Prov
 	}
 	payload := map[string]any{
 		"model": request.Model, "input": input, "stream": true, "store": false,
+	}
+	if request.MaxOutputTokens > 0 {
+		payload["max_output_tokens"] = request.MaxOutputTokens
 	}
 	if strings.TrimSpace(request.SystemPrompt) != "" {
 		payload["instructions"] = request.SystemPrompt

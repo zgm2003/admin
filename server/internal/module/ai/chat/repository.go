@@ -33,9 +33,10 @@ func (r *Repository) ListAgents(ctx context.Context) ([]AgentRow, error) {
 	err := r.db.WithContext(ctx).
 		Table("ai_agent AS a").
 		Select(`a.id, a.name, a.description, a.avatar, a.scene, a.timeout_ms,
-			p.name AS provider_name, pm.display_name AS model_name`).
+			p.name AS provider_name, pm.display_name AS model_name, o.context_window_tokens`).
 		Joins("JOIN ai_provider_model pm ON pm.id = a.provider_model_id AND pm.deleted_at IS NULL").
 		Joins("JOIN ai_provider p ON p.id = pm.provider_id AND p.deleted_at IS NULL").
+		Joins("LEFT JOIN ai_official_model o ON o.id = pm.official_model_id").
 		Where(`a.deleted_at IS NULL AND a.status = 1 AND a.agent_type = 1 AND a.scene = 1
 			AND pm.status = 1 AND pm.model_kind = 1 AND pm.pricing_mode = 1
 			AND p.status = 1`).
@@ -48,9 +49,10 @@ func (r *Repository) FindAgent(ctx context.Context, id int64) (AgentRow, error) 
 	err := r.db.WithContext(ctx).
 		Table("ai_agent AS a").
 		Select(`a.id, a.name, a.description, a.avatar, a.scene, a.timeout_ms,
-			p.name AS provider_name, pm.display_name AS model_name`).
+			p.name AS provider_name, pm.display_name AS model_name, o.context_window_tokens`).
 		Joins("JOIN ai_provider_model pm ON pm.id = a.provider_model_id AND pm.deleted_at IS NULL").
-		Joins("JOIN ai_provider p ON p.id = pm.provider_id AND p.deleted_at IS NULL").
+		Joins("JOIN ai_provider p ON p.id = pm.provider_id AND pm.deleted_at IS NULL").
+		Joins("LEFT JOIN ai_official_model o ON o.id = pm.official_model_id").
 		Where(`a.id = ? AND a.deleted_at IS NULL AND a.status = 1 AND a.agent_type = 1 AND a.scene = 1
 			AND pm.status = 1 AND pm.model_kind = 1 AND pm.pricing_mode = 1 AND p.status = 1`, id).
 		Take(&row).Error

@@ -116,14 +116,15 @@ func (m Message) RunIDValue() int64 {
 
 // AgentRow is the lightweight agent projection used by conversation selection.
 type AgentRow struct {
-	ID           int64  `gorm:"column:id"`
-	Name         string `gorm:"column:name"`
-	Description  string `gorm:"column:description"`
-	Avatar       string `gorm:"column:avatar"`
-	Scene        int16  `gorm:"column:scene"`
-	ProviderName string `gorm:"column:provider_name"`
-	ModelName    string `gorm:"column:model_name"`
-	TimeoutMS    int32  `gorm:"column:timeout_ms"`
+	ID                  int64  `gorm:"column:id"`
+	Name                string `gorm:"column:name"`
+	Description         string `gorm:"column:description"`
+	Avatar              string `gorm:"column:avatar"`
+	Scene               int16  `gorm:"column:scene"`
+	ProviderName        string `gorm:"column:provider_name"`
+	ModelName           string `gorm:"column:model_name"`
+	TimeoutMS           int32  `gorm:"column:timeout_ms"`
+	ContextWindowTokens *int64 `gorm:"column:context_window_tokens"`
 }
 
 // ActiveRunSummary is a read-only projection of the run currently owning a

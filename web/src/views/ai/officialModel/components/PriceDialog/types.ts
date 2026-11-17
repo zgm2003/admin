@@ -3,4 +3,6 @@ export interface PriceForm {
   outputCny: string
   cacheReadCny: string
   cacheWriteCny: string
+  contextWindowTokens: string
+  maxOutputTokens: string
 }
