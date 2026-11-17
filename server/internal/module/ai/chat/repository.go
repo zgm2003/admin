@@ -264,26 +264,39 @@ func (r *Repository) HideMessagesFromSeqTx(ctx context.Context, tx *gorm.DB, con
 	return result.RowsAffected, nil
 }
 
-func (r *Repository) DeleteMessage(ctx context.Context, platformID, userID, messageID int64, now time.Time) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var row Message
+func (r *Repository) DeleteMessages(ctx context.Context, platformID, userID int64, messageIDs []int64, now time.Time) (int64, error) {
+	if len(messageIDs) == 0 {
+		return 0, ErrMessageNotFound
+	}
+	var deleted int64
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		rows := make([]Message, 0, len(messageIDs))
 		err := tx.WithContext(ctx).
 			Table("ai_chat_message AS m").
-			Select("m.*").
+			Select("m.id, m.conversation_id").
 			Joins("JOIN ai_chat_conversation AS c ON c.id = m.conversation_id").
-			Where(`m.id = ? AND c.platform_id = ? AND c.user_id = ? AND c.deleted_at IS NULL
-				AND m.deleted_at IS NULL`, messageID, platformID, userID).
+			Where(`m.id IN ? AND c.platform_id = ? AND c.user_id = ? AND c.deleted_at IS NULL
+				AND m.deleted_at IS NULL`, messageIDs, platformID, userID).
 			Clauses(clause.Locking{Strength: "UPDATE"}).
-			Take(&row).Error
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrMessageNotFound
-		}
+			Find(&rows).Error
 		if err != nil {
 			return err
 		}
+		if len(rows) != len(messageIDs) {
+			return ErrMessageNotFound
+		}
+		conversationIDs := make([]int64, 0, len(rows))
+		seen := make(map[int64]struct{}, len(rows))
+		for _, row := range rows {
+			if _, exists := seen[row.ConversationID]; exists {
+				continue
+			}
+			seen[row.ConversationID] = struct{}{}
+			conversationIDs = append(conversationIDs, row.ConversationID)
+		}
 		var active int64
 		if err := tx.WithContext(ctx).Table("ai_chat_run").
-			Where("conversation_id = ? AND status IN (1, 2)", row.ConversationID).
+			Where("conversation_id IN ? AND status IN (1, 2)", conversationIDs).
 			Count(&active).Error; err != nil {
 			return err
 		}
@@ -291,29 +304,34 @@ func (r *Repository) DeleteMessage(ctx context.Context, platformID, userID, mess
 			return ErrConversationBusy
 		}
 		result := tx.WithContext(ctx).Model(&Message{}).
-			Where("id = ? AND deleted_at IS NULL", row.ID).
+			Where("id IN ? AND deleted_at IS NULL", messageIDs).
 			Updates(map[string]any{"deleted_at": now, "updated_at": now})
 		if result.Error != nil {
 			return result.Error
 		}
-		if result.RowsAffected != 1 {
+		if result.RowsAffected != int64(len(messageIDs)) {
 			return ErrMessageNotFound
 		}
-		var lastMessageAt time.Time
-		if err := tx.WithContext(ctx).Model(&Message{}).
-			Select("COALESCE(MAX(created_at), ?)", now).
-			Where("conversation_id = ? AND deleted_at IS NULL", row.ConversationID).
-			Scan(&lastMessageAt).Error; err != nil {
+		if err := tx.WithContext(ctx).Exec(`
+			UPDATE ai_chat_conversation AS c
+			SET message_count = (
+					SELECT COUNT(*) FROM ai_chat_message AS m
+					WHERE m.conversation_id = c.id AND m.deleted_at IS NULL
+				),
+				last_message_at = COALESCE((
+					SELECT MAX(m.created_at) FROM ai_chat_message AS m
+					WHERE m.conversation_id = c.id AND m.deleted_at IS NULL
+				), c.last_message_at),
+				updated_at = ?,
+				version = c.version + 1
+			WHERE c.id IN ?
+		`, now, conversationIDs).Error; err != nil {
 			return err
 		}
-		return tx.WithContext(ctx).Model(&Conversation{}).Where("id = ?", row.ConversationID).
-			Updates(map[string]any{
-				"message_count":   gorm.Expr("GREATEST(message_count - 1, 0)"),
-				"last_message_at": lastMessageAt,
-				"updated_at":      now,
-				"version":         gorm.Expr("version + 1"),
-			}).Error
+		deleted = int64(len(rows))
+		return nil
 	})
+	return deleted, err
 }
 
 func (r *Repository) UpdateStreamingMessage(ctx context.Context, messageID int64, content, reasoning string, deliverySeq int64, now time.Time) error {

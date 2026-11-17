@@ -20,6 +20,6 @@ func RegisterAdminRoutes(routes *gin.RouterGroup, handler *Handler, authenticate
 	group.PATCH("/conversations/:id", authenticate, requirePermission(PermissionUpdate), handler.RenameConversation)
 	group.DELETE("/conversations/:id", authenticate, requirePermission(PermissionDelete), handler.DeleteConversation)
 	group.GET("/conversations/:id/messages", authenticate, requirePermission(PermissionDetail), handler.Messages)
-	group.DELETE("/messages/:id", authenticate, requirePermission(PermissionDelete), handler.DeleteMessage)
+	group.POST("/messages/batch-delete", authenticate, requirePermission(PermissionDelete), handler.DeleteMessages)
 	group.PUT("/messages/:id/feedback", authenticate, requirePermission(PermissionSend), handler.Feedback)
 }

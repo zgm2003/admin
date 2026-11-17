@@ -362,10 +362,12 @@ export const zhCN = {
   'ai.workbench.like': '点赞',
   'ai.workbench.dislike': '踩一踩',
   'ai.workbench.edit': '编辑',
-  'ai.workbench.deleteMessage': '删除消息',
-  'ai.workbench.deleteMessageConfirm':
-    '只删除这一条消息，不影响其他消息；运行日志仍会保留该消息。确定删除吗？',
-  'ai.workbench.deleteMessageSuccess': '消息已删除',
+  'ai.workbench.selectMessages': '选择消息',
+  'ai.workbench.selectMessagesTitle': '选择对话',
+  'ai.workbench.selectedCount': '已选 {count} 条',
+  'ai.workbench.deleteSelectedConfirm':
+    '确定删除选中的 {count} 条消息吗？只删除所选内容，其他消息不受影响；运行日志仍会保留。',
+  'ai.workbench.deleteSelectedSuccess': '已删除 {count} 条消息',
   'ai.workbench.editHint': '保存后会基于修改后的内容重新生成回复，原对话保留在运行日志中。',
   'ai.workbench.saveAndRegenerate': '保存并重新生成',
   'ai.workbench.editEmpty': '消息内容不能为空',

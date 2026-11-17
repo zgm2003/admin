@@ -130,22 +130,26 @@ func (h *Handler) Messages(c *gin.Context) {
 	response.OK(c, http.StatusOK, result)
 }
 
-func (h *Handler) DeleteMessage(c *gin.Context) {
+func (h *Handler) DeleteMessages(c *gin.Context) {
 	identity := mustIdentity(c)
-	id, err := validate.ParsePositiveInt64(c.Param("id"), "id")
+	var request deleteMessagesRequest
+	if err := validate.BindJSON(c, &request); err != nil {
+		response.Fail(c, err)
+		return
+	}
+	ids, err := request.ids()
+	if err != nil {
+		response.Fail(c, invalid(err))
+		return
+	}
+	deleted, err := h.service.DeleteMessages(c.Request.Context(), identity, ids)
 	if err != nil {
 		response.Fail(c, err)
 		return
 	}
-	if err = validate.RequireEmptyBody(c); err != nil {
-		response.Fail(c, err)
-		return
-	}
-	if err = h.service.DeleteMessage(c.Request.Context(), identity, id); err != nil {
-		response.Fail(c, err)
-		return
-	}
-	response.OK(c, http.StatusOK, struct{}{})
+	response.OK(c, http.StatusOK, struct {
+		Deleted int64 `json:"deleted"`
+	}{Deleted: deleted})
 }
 
 func (h *Handler) Feedback(c *gin.Context) {

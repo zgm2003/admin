@@ -89,7 +89,9 @@ const listError = ref('')
 const chatError = ref('')
 const searchKeyword = ref('')
 const feedbackBusyID = ref<number | null>(null)
-const deletingMessageID = ref<number | null>(null)
+const selectingMessages = ref(false)
+const selectedMessageIDs = ref<number[]>([])
+const deletingSelection = ref(false)
 const editingMessageId = ref<number | null>(null)
 const editContent = ref('')
 const editSaving = ref(false)
@@ -332,27 +334,68 @@ async function saveEdit(message: ChatMessage): Promise<void> {
   }
 }
 
-async function removeMessage(message: ChatMessage): Promise<void> {
-  if (!canDelete.value || streaming.value || deletingMessageID.value !== null) return
+const selectedCount = computed(() => selectedMessageIDs.value.length)
+
+function isMessageSelected(messageID: number): boolean {
+  return selectedMessageIDs.value.includes(messageID)
+}
+
+function startMessageSelection(message: ChatMessage): void {
+  if (!canDelete.value || streaming.value || editSaving.value) return
+  cancelEdit()
+  selectingMessages.value = true
+  selectedMessageIDs.value = [message.id]
+}
+
+function toggleMessageSelection(messageID: number): void {
+  if (!selectingMessages.value) return
+  const ids = new Set(selectedMessageIDs.value)
+  if (ids.has(messageID)) ids.delete(messageID)
+  else ids.add(messageID)
+  selectedMessageIDs.value = [...ids]
+}
+
+function onMessageRowClick(message: ChatMessage): void {
+  if (!selectingMessages.value) return
+  toggleMessageSelection(message.id)
+}
+
+function cancelMessageSelection(): void {
+  if (deletingSelection.value) return
+  selectingMessages.value = false
+  selectedMessageIDs.value = []
+}
+
+async function deleteSelectedMessages(): Promise<void> {
+  if (!canDelete.value || deletingSelection.value || selectedMessageIDs.value.length === 0) {
+    return
+  }
+  const ids = [...selectedMessageIDs.value]
   try {
-    await ElMessageBox.confirm(t('ai.workbench.deleteMessageConfirm'), t('confirm.title'), {
-      type: 'warning',
-      confirmButtonText: t('common.delete'),
-      cancelButtonText: t('common.cancel'),
-    })
-    deletingMessageID.value = message.id
-    await api.deleteMessage(message.id)
+    await ElMessageBox.confirm(
+      t('ai.workbench.deleteSelectedConfirm', { count: ids.length }),
+      t('confirm.title'),
+      {
+        type: 'warning',
+        confirmButtonText: t('common.delete'),
+        cancelButtonText: t('common.cancel'),
+      },
+    )
+    deletingSelection.value = true
+    await api.deleteMessages(ids)
     const state = session.value
     if (state !== null) {
-      state.messages = state.messages.filter((item) => item.id !== message.id)
+      const removed = new Set(ids)
+      state.messages = state.messages.filter((item) => !removed.has(item.id))
     }
-    if (editingMessageId.value === message.id) cancelEdit()
+    selectingMessages.value = false
+    selectedMessageIDs.value = []
     void loadConversations(false)
-    ElMessage.success(t('ai.workbench.deleteMessageSuccess'))
+    ElMessage.success(t('ai.workbench.deleteSelectedSuccess', { count: ids.length }))
   } catch {
     // cancelled or request failed
   } finally {
-    deletingMessageID.value = null
+    deletingSelection.value = false
   }
 }
 
@@ -921,6 +964,8 @@ watch(activeId, () => {
   attachments.value = []
   editingMessageId.value = null
   editContent.value = ''
+  selectingMessages.value = false
+  selectedMessageIDs.value = []
 })
 
 watch(
@@ -1059,7 +1104,7 @@ onBeforeUnmount(() => {
       @dragleave.prevent="onDragLeave"
       @drop.prevent="onDropAttachments"
     >
-      <header class="ai-workbench__head">
+      <header v-if="!selectingMessages" class="ai-workbench__head">
         <div class="ai-workbench__head-copy">
           <strong>{{ activeConversation?.title || t('ai.workbench.welcome') }}</strong>
           <span v-if="activeConversation">{{ t('ai.workbench.contextSwitchHint') }}</span>
@@ -1072,6 +1117,16 @@ onBeforeUnmount(() => {
           <small>{{ t('ai.workbench.balance') }}</small>
           <strong>¥{{ balanceText }}</strong>
         </div>
+      </header>
+      <header v-else class="ai-workbench__head ai-workbench__head--selection">
+        <strong>{{ t('ai.workbench.selectMessagesTitle') }}</strong>
+        <button
+          type="button"
+          class="ai-workbench__selection-cancel"
+          @click="cancelMessageSelection"
+        >
+          {{ t('common.cancel') }}
+        </button>
       </header>
 
       <div v-if="balance && !balance.canSend" class="ai-workbench__alert">
@@ -1150,9 +1205,23 @@ onBeforeUnmount(() => {
               'is-user': message.role === 1,
               'is-assistant': message.role === 2,
               'is-editing': editingMessageId === message.id,
+              'is-selecting': selectingMessages,
+              'is-selected': selectingMessages && isMessageSelected(message.id),
             }"
+            @click="onMessageRowClick(message)"
           >
-            <span v-if="message.role === 2" class="ai-workbench__message-mark">
+            <label v-if="selectingMessages" class="ai-workbench__selection-check" @click.stop>
+              <input
+                type="checkbox"
+                :checked="isMessageSelected(message.id)"
+                :aria-label="t('ai.workbench.selectMessages')"
+                @change="toggleMessageSelection(message.id)"
+              />
+            </label>
+            <span
+              v-if="message.role === 2 && !selectingMessages"
+              class="ai-workbench__message-mark"
+            >
               <el-icon :size="15"><ChatDotRound /></el-icon>
             </span>
             <div class="ai-workbench__message-column">
@@ -1300,7 +1369,10 @@ onBeforeUnmount(() => {
                   {{ t('ai.workbench.messageFailed') }}
                 </div>
               </div>
-              <div v-if="editingMessageId !== message.id" class="ai-workbench__message-footer">
+              <div
+                v-if="!selectingMessages && editingMessageId !== message.id"
+                class="ai-workbench__message-footer"
+              >
                 <span
                   class="ai-workbench__message-time"
                   :title="formatMessageFullTime(message.createdAt)"
@@ -1375,7 +1447,7 @@ onBeforeUnmount(() => {
                   </template>
                   <el-tooltip
                     v-if="canDelete"
-                    :content="t('ai.workbench.deleteMessage')"
+                    :content="t('ai.workbench.selectMessages')"
                     placement="top"
                     :show-after="300"
                   >
@@ -1384,9 +1456,9 @@ onBeforeUnmount(() => {
                       circle
                       size="small"
                       class="ai-workbench__message-delete"
-                      :disabled="streaming || sending || deletingMessageID !== null"
-                      :aria-label="t('ai.workbench.deleteMessage')"
-                      @click="removeMessage(message)"
+                      :disabled="streaming || sending"
+                      :aria-label="t('ai.workbench.selectMessages')"
+                      @click.stop="startMessageSelection(message)"
                     >
                       <Trash2 :size="13" aria-hidden="true" />
                     </el-button>
@@ -1399,7 +1471,7 @@ onBeforeUnmount(() => {
       </div>
 
       <button
-        v-if="!followBottom && !showWelcome"
+        v-if="!followBottom && !showWelcome && !selectingMessages"
         type="button"
         class="ai-workbench__to-bottom"
         @click="scrollToBottom"
@@ -1407,7 +1479,20 @@ onBeforeUnmount(() => {
         {{ t('ai.workbench.toBottom') }}
       </button>
 
-      <footer v-if="!showEmpty" class="ai-workbench__composer">
+      <footer v-if="selectingMessages" class="ai-workbench__selection-footer">
+        <span>{{ t('ai.workbench.selectedCount', { count: selectedCount }) }}</span>
+        <el-button
+          type="danger"
+          :disabled="selectedCount === 0"
+          :loading="deletingSelection"
+          @click="deleteSelectedMessages"
+        >
+          {{ t('common.delete') }}
+          <template v-if="selectedCount > 0">({{ selectedCount }})</template>
+        </el-button>
+      </footer>
+
+      <footer v-if="!showEmpty && !selectingMessages" class="ai-workbench__composer">
         <div class="ai-workbench__composer-shell" :class="{ 'is-dragging': dragActive }">
           <input
             ref="attachmentInput"
@@ -2181,6 +2266,39 @@ onBeforeUnmount(() => {
   color: #dc2626;
 }
 
+.ai-workbench__head--selection {
+  justify-content: space-between;
+}
+
+.ai-workbench__selection-cancel {
+  padding: 4px 6px;
+  border: 0;
+  color: #64748b;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ai-workbench__selection-cancel:hover {
+  color: var(--el-color-primary);
+}
+
+.ai-workbench__selection-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-top: 1px solid #edf0f4;
+  background: #fff;
+}
+
+.ai-workbench__selection-footer > span {
+  color: #667085;
+  font-size: 12px;
+}
+
 .ai-workbench__alert {
   padding: 10px 20px 0;
 }
@@ -2332,6 +2450,57 @@ onBeforeUnmount(() => {
 
 .ai-workbench__message.is-user {
   justify-content: flex-end;
+}
+
+.ai-workbench__message.is-selecting {
+  position: relative;
+  padding: 10px 12px 10px 42px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.ai-workbench__message.is-selecting:hover {
+  background: #f7faff;
+}
+
+.ai-workbench__message.is-selected {
+  background: #f1f6ff;
+}
+
+.ai-workbench__message.is-selected:hover {
+  background: #eaf2ff;
+}
+
+.ai-workbench__selection-check {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  cursor: pointer;
+}
+
+.ai-workbench__selection-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--el-color-primary);
+  cursor: pointer;
+}
+
+.ai-workbench__message.is-selecting .ai-workbench__message-body,
+.ai-workbench__message.is-selecting .ai-workbench__message-agent,
+.ai-workbench__message.is-selecting .ai-workbench__message-mark {
+  pointer-events: none;
+  user-select: none;
+}
+
+.ai-workbench__message.is-selecting .ai-workbench__message-agent,
+.ai-workbench__message.is-selecting .ai-workbench__message-mark {
+  display: none;
 }
 
 .ai-workbench__message-column {
@@ -2985,6 +3154,10 @@ onBeforeUnmount(() => {
 
   .ai-workbench__composer {
     padding: 10px 20px 16px;
+  }
+
+  .ai-workbench__selection-footer {
+    padding: 10px 20px;
   }
 }
 

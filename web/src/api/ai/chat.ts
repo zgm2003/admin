@@ -206,8 +206,10 @@ export function deleteConversation(id: number): Promise<Record<string, never>> {
   return request.delete<Record<string, never>>(`${base}/conversations/${id}`)
 }
 
-export function deleteMessage(id: number): Promise<Record<string, never>> {
-  return request.delete<Record<string, never>>(`${base}/messages/${id}`)
+export function deleteMessages(ids: number[]): Promise<{ deleted: number }> {
+  return request.post<{ deleted: number }, { ids: number[] }>(`${base}/messages/batch-delete`, {
+    ids,
+  })
 }
 
 export function getMessages(

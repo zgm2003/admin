@@ -138,14 +138,17 @@ func (s *Service) Feedback(ctx context.Context, identity auth.Identity, messageI
 	return feedback, nil
 }
 
-func (s *Service) DeleteMessage(ctx context.Context, identity auth.Identity, messageID int64) error {
+func (s *Service) DeleteMessages(ctx context.Context, identity auth.Identity, messageIDs []int64) (int64, error) {
 	if s == nil || s.repo == nil {
-		return dependency(errors.New("chat service is not configured"))
+		return 0, dependency(errors.New("chat service is not configured"))
 	}
-	if messageID < 1 {
-		return invalid(errors.New("messageId is invalid"))
+	if len(messageIDs) == 0 || len(messageIDs) > maxDeleteMessages {
+		return 0, invalid(errors.New("messageIds are invalid"))
 	}
-	return mapError(s.repo.DeleteMessage(ctx, identity.PlatformID, identity.UserID, messageID, s.now().UTC()))
+	deleted, err := s.repo.DeleteMessages(
+		ctx, identity.PlatformID, identity.UserID, messageIDs, s.now().UTC(),
+	)
+	return deleted, mapError(err)
 }
 
 func (s *Service) Balance(ctx context.Context, userID int64) (BalanceValue, error) {

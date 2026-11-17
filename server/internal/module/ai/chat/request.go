@@ -10,11 +10,37 @@ import (
 	"admin/server/internal/shared/pagination"
 )
 
-const maxTitleRunes = 128
+const (
+	maxTitleRunes     = 128
+	maxDeleteMessages = 100
+)
 
 type CreateConversationInput struct {
 	AgentID int64
 	Title   string
+}
+
+type deleteMessagesRequest struct {
+	IDs []int64 `json:"ids"`
+}
+
+func (r deleteMessagesRequest) ids() ([]int64, error) {
+	if len(r.IDs) == 0 || len(r.IDs) > maxDeleteMessages {
+		return nil, fmt.Errorf("ids must contain between 1 and %d messages", maxDeleteMessages)
+	}
+	ids := make([]int64, 0, len(r.IDs))
+	seen := make(map[int64]struct{}, len(r.IDs))
+	for _, id := range r.IDs {
+		if id < 1 {
+			return nil, fmt.Errorf("message id is invalid")
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 type feedbackRequest struct {
