@@ -1876,7 +1876,7 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 定价边界：官方模型目录只维护对话模型的官方 token 价，供应商倍率只作用于对话模型；图片、视频、音频模型不进入官方目录，价格只在供应商模型的“供应商单位价格”里维护（image / second / request）。
 - 官方目录 `server/internal/module/ai/officialModel/catalog/official-models.json` 移除 4 个 `gpt-image` 与 4 个 Seedance 视频模型，目录版本升级为 `multi-vendor-2026-11-18-chat-only`，当前 51 个对话模型（OpenAI 37 / Anthropic 7 / Google 7）。
 - 目录解析只接受 `modelKind=1`，出现媒体模型或 `videoPrices` 字段会直接报错；后端删除 `VideoPrice` 模型、响应字段、仓储预加载和同步写入逻辑；`safeValue` 只接受 `model_kind=1`。
-- 迁移 `docs/database/2026-11-18-ai-official-model-chat-only.sql` 已在真实 PostgreSQL 执行：删除 4 个媒体官方模型与 20 条官方媒体价，剩余 51 个对话模型；`ai_official_model_price` 保留为空表待后续确认是否删除。`docs/database/current.sql` 已重新导出。
+- 迁移 `docs/database/2026-11-18-ai-official-model-chat-only.sql` 已在真实 PostgreSQL 执行：删除 4 个媒体官方模型与 20 条官方媒体价，剩余 51 个对话模型。随后执行 `docs/database/2026-11-18-ai-drop-official-model-price.sql` 删除已清空的 `ai_official_model_price` 表（无外键、无代码引用），`ai_*` 表由 14 张变为 13 张。`docs/database/current.sql` 已重新导出。
 - 前端官方模型页移除“官方视频价”列、模型类型标签、媒体价格提示与相关分支；价格弹窗只保留对话模型字段；API 类型与中英文文案同步清理。
 - 验证：`go build ./internal/module/ai/... ./cmd/api`、`go vet ./internal/module/ai/officialModel ./cmd/api`、`go test ./internal/module/ai/officialModel -count=1`、`pnpm typecheck`、定向 ESLint、`pnpm build` 通过；API 已重启，页面刷新后官方模型为 51 条对话模型。
 - 下一步：在供应商「测试」下同步或新增 `gpt-image` 模型，设置类型=图片、计费模式=供应商单位价格、单位=张并配置价格档位；之后再建生图/生视频工作台菜单与运行时。
