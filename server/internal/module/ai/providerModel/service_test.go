@@ -8,7 +8,7 @@ import (
 
 	"admin/server/internal/module/ai/pricing"
 	aiprovider "admin/server/internal/module/ai/provider"
-	"admin/server/pkg/yesno"
+	"admin/server/internal/shared/yesno"
 )
 
 func TestListUpstreamModelsByProtocol(t *testing.T) {
