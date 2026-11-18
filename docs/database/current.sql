@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict wHr5MxgISPRYxv7gogUe7whMsbt6ffhSGpc1NkvxVFtHuPqV8lC9xlmO4f21bH8
+\restrict kcQ96b6X5b39ZwHcxdwGYPtChzO8gTGd4ZqtGhlacfp9gTrcRLWAx5trkWMh6o4
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -602,7 +602,7 @@ CREATE TABLE public.ai_official_model (
 -- Name: TABLE ai_official_model; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.ai_official_model IS 'AI 官方模型价格目录；官方价为美元/1M tokens，系统价为人民币/1M tokens';
+COMMENT ON TABLE public.ai_official_model IS '官方对话模型目录；只维护对话模型官方 token 价，图片/视频/音频价格由供应商模型单位价维护';
 
 
 --
@@ -658,7 +658,7 @@ COMMENT ON COLUMN public.ai_official_model.vendor IS '厂商：1=OpenAI，2=Anth
 -- Name: COLUMN ai_official_model.model_kind; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.ai_official_model.model_kind IS '模型类型：1=聊天，2=图片，3=视频，4=音频';
+COMMENT ON COLUMN public.ai_official_model.model_kind IS '模型类型固定为 1=对话；媒体模型不进入官方目录';
 
 
 --
@@ -730,6 +730,13 @@ CREATE TABLE public.ai_official_model_price (
     CONSTRAINT ai_official_model_price_unit_check CHECK (((unit)::text = ANY (ARRAY['second'::text, 'minute'::text, 'item'::text]))),
     CONSTRAINT ai_official_model_price_version_check CHECK ((version >= 1))
 );
+
+
+--
+-- Name: TABLE ai_official_model_price; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.ai_official_model_price IS '历史官方媒体价表，已停用；媒体价格由供应商模型单位价维护';
 
 
 --
@@ -5739,5 +5746,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict wHr5MxgISPRYxv7gogUe7whMsbt6ffhSGpc1NkvxVFtHuPqV8lC9xlmO4f21bH8
+\unrestrict kcQ96b6X5b39ZwHcxdwGYPtChzO8gTGd4ZqtGhlacfp9gTrcRLWAx5trkWMh6o4
 

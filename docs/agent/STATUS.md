@@ -1870,3 +1870,13 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - AI 上下文预算 v1（2026-11-17）：官方模型新增 `context_window_tokens` / `max_output_tokens`，模型配置弹窗可按官方值维护；官方目录 JSON 和同步逻辑同步携带上下文参数，当前 51 个聊天模型已写入官方窗口，4 个视频模型保持为空；聊天 Agent DTO 返回上下文窗口，官方模型列表在模型名下展示“上下文窗口 / 输出”。执行器不再按字符从旧到新截断，改为先保留当前用户消息，再从最新历史向旧消息填充 token 预算，历史上限仍为 40 条；系统提示词、工具定义、图片和附件文本都计入预算，当前消息附件超限时只截断附件文本。运行事件新增 `context`，记录窗口、预算、估算 token、保留/丢弃消息数和是否超预算。工作台头部展示最近一次请求的上下文占用 token 数（含缓存命中）。同时过滤上游返回的零宽推理占位，不再显示没有内容的“已思考”块。迁移 `docs/database/2026-11-17-ai-context-window.sql` 已执行，`current.sql` 已刷新。验证：上下文单元测试、后端 AI 模块 tests/vet、前端 typecheck/ESLint/build，以及真实对话的 `context` 事件和 UI 占用显示通过。自动摘要、长期记忆和跨会话记忆尚未实现。
 - 登录页移除“仅限已授权账号访问”多余脚注及对应无用文案。
 - 验证：真实接口运行日志返回 userMessage/assistantMessage，反馈 1/-1/0 写入并读取，非法附件 objectKey 返回 400；provider 单测校验图片 content parts；AI Go 包测试、`go vet`、前端 typecheck、ESLint 和 `pnpm build` 通过。
+
+### AI 官方模型收敛为对话模型（2026-11-18）
+
+- 定价边界：官方模型目录只维护对话模型的官方 token 价，供应商倍率只作用于对话模型；图片、视频、音频模型不进入官方目录，价格只在供应商模型的“供应商单位价格”里维护（image / second / request）。
+- 官方目录 `server/internal/module/ai/officialModel/catalog/official-models.json` 移除 4 个 `gpt-image` 与 4 个 Seedance 视频模型，目录版本升级为 `multi-vendor-2026-11-18-chat-only`，当前 51 个对话模型（OpenAI 37 / Anthropic 7 / Google 7）。
+- 目录解析只接受 `modelKind=1`，出现媒体模型或 `videoPrices` 字段会直接报错；后端删除 `VideoPrice` 模型、响应字段、仓储预加载和同步写入逻辑；`safeValue` 只接受 `model_kind=1`。
+- 迁移 `docs/database/2026-11-18-ai-official-model-chat-only.sql` 已在真实 PostgreSQL 执行：删除 4 个媒体官方模型与 20 条官方媒体价，剩余 51 个对话模型；`ai_official_model_price` 保留为空表待后续确认是否删除。`docs/database/current.sql` 已重新导出。
+- 前端官方模型页移除“官方视频价”列、模型类型标签、媒体价格提示与相关分支；价格弹窗只保留对话模型字段；API 类型与中英文文案同步清理。
+- 验证：`go build ./internal/module/ai/... ./cmd/api`、`go vet ./internal/module/ai/officialModel ./cmd/api`、`go test ./internal/module/ai/officialModel -count=1`、`pnpm typecheck`、定向 ESLint、`pnpm build` 通过；API 已重启，页面刷新后官方模型为 51 条对话模型。
+- 下一步：在供应商「测试」下同步或新增 `gpt-image` 模型，设置类型=图片、计费模式=供应商单位价格、单位=张并配置价格档位；之后再建生图/生视频工作台菜单与运行时。
