@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict k5gBRMBTPARTepI1rXwuhcyDoW3Lnfgr37BFpqEWwEpg0ZU72C1fyANfXi8gqjm
+\restrict UEOFkMzQu5W5H9fjzAFatiEcKQaAcimoG2MPKspJcKbdsFMhwC1Yb5mxo78Wyr9
 
 -- Dumped from database version 18.6
 -- Dumped by pg_dump version 18.6
@@ -189,11 +189,11 @@ CREATE TABLE public.ai_agent (
     scene smallint DEFAULT 1 NOT NULL,
     timeout_ms integer DEFAULT 60000 NOT NULL,
     avatar character varying(512) DEFAULT ''::character varying NOT NULL,
-    CONSTRAINT ai_agent_agent_type_check CHECK ((agent_type = ANY (ARRAY[1, 2, 3, 4]))),
+    CONSTRAINT ai_agent_agent_type_check CHECK ((agent_type = ANY (ARRAY[1, 2, 3]))),
     CONSTRAINT ai_agent_avatar_check CHECK ((length((avatar)::text) <= 512)),
     CONSTRAINT ai_agent_description_check CHECK ((length((description)::text) <= 500)),
     CONSTRAINT ai_agent_name_check CHECK (((length((name)::text) >= 1) AND (length((name)::text) <= 128))),
-    CONSTRAINT ai_agent_scene_check CHECK ((scene = ANY (ARRAY[1, 2, 3, 4, 5]))),
+    CONSTRAINT ai_agent_scene_check CHECK ((scene = ANY (ARRAY[1, 2, 3, 4]))),
     CONSTRAINT ai_agent_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
     CONSTRAINT ai_agent_system_prompt_check CHECK (((length(system_prompt) >= 1) AND (length(system_prompt) <= 20000))),
     CONSTRAINT ai_agent_timeout_ms_check CHECK (((timeout_ms >= 1000) AND (timeout_ms <= 300000))),
@@ -817,8 +817,8 @@ CREATE TABLE public.ai_provider_model (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     deleted_at timestamp with time zone,
-    CONSTRAINT ai_provider_model_model_kind_check CHECK ((model_kind = ANY (ARRAY[1, 2, 3, 4]))),
-    CONSTRAINT ai_provider_model_price_unit_check CHECK ((price_unit = ANY (ARRAY[1, 2, 3, 4, 5, 6]))),
+    CONSTRAINT ai_provider_model_model_kind_check CHECK ((model_kind = ANY (ARRAY[1, 2, 3]))),
+    CONSTRAINT ai_provider_model_price_unit_check CHECK ((price_unit = ANY (ARRAY[1, 2, 3]))),
     CONSTRAINT ai_provider_model_pricing_mode_check CHECK ((pricing_mode = ANY (ARRAY[1, 2]))),
     CONSTRAINT ai_provider_model_source_check CHECK ((source = ANY (ARRAY[1, 2]))),
     CONSTRAINT ai_provider_model_status_check CHECK ((status = ANY (ARRAY[0, 1]))),
@@ -5670,5 +5670,5 @@ ALTER TABLE ONLY public.message_mail_rate_limit_policy
 -- PostgreSQL database dump complete
 --
 
-\unrestrict k5gBRMBTPARTepI1rXwuhcyDoW3Lnfgr37BFpqEWwEpg0ZU72C1fyANfXi8gqjm
+\unrestrict UEOFkMzQu5W5H9fjzAFatiEcKQaAcimoG2MPKspJcKbdsFMhwC1Yb5mxo78Wyr9
 

@@ -63,9 +63,6 @@ const priceUnits = computed(() => {
   }
   if (form.value.modelKind === 2) return props.options.priceUnits.filter((item) => item.value === 2)
   if (form.value.modelKind === 3) return props.options.priceUnits.filter((item) => item.value === 3)
-  if (form.value.modelKind === 4) {
-    return props.options.priceUnits.filter((item) => [4, 5, 6].includes(item.value))
-  }
   return props.options.priceUnits.filter((item) => item.value === 1)
 })
 const rules = computed<FormRules<typeof form.value>>(() => ({
@@ -95,7 +92,9 @@ watch(
       form.value.pricingMode = 1
       form.value.priceUnit = 1
       prices.value = []
-    } else if (form.value.pricingMode === 2 && prices.value.length === 0) {
+    } else if (form.value.pricingMode !== 2) {
+      form.value.pricingMode = 2
+    } else if (prices.value.length === 0) {
       defaultTiers()
     }
     localError.value = ''
@@ -126,6 +125,8 @@ watch(
       form.value.pricingMode = 1
       form.value.priceUnit = 1
       prices.value = []
+    } else if (form.value.pricingMode === 1) {
+      form.value.pricingMode = 2
     }
     if (form.value.pricingMode === 1) {
       form.value.priceUnit = 1
@@ -135,6 +136,7 @@ watch(
       }
       return
     }
+    form.value.officialModelId = null
     form.value.priceUnit = unitForKind(kind)
     if (kindChanged) {
       prices.value = []
@@ -146,7 +148,6 @@ watch(
 function unitForKind(kind: number): number {
   if (kind === 2) return 2
   if (kind === 3) return 3
-  if (kind === 4) return 5
   return 2
 }
 

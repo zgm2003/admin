@@ -129,8 +129,6 @@ func sceneName(ctx context.Context, scene Scene) string {
 		return option.New(ctx, scene, "生图", "Image generation").Label
 	case SceneVideoGeneration:
 		return option.New(ctx, scene, "视频生成", "Video generation").Label
-	case SceneAudioGeneration:
-		return option.New(ctx, scene, "音频生成", "Audio generation").Label
 	default:
 		return option.New(ctx, scene, "对话", "Conversation").Label
 	}
@@ -142,8 +140,6 @@ func agentTypeName(ctx context.Context, kind pricing.ModelKind) string {
 		return option.New(ctx, kind, "图片", "Image").Label
 	case pricing.KindVideo:
 		return option.New(ctx, kind, "视频", "Video").Label
-	case pricing.KindAudio:
-		return option.New(ctx, kind, "音频", "Audio").Label
 	default:
 		return option.New(ctx, kind, "对话", "Chat").Label
 	}

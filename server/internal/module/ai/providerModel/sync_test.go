@@ -100,8 +100,8 @@ func TestSyncMatchesOfficialModelsAndDefaultsUnmatched(t *testing.T) {
 		repo.items[1].Status != yesno.No {
 		t.Fatalf("video item = %+v", repo.items[1])
 	}
-	if repo.items[2].OfficialModelID != nil || repo.items[2].PricingMode != pricing.ModeProviderUnit ||
-		repo.items[2].Status != yesno.No {
+	if repo.items[2].OfficialModelID != nil || repo.items[2].PricingMode != pricing.ModeOfficialToken ||
+		repo.items[2].PriceUnit != pricing.UnitMillionTokens || repo.items[2].Status != yesno.No {
 		t.Fatalf("unmatched item = %+v", repo.items[2])
 	}
 }

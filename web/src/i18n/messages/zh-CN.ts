@@ -263,7 +263,7 @@ export const zhCN = {
   'ai.providerModel.empty': '暂无模型，先拉取上游模型',
   'ai.providerModel.unmatched': '未匹配官方模型',
   'ai.providerModel.hint':
-    'Token 模型按官方价 × 供应商 Token 倍率；图片/视频/音频按供应商模型价格直接计费。',
+    'Token 模型按官方价 × 供应商 Token 倍率；图片/视频按供应商模型价格直接计费。',
   'ai.providerModel.displayName': '显示名称',
   'ai.providerModel.displayNameRequired': '请输入显示名称',
   'ai.providerModel.editTitle': '配置模型 · {name}',
@@ -273,10 +273,10 @@ export const zhCN = {
   'ai.providerModel.enabled': '启用',
   'ai.providerModel.disabled': '停用',
   'ai.providerModel.tokenHint':
-    'Token 模式使用官方目录价格，并乘以供应商的 Token 倍率；图片/视频/音频请使用供应商单位价格。',
+    'Token 模式使用官方目录价格，并乘以供应商的 Token 倍率；图片/视频请使用供应商单位价格。',
   'ai.providerModel.prices': '供应商价格',
   'ai.providerModel.pricesHint':
-    '图片按质量档位设置每张价格，视频按分辨率设置每秒价格，音频按单位设置；媒体模型直接按次数/时长计费，不使用倍率。',
+    '图片按质量档位设置每张价格，视频按分辨率设置每秒价格；媒体模型直接按单位计费，不使用倍率。',
   'ai.providerModel.addTier': '添加档位',
   'ai.providerModel.tierKey': '档位 key，例如 quality:medium',
   'ai.providerModel.tierLabel': '档位名称',

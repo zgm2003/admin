@@ -254,14 +254,12 @@ func (s *Service) Options(ctx context.Context) (Options, error) {
 			option.New(ctx, pricing.KindChat, "对话", "Chat"),
 			option.New(ctx, pricing.KindImage, "图片", "Image"),
 			option.New(ctx, pricing.KindVideo, "视频", "Video"),
-			option.New(ctx, pricing.KindAudio, "音频", "Audio"),
 		},
 		Scenes: []option.Option[Scene]{
 			option.New(ctx, SceneConversation, "对话", "Conversation"),
 			option.New(ctx, SceneToolGeneration, "工具生成", "Tool generation"),
 			option.New(ctx, SceneImageGeneration, "生图", "Image generation"),
 			option.New(ctx, SceneVideoGeneration, "视频生成", "Video generation"),
-			option.New(ctx, SceneAudioGeneration, "音频生成", "Audio generation"),
 		},
 		Statuses: []option.Option[yesno.Value]{
 			option.New(ctx, yesno.No, "停用", "Disabled"),

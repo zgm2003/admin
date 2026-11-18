@@ -1880,3 +1880,13 @@ refresh 首次设密标记；真实 PostgreSQL/Redis 并发与故障回归。另
 - 前端官方模型页移除“官方视频价”列、模型类型标签、媒体价格提示与相关分支；价格弹窗只保留对话模型字段；API 类型与中英文文案同步清理。
 - 验证：`go build ./internal/module/ai/... ./cmd/api`、`go vet ./internal/module/ai/officialModel ./cmd/api`、`go test ./internal/module/ai/officialModel -count=1`、`pnpm typecheck`、定向 ESLint、`pnpm build` 通过；API 已重启，页面刷新后官方模型为 51 条对话模型。
 - 下一步：在供应商「测试」下同步或新增 `gpt-image` 模型，设置类型=图片、计费模式=供应商单位价格、单位=张并配置价格档位；之后再建生图/生视频工作台菜单与运行时。
+
+### AI 移除音频类型（2026-11-18）
+
+- 产品决定：AI 模块只保留对话、图片、视频三类，音频类型与“音频生成”场景全系统移除。
+- 后端：`pricing.KindAudio`、`UnitMinute`、`UnitMillionCharacters`、`UnitRequest` 删除；模型类型有效值 1-3，计价单位只剩百万 Token / 张 / 秒；`agent.SceneAudioGeneration` 删除，场景有效值 1-4。
+- 同步默认：未匹配上游模型从“对话 + 供应商单位价 + 次”改为“对话 + 官方 Token + 停用”，避免再写入音频单位；`defaultPricingForKind` 只覆盖对话/图片/视频。
+- 迁移 `docs/database/2026-11-18-ai-remove-audio-type.sql` 已执行：清理 0 条音频智能体/模型，修正 1 条历史模型 `codex-auto-review`（对话 + 供应商单位价 + 次 → 对话 Token + 停用），收紧四个 CHECK 约束（agent_type 1-3、scene 1-4、model_kind 1-3、price_unit 1-3）。`docs/database/current.sql` 已重新导出。
+- 前端：供应商模型类型/单位下拉由后端 options 驱动，自动只剩三类；模型配置弹窗删除音频单位过滤与默认单位分支；中英文提示文案去掉“音频/audio”。
+- 验证：`go build ./internal/module/ai/... ./cmd/api`、`go test ./internal/module/ai/pricing ./internal/module/ai/providerModel ./internal/module/ai/agent`、`pnpm typecheck`、定向 ESLint、`pnpm build` 通过；API 已重启（health/ready 200）。
+- 未动：`canvas` 的音频节点与文件管理的 `audio` 文件分类，它们不属于 AI 类型体系。

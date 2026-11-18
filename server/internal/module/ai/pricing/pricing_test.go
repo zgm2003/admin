@@ -45,9 +45,6 @@ func TestCalculateUnit(t *testing.T) {
 	}{
 		{"image", UnitImage, 2, 300000, 600000},
 		{"video seconds", UnitSecond, 16, 500000, 8000000},
-		{"tts million chars", UnitMillionCharacters, 2500000, 5000000, 12500000},
-		{"stt minutes", UnitMinute, 3, 20000, 60000},
-		{"request", UnitRequest, 4, 1000, 4000},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -281,7 +281,7 @@ export const enUS = {
   'ai.providerModel.empty': 'No models yet. Pull the upstream list first.',
   'ai.providerModel.unmatched': 'No official match',
   'ai.providerModel.hint':
-    'Token models use official price × provider token multiplier; image/video/audio use provider unit prices.',
+    'Token models use official price × provider token multiplier; image/video use provider unit prices.',
   'ai.providerModel.displayName': 'Display name',
   'ai.providerModel.displayNameRequired': 'Enter a display name',
   'ai.providerModel.editTitle': 'Configure model · {name}',
@@ -291,10 +291,10 @@ export const enUS = {
   'ai.providerModel.enabled': 'Enabled',
   'ai.providerModel.disabled': 'Disabled',
   'ai.providerModel.tokenHint':
-    'Token mode uses official catalog prices multiplied by the provider token multiplier. Use provider unit prices for image/video/audio.',
+    'Token mode uses official catalog prices multiplied by the provider token multiplier. Use provider unit prices for image/video.',
   'ai.providerModel.prices': 'Provider prices',
   'ai.providerModel.pricesHint':
-    'Set image prices per image by quality, video prices per second by resolution, and audio prices by unit. Media models bill by unit directly, without a multiplier.',
+    'Set image prices per image by quality and video prices per second by resolution. Media models bill by unit directly, without a multiplier.',
   'ai.providerModel.addTier': 'Add tier',
   'ai.providerModel.tierKey': 'Tier key, e.g. quality:medium',
   'ai.providerModel.tierLabel': 'Tier label',

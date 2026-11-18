@@ -170,8 +170,8 @@ func (s *Service) Sync(ctx context.Context, providerID int64) (SyncResult, error
 	for _, model := range upstream {
 		item := SyncItem{
 			UpstreamModel: model.ID, ModelKey: model.ID, DisplayName: model.DisplayName,
-			ModelKind: pricing.KindChat, PricingMode: pricing.ModeProviderUnit,
-			PriceUnit: pricing.UnitRequest, Status: yesno.No,
+			ModelKind: pricing.KindChat, PricingMode: pricing.ModeOfficialToken,
+			PriceUnit: pricing.UnitMillionTokens, Status: yesno.No,
 		}
 		if official, ok := byKey[model.ID]; ok {
 			id := official.ID
@@ -199,18 +199,15 @@ func (s *Service) Sync(ctx context.Context, providerID int64) (SyncResult, error
 }
 
 func defaultPricingForKind(kind pricing.ModelKind) (pricing.PricingMode, pricing.PriceUnit) {
-	if kind == pricing.KindChat {
-		return pricing.ModeOfficialToken, pricing.UnitMillionTokens
-	}
 	switch kind {
+	case pricing.KindChat:
+		return pricing.ModeOfficialToken, pricing.UnitMillionTokens
 	case pricing.KindImage:
 		return pricing.ModeProviderUnit, pricing.UnitImage
 	case pricing.KindVideo:
 		return pricing.ModeProviderUnit, pricing.UnitSecond
-	case pricing.KindAudio:
-		return pricing.ModeProviderUnit, pricing.UnitRequest
 	default:
-		return pricing.ModeProviderUnit, pricing.UnitRequest
+		return pricing.ModeOfficialToken, pricing.UnitMillionTokens
 	}
 }
 
@@ -256,7 +253,7 @@ func (s *Service) validateConfiguration(ctx context.Context, vendor int16, input
 		return nil, invalid(fmt.Errorf("chat models must use official token pricing"))
 	}
 	if input.ModelKind != pricing.KindChat && input.PricingMode != pricing.ModeProviderUnit {
-		return nil, invalid(fmt.Errorf("image, video and audio models must use provider unit pricing"))
+		return nil, invalid(fmt.Errorf("image and video models must use provider unit pricing"))
 	}
 	if input.PricingMode == pricing.ModeOfficialToken && input.PriceUnit != pricing.UnitMillionTokens {
 		return nil, invalid(fmt.Errorf("token pricing must use million tokens"))
@@ -272,12 +269,6 @@ func (s *Service) validateConfiguration(ctx context.Context, vendor int16, input
 	case pricing.KindVideo:
 		if input.PricingMode == pricing.ModeProviderUnit && input.PriceUnit != pricing.UnitSecond {
 			return nil, invalid(fmt.Errorf("video models must use second price units"))
-		}
-	case pricing.KindAudio:
-		if input.PricingMode == pricing.ModeProviderUnit &&
-			input.PriceUnit != pricing.UnitMinute && input.PriceUnit != pricing.UnitMillionCharacters &&
-			input.PriceUnit != pricing.UnitRequest {
-			return nil, invalid(fmt.Errorf("audio models must use minute, million characters or request price units"))
 		}
 	}
 	var official *Official

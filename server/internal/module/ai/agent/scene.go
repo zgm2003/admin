@@ -7,9 +7,8 @@ const (
 	SceneToolGeneration  Scene = 2
 	SceneImageGeneration Scene = 3
 	SceneVideoGeneration Scene = 4
-	SceneAudioGeneration Scene = 5
 )
 
 func (scene Scene) Valid() bool {
-	return scene >= SceneConversation && scene <= SceneAudioGeneration
+	return scene >= SceneConversation && scene <= SceneVideoGeneration
 }

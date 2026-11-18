@@ -154,7 +154,6 @@ func (s *Service) Options(ctx context.Context, providerID int64) (Options, error
 			option.New(ctx, pricing.KindChat, "聊天", "Chat"),
 			option.New(ctx, pricing.KindImage, "图片", "Image"),
 			option.New(ctx, pricing.KindVideo, "视频", "Video"),
-			option.New(ctx, pricing.KindAudio, "音频", "Audio"),
 		},
 		PricingModes: []option.Option[pricing.PricingMode]{
 			option.New(ctx, pricing.ModeOfficialToken, "官方 Token 倍率", "Official token multiplier"),
@@ -164,9 +163,6 @@ func (s *Service) Options(ctx context.Context, providerID int64) (Options, error
 			option.New(ctx, pricing.UnitMillionTokens, "百万 Token", "Million tokens"),
 			option.New(ctx, pricing.UnitImage, "张", "Image"),
 			option.New(ctx, pricing.UnitSecond, "秒", "Second"),
-			option.New(ctx, pricing.UnitMinute, "分钟", "Minute"),
-			option.New(ctx, pricing.UnitMillionCharacters, "百万字符", "Million characters"),
-			option.New(ctx, pricing.UnitRequest, "次", "Request"),
 		},
 		OfficialModels: officialOptions,
 	}, nil
@@ -180,8 +176,6 @@ func kindLabel(ctx context.Context, kind pricing.ModelKind) string {
 		return option.New(ctx, kind, "图片", "Image").Label
 	case pricing.KindVideo:
 		return option.New(ctx, kind, "视频", "Video").Label
-	case pricing.KindAudio:
-		return option.New(ctx, kind, "音频", "Audio").Label
 	default:
 		return ""
 	}
@@ -206,12 +200,6 @@ func priceUnitLabel(ctx context.Context, unit pricing.PriceUnit) string {
 		return option.New(ctx, unit, "张", "Image").Label
 	case pricing.UnitSecond:
 		return option.New(ctx, unit, "秒", "Second").Label
-	case pricing.UnitMinute:
-		return option.New(ctx, unit, "分钟", "Minute").Label
-	case pricing.UnitMillionCharacters:
-		return option.New(ctx, unit, "百万字符", "Million characters").Label
-	case pricing.UnitRequest:
-		return option.New(ctx, unit, "次", "Request").Label
 	default:
 		return ""
 	}

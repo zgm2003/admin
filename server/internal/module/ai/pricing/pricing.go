@@ -12,10 +12,9 @@ const (
 	KindChat  ModelKind = 1
 	KindImage ModelKind = 2
 	KindVideo ModelKind = 3
-	KindAudio ModelKind = 4
 )
 
-func (kind ModelKind) Valid() bool { return kind >= KindChat && kind <= KindAudio }
+func (kind ModelKind) Valid() bool { return kind >= KindChat && kind <= KindVideo }
 
 type PricingMode int16
 
@@ -29,15 +28,12 @@ func (mode PricingMode) Valid() bool { return mode == ModeOfficialToken || mode 
 type PriceUnit int16
 
 const (
-	UnitMillionTokens     PriceUnit = 1
-	UnitImage             PriceUnit = 2
-	UnitSecond            PriceUnit = 3
-	UnitMinute            PriceUnit = 4
-	UnitMillionCharacters PriceUnit = 5
-	UnitRequest           PriceUnit = 6
+	UnitMillionTokens PriceUnit = 1
+	UnitImage         PriceUnit = 2
+	UnitSecond        PriceUnit = 3
 )
 
-func (unit PriceUnit) Valid() bool { return unit >= UnitMillionTokens && unit <= UnitRequest }
+func (unit PriceUnit) Valid() bool { return unit >= UnitMillionTokens && unit <= UnitSecond }
 
 var (
 	ErrInvalidUsage = errors.New("invalid usage")
@@ -121,8 +117,7 @@ func CalculateUnit(unit PriceUnit, quantity, unitPriceMicros int64) (int64, erro
 	}
 	numerator := new(big.Int).Mul(big.NewInt(quantity), big.NewInt(unitPriceMicros))
 	divisor := int64(1)
-	switch unit {
-	case UnitMillionTokens, UnitMillionCharacters:
+	if unit == UnitMillionTokens {
 		divisor = 1000000
 	}
 	if !numerator.IsInt64() {
